@@ -7,6 +7,7 @@
 @inject AppState App
 @inject AppDbContext Db
 @inject IGitBranchService GitBranch
+@inject GitHubService GitHub
 
 <TopBar Title="@($"Lab{LabInfo.Id:D2} · {LabInfo.Title}")" Crumbs="@(new[] { "Мої лаби", $"Lab{LabInfo.Id:D2}" })" />
 
@@ -203,8 +204,28 @@
                 }
 
                 <div class="field" style="margin-bottom:14px">
-                    <label style="font-size:12.5px;font-weight:650;color:var(--tx-2);margin-bottom:6px;display:block">Гілка</label>
-                    <input class="input mono" @bind="_branchInput" @bind:event="oninput" placeholder="main" style="width:100%" />
+                    <label style="font-size:12.5px;font-weight:650;color:var(--tx-2);margin-bottom:6px;display:block">
+                        Гілка
+                        @if (_loadingBranches)
+                        {
+                            <span style="margin-left:8px;font-size:11px;color:var(--tx-3)">завантаження…</span>
+                        }
+                    </label>
+                    @if (_branches.Count > 0)
+                    {
+                        <select class="select mono" style="width:100%"
+                                value="@_branchInput"
+                                @onchange="@(e => _branchInput = e.Value?.ToString() ?? "")">
+                            @foreach (var b in _branches)
+                            {
+                                <option value="@b.Name">@b.Name</option>
+                            }
+                        </select>
+                    }
+                    else
+                    {
+                        <input class="input mono" @bind="_branchInput" @bind:event="oninput" placeholder="main" style="width:100%" />
+                    }
                 </div>
 
                 <div style="margin-bottom:18px">
@@ -460,6 +481,8 @@
     private bool _loadingCommits;
     private string? _loadError;
     private string? _selectedSha;
+    private List<GitHubBranch> _branches = [];
+    private bool _loadingBranches;
 
     // ── Git graph (CSS-based, no SVG) ────────────────────────────────────────
     // Each GraphRow knows: which lane the commit is on, which lanes have
@@ -568,6 +591,31 @@
         _loadError    = null;
         _selectedSha  = null;
         _graph        = [];
+        _branches     = [];
+        _ = LoadBranchesAsync();   // fire-and-forget, UI updates via StateHasChanged
+    }
+
+    private async Task LoadBranchesAsync()
+    {
+        if (string.IsNullOrWhiteSpace(App.Student.Github)) return;
+        _loadingBranches = true;
+        StateHasChanged();
+        try
+        {
+            _branches = await GitHub.GetBranchesAsync(App.Student.Github);
+            // Pre-select the lab's default branch if it exists in the list
+            var labBranch = LabInfo.Branch;
+            if (!string.IsNullOrEmpty(labBranch) && _branches.Any(b => b.Name == labBranch))
+                _branchInput = labBranch;
+            else if (_branches.Count > 0)
+                _branchInput = _branches[0].Name;
+        }
+        catch { /* GitHub недоступний — залишаємо текстовий input */ }
+        finally
+        {
+            _loadingBranches = false;
+            StateHasChanged();
+        }
     }
 
     private void CloseResubmit() => _modalOpen = false;
