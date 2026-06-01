@@ -89,7 +89,9 @@ public class AuthService(AppDbContext db) : IAuthService
         }
         catch (Microsoft.EntityFrameworkCore.DbUpdateException)
         {
-            // Race condition: another concurrent request already created the link — ignore
+            // Race condition: another concurrent render already created the link.
+            // Clear the change tracker so the DbContext is usable for subsequent queries.
+            db.ChangeTracker.Clear();
         }
     }
 

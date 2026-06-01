@@ -37,9 +37,13 @@ public class AppState(IAuthService auth)
             if (_student != null)
                 Student = new Student
                 {
-                    FirstName = _student.FirstName, LastName = _student.LastName,
-                    Group = _student.Group, Email = _student.Email,
-                    Github = _student.Github, Initials = _student.Initials,
+                    FirstName    = _student.FirstName,
+                    LastName     = _student.LastName,
+                    Group        = _student.Group,
+                    Email        = _student.Email,
+                    Github       = _student.Github,
+                    GithubToken  = _student.GithubToken,
+                    Initials     = _student.Initials,
                 };
         }
     }
