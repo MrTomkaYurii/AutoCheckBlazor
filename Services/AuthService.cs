@@ -69,16 +69,34 @@ public class AuthService(AppDbContext db) : IAuthService
 
         if (isTeacher)
         {
-            // Find first existing teacher or create one
             var teacher = await db.Teachers.FirstOrDefaultAsync()
                 ?? await CreateTeacherAsync(firstName, lastName, email);
+
+            // Keycloak reset: teacher already has a link with a stale sub — reuse it
+            var existing = await db.UserLinks.FirstOrDefaultAsync(l => l.TeacherId == teacher.Id);
+            if (existing != null)
+            {
+                existing.KeycloakSub = sub;
+                existing.Email = email;
+                await db.SaveChangesAsync();
+                return;
+            }
             link.TeacherId = teacher.Id;
         }
         else
         {
-            // Find existing student by email or create
             var student = await db.Students.FirstOrDefaultAsync(s => s.Email == email)
                 ?? await CreateStudentAsync(firstName, lastName, email);
+
+            // Keycloak reset: student already has a link with a stale sub — reuse it
+            var existing = await db.UserLinks.FirstOrDefaultAsync(l => l.StudentId == student.Id);
+            if (existing != null)
+            {
+                existing.KeycloakSub = sub;
+                existing.Email = email;
+                await db.SaveChangesAsync();
+                return;
+            }
             link.StudentId = student.Id;
         }
 
@@ -90,7 +108,6 @@ public class AuthService(AppDbContext db) : IAuthService
         catch (Microsoft.EntityFrameworkCore.DbUpdateException)
         {
             // Race condition: another concurrent render already created the link.
-            // Clear the change tracker so the DbContext is usable for subsequent queries.
             db.ChangeTracker.Clear();
         }
     }

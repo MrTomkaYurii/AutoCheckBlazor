@@ -221,9 +221,10 @@
                     </label>
                     @if (_branches.Count > 0)
                     {
-                        <select class="select mono" style="width:100%"
+                        <select class="select mono" style="width:100%;@(_mode=="graph" ? "opacity:0.5;pointer-events:none" : "")"
                                 value="@_branchInput"
-                                @onchange="@(e => _branchInput = e.Value?.ToString() ?? "")">
+                                @onchange="@(e => _branchInput = e.Value?.ToString() ?? "")"
+                                disabled="@(_mode == "graph")">
                             @foreach (var b in _branches)
                             {
                                 <option value="@b.Name">@b.Name</option>
@@ -232,7 +233,7 @@
                     }
                     else
                     {
-                        <input class="input mono" @bind="_branchInput" @bind:event="oninput" placeholder="main" style="width:100%" />
+                        <input class="input mono" @bind="_branchInput" @bind:event="oninput" placeholder="main" style="width:100%;@(_mode=="graph" ? "opacity:0.5" : "")" disabled="@(_mode == "graph")" />
                     }
                 </div>
 
@@ -244,7 +245,7 @@
                             <Icon Name="braces" Size="15" />Список комітів
                         </button>
                         <button class="btn @(_mode=="graph" ? "btn-primary" : "btn-ghost")" style="flex:1;justify-content:center"
-                                @onclick='() => _mode = "graph"'>
+                                @onclick='() => { _mode = "graph"; _branchInput = "main"; }'>
                             <Icon Name="spark" Size="15" />Граф гіта
                         </button>
                     </div>
@@ -291,7 +292,7 @@
                 </div>
 
                 @* Commit list *@
-                <div style="max-height:360px;overflow-y:auto;border:1px solid var(--line);border-radius:10px;margin-bottom:14px">
+                <div style="max-height:520px;overflow-y:auto;border:1px solid var(--line);border-radius:10px;margin-bottom:14px">
                     @for (int ci = 0; ci < _commits.Count; ci++)
                     {
                         var c       = _commits[ci];
@@ -326,8 +327,9 @@
                                         var glow     = isSelected && isNode
                                             ? $"box-shadow:0 0 8px {color};" : "";
                                         <div style="width:22px;flex:none;display:flex;flex-direction:column;align-items:center">
-                                            @* top line *@
-                                            <div style="width:2px;flex:none;height:20px;background:@(hasTop ? color : "transparent")"></div>
+                                            @* top line — hide for lanes freshly spawned by a fork *@
+                                            @{ var isForkSpawn = !isNode && gr.Forks.Values.Any(ft => ft == lane) && !gr.InLanes.Contains(lane); }
+                                            <div style="width:2px;flex:none;height:20px;background:@(hasTop && !isForkSpawn ? color : "transparent")"></div>
                                             @* node dot or spacer *@
                                             @if (isNode)
                                             {
@@ -337,9 +339,10 @@
                                             {
                                                 <div style="width:10px;height:10px;flex:none"></div>
                                             }
-                                            @* bottom: straight or CSS arc *@
+                                            @* bottom: straight, converge arc, or fork arc *@
                                             @if (!hasBot && gr.Converges.TryGetValue(lane, out var convTo))
                                             {
+                                                @* converge: branch merges back into main *@
                                                 @if (convTo < lane)
                                                 {
                                                     <div style="width:11px;flex:1;min-height:12px;margin-right:auto;border-left:2px solid @color;border-bottom:2px solid @color;border-bottom-left-radius:9px"></div>
@@ -348,6 +351,16 @@
                                                 {
                                                     <div style="width:11px;flex:1;min-height:12px;margin-left:auto;border-right:2px solid @color;border-bottom:2px solid @color;border-bottom-right-radius:9px"></div>
                                                 }
+                                            }
+                                            else if (isNode && gr.Forks.TryGetValue(lane, out var forkTo) && forkTo > lane)
+                                            {
+                                                @* fork: straight center line (first parent) + right arc (second parent) *@
+                                                <div style="flex:1;min-height:12px;width:100%;position:relative">
+                                                    <div style="position:absolute;inset:0;display:flex;justify-content:center">
+                                                        <div style="width:2px;background:@(hasBot ? color : "transparent")"></div>
+                                                    </div>
+                                                    <div style="position:absolute;right:0;top:0;bottom:0;width:11px;border-right:2px solid @LC(forkTo);border-bottom:2px solid @LC(forkTo);border-bottom-right-radius:9px"></div>
+                                                </div>
                                             }
                                             else
                                             {
@@ -378,16 +391,43 @@
                                     <div style="font-size:13px;font-weight:580;color:var(--tx-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@c.Message</div>
                                     <div style="font-size:11px;color:var(--tx-3);margin-top:2px">@c.Author</div>
                                 </div>
-                                <select style="flex:none;width:160px;background:var(--glass-bg);border:1px solid @(isSelected ? LC(gr?.Lane ?? 0) : "var(--line)");border-radius:8px;padding:5px 8px;color:var(--tx-1);font-size:12.5px;cursor:pointer;transition:border-color .15s"
-                                        value="@_mapping.GetValueOrDefault(sha, 0)"
-                                        @onchange="@(e => SetMapping(sha, e.Value?.ToString()))"
-                                        @onclick:stopPropagation>
-                                    <option value="0">— не вказано —</option>
-                                    @foreach (var t in _labTasks)
+                                @{
+                                    var mapped   = _mapping.GetValueOrDefault(sha, 0);
+                                    var ddLabel  = mapped == 0
+                                        ? "— не вказано —"
+                                        : _labTasks.FirstOrDefault(t => t.Number == mapped) is { } tt
+                                            ? $"Task{tt.Number}: {tt.Title}" : "— не вказано —";
+                                    var ddOpen   = _openDropdownSha == sha;
+                                    var ddBorder = isSelected ? LC(gr?.Lane ?? 0) : "var(--line)";
+                                }
+                                <div style="flex:none;width:180px;position:relative;font-size:12.5px"
+                                     @onclick:stopPropagation>
+                                    @* trigger button *@
+                                    <div @onclick="@(() => _openDropdownSha = ddOpen ? null : sha)"
+                                         style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:5px 10px;background:var(--bg-2);border:1px solid @ddBorder;border-radius:8px;cursor:pointer;color:@(mapped==0?"var(--tx-3)":"var(--tx-1)");transition:border-color .15s;user-select:none">
+                                        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@ddLabel</span>
+                                        <svg style="flex:none;transform:rotate(@(ddOpen?"180deg":"0deg"));transition:transform .15s" width="11" height="7" viewBox="0 0 12 8" fill="none"><path d="M1 1.5L6 6.5L11 1.5" stroke="var(--tx-3)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                    </div>
+                                    @* dropdown list *@
+                                    @if (ddOpen)
                                     {
-                                        <option value="@t.Number">Task@(t.Number): @t.Title</option>
+                                        <div style="position:absolute;top:calc(100% + 4px);right:0;z-index:200;width:220px;background:var(--bg-2);border:1px solid var(--glass-border-hover);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.55);overflow-y:auto;max-height:260px;animation:popIn .15s cubic-bezier(.22,1,.36,1) both">
+                                            @{
+                                                var options = new (int Val, string Lbl)[] { (0, "— не вказано —") }
+                                                    .Concat(_labTasks.Select(t => (t.Number, $"Task{t.Number}: {t.Title}")));
+                                            }
+                                            @foreach (var (val, lbl) in options)
+                                            {
+                                                var isActive = mapped == val;
+                                                <div class="dd-option @(isActive ? "active" : "")"
+                                                     style="color:@(isActive ? "var(--acc-bright)" : val == 0 ? "var(--tx-3)" : "var(--tx-1)")"
+                                                     @onclick="@(() => { SetMapping(sha, val.ToString()); _openDropdownSha = null; })">
+                                                    @lbl
+                                                </div>
+                                            }
+                                        </div>
                                     }
-                                </select>
+                                </div>
                             </div>
                         </div>
                     }
@@ -489,6 +529,7 @@
     private bool _loadingCommits;
     private string? _loadError;
     private string? _selectedSha;
+    private string? _openDropdownSha;   // sha of commit whose dropdown is open
     private List<GitHubBranch> _branches = [];
     private bool _loadingBranches;
 
@@ -499,7 +540,8 @@
         CommitInfo Commit, int Lane,
         int[] InLanes,                          // lanes with line coming in from top
         int[] OutLanes,                         // lanes with line going out to bottom
-        IReadOnlyDictionary<int, int> Converges // lane → target lane  (arc at bottom)
+        IReadOnlyDictionary<int, int> Converges,// lane → target lane  (arc at bottom, branch merging back)
+        IReadOnlyDictionary<int, int> Forks     // lane → target lane  (arc at bottom, new branch spawned)
     );
     private List<GraphRow> _graph = [];
     private int _graphMaxLanes = 1;
@@ -537,7 +579,8 @@
             slots[myLane] = null;  // consume this slot
 
             var outLaneSet = new HashSet<int>();
-            var converges  = new Dictionary<int, int>(); // lane → target
+            var converges  = new Dictionary<int, int>(); // lane → target (merge arc)
+            var forks      = new Dictionary<int, int>(); // lane → target (fork arc)
 
             // Assign lanes to parents
             for (int pi = 0; pi < c.Parents.Length; pi++)
@@ -558,11 +601,12 @@
                 }
                 else
                 {
-                    // additional parent → open a new lane
+                    // additional parent → open a new lane, draw fork arc
                     int nl = slots.IndexOf(null);
                     if (nl < 0) { nl = slots.Count; slots.Add(null); }
                     slots[nl] = pSha;
                     outLaneSet.Add(nl);
+                    forks[myLane] = nl; // diagonal from myLane going out to nl
                 }
             }
 
@@ -574,7 +618,7 @@
             while (slots.Count > 0 && slots[^1] == null) slots.RemoveAt(slots.Count - 1);
 
             var outLanes = outLaneSet.ToArray();
-            _graph.Add(new GraphRow(c, myLane, inLanes, outLanes, converges));
+            _graph.Add(new GraphRow(c, myLane, inLanes, outLanes, converges, forks));
             prevOutLanes = outLanes;
         }
 
@@ -610,7 +654,7 @@
         await InvokeAsync(StateHasChanged);
         try
         {
-            _branches = await GitHub.GetBranchesAsync(App.Student.Github);
+            _branches = await GitHub.GetBranchesAsync(App.Student.Github, App.Student.GithubToken.Length > 0 ? App.Student.GithubToken : null);
             var labBranch = LabInfo.Branch;
             if (!string.IsNullOrEmpty(labBranch) && _branches.Any(b => b.Name == labBranch))
                 _branchInput = labBranch;
@@ -626,7 +670,7 @@
     }
 
     private void CloseResubmit() => _modalOpen = false;
-    private void NoOp() { }
+    private void NoOp() { _openDropdownSha = null; }
 
     private void SetMapping(string sha, string? value) =>
         _mapping[sha] = int.TryParse(value, out var n) ? n : 0;
@@ -638,13 +682,13 @@
         StateHasChanged();
         try
         {
-            // Load tasks directly from DB — reliable regardless of submission status
             var labDef = await Db.Labs
                 .Include(l => l.Tasks)
                 .FirstOrDefaultAsync(l => l.Number == Id);
             _labTasks = labDef?.Tasks.OrderBy(t => t.Number).ToList() ?? [];
 
-            _commits      = await GitBranch.GetCommitsAsync(App.Student.Github, _branchInput);
+            var token = App.Student.GithubToken.Length > 0 ? App.Student.GithubToken : null;
+            _commits = await GitHub.GetBranchCommitInfosAsync(App.Student.Github, _branchInput, token);
             _mapping      = _commits.ToDictionary(c => c.Sha, _ => 0);
             _selectedSha  = null;
             BuildGraph();

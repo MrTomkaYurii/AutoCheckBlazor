@@ -58,13 +58,11 @@
     <div class="ac-right">
         <div class="ac-card">
 
-            <!-- Icon + heading -->
             <div style="display:flex;flex-direction:column;align-items:center;text-align:center;margin-bottom:28px">
                 <div style="width:56px;height:56px;border-radius:16px;display:grid;place-items:center;background:rgba(118,199,173,0.1);border:1px solid rgba(118,199,173,0.25);margin-bottom:16px">
                     <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--acc)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
                         <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                        <circle cx="12" cy="16" r="1" fill="var(--acc)" stroke="none"/>
                     </svg>
                 </div>
                 <h2 style="margin:0 0 6px;font-size:22px;font-weight:730;letter-spacing:-0.025em">Відновлення пароля</h2>
@@ -73,15 +71,13 @@
                 </p>
             </div>
 
-            <!-- Alert -->
             <#if message?has_content>
             <div class="ac-alert ac-alert-${message.type}" style="margin-bottom:16px">
                 ${kcSanitize(message.summary)?no_esc}
             </div>
             </#if>
 
-            <!-- Reset form -->
-            <form action="${url.loginAction}" method="post" class="ac-form">
+            <form id="kc-reset-password-form" action="${url.loginAction}" method="post" class="ac-form">
 
                 <div class="ac-field">
                     <label class="ac-label" for="username">
@@ -94,7 +90,6 @@
                         </span>
                         <input tabindex="1" id="username" name="username" type="text"
                                class="ac-input"
-                               value="${(auth.attemptedUsername!'')}"
                                placeholder="student@cnu.edu.ua"
                                autofocus autocomplete="off"/>
                     </div>

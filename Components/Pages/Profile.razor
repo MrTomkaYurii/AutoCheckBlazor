@@ -27,6 +27,8 @@
             <div style="padding:10px 30px 24px">
                 @foreach (var (k, v, mono) in new[]
                 {
+                    ("Ім'я",          App.Student.FirstName, false),
+                    ("Прізвище",      App.Student.LastName,  false),
                     ("Email",         App.Student.Email,  true),
                     ("GitHub репо",   App.Student.Github, true),
                     ("GitHub токен",  string.IsNullOrEmpty(App.Student.GithubToken) ? "—" : "••••••••••••", false),
@@ -43,6 +45,10 @@
         else
         {
             <div style="padding:24px 30px;display:flex;flex-direction:column;gap:14px">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+                    <div class="field"><label>Ім'я</label><input class="input" @bind="_firstName" /></div>
+                    <div class="field"><label>Прізвище</label><input class="input" @bind="_lastName" /></div>
+                </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
                     <div class="field"><label>Email</label><input class="input" type="email" @bind="_email" /></div>
                     <div class="field"><label>GitHub репо</label><input class="input mono" @bind="_github" placeholder="https://github.com/username/repo" /></div>
@@ -69,10 +75,12 @@
     [CascadingParameter] private Task<AuthenticationState> AuthStateTask { get; set; } = default!;
 
     private bool _editing, _saving;
-    private string _email = "", _github = "", _githubToken = "", _msg = "";
+    private string _firstName = "", _lastName = "", _email = "", _github = "", _githubToken = "", _msg = "";
 
     protected override async Task OnInitializedAsync()
     {
+        _firstName   = App.Student.FirstName;
+        _lastName    = App.Student.LastName;
         _email       = App.Student.Email;
         _github      = App.Student.Github;
         _githubToken = App.Student.GithubToken;
@@ -83,6 +91,8 @@
         _editing = !_editing; _msg = "";
         if (_editing)
         {
+            _firstName   = App.Student.FirstName;
+            _lastName    = App.Student.LastName;
             _email       = App.Student.Email;
             _github      = App.Student.Github;
             _githubToken = App.Student.GithubToken;
@@ -93,13 +103,22 @@
     {
         _saving = true; StateHasChanged();
         var state = await AuthStateTask;
-        var rec = await Auth.GetStudentRecordAsync(state.User);
-        if (rec is not null)
+        var sub = Auth.GetSub(state.User);
+        var link = await Db.UserLinks.AsNoTracking()
+                                     .FirstOrDefaultAsync(l => l.KeycloakSub == sub);
+        if (link?.StudentId is int studentId)
         {
-            rec.Email        = _email.Trim();
-            rec.Github       = _github.Trim();
-            rec.GithubToken  = _githubToken.Trim();
-            await Db.SaveChangesAsync();
+            var initials = (_firstName.Length > 0 ? _firstName[0].ToString() : "")
+                         + (_lastName.Length  > 0 ? _lastName[0].ToString()  : "");
+            await Db.Students
+                    .Where(s => s.Id == studentId)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(x => x.FirstName,   _firstName.Trim())
+                        .SetProperty(x => x.LastName,    _lastName.Trim())
+                        .SetProperty(x => x.Initials,    initials)
+                        .SetProperty(x => x.Email,       _email.Trim())
+                        .SetProperty(x => x.Github,      _github.Trim())
+                        .SetProperty(x => x.GithubToken, _githubToken.Trim()));
             await App.PreloadAsync(state.User);
         }
         _saving = false; _editing = false; _msg = "Профіль оновлено"; StateHasChanged();

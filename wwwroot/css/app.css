@@ -239,7 +239,22 @@ html, body {
   padding-right: 38px;
   cursor: pointer;
 }
+.select { color-scheme: dark; }
 .select option { background: var(--bg-2); color: var(--tx-1); }
+.select option:checked { background: var(--acc-dim); color: var(--acc-bright); }
+
+/* custom dropdown */
+.dd-option {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 12.5px;
+  transition: background .12s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dd-option:hover { background: rgba(118,199,173,0.10) !important; }
+.dd-option.active { background: var(--acc-dim) !important; color: var(--acc-bright); }
 
 /* card hover lift used across status cards */
 .lift { transition: transform .22s cubic-bezier(.22,1,.36,1), border-color .22s, box-shadow .22s, background .22s; }

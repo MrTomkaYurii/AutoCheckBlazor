@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
+using AutoCheck.Models;
 
 namespace AutoCheck.Services;
 
@@ -147,6 +148,45 @@ public class GitHubService
             .OrderByDescending(c => c.Date)
             .Take(100)
             .ToList();
+    }
+
+    // ── Коміти гілки як CommitInfo (для Lab.razor) ───────────────────────────
+    public async Task<List<CommitInfo>> GetBranchCommitInfosAsync(
+        string repoUrl, string branch, string? token = null, int count = 50)
+    {
+        var parsed = ParseUrl(repoUrl);
+        if (parsed is null) return [];
+
+        var (owner, repo) = parsed.Value;
+        var req = new HttpRequestMessage(HttpMethod.Get,
+            $"https://api.github.com/repos/{owner}/{repo}/commits?sha={Uri.EscapeDataString(branch)}&per_page={count}");
+        AddHeaders(req, token);
+
+        var resp = await _http.SendAsync(req);
+        if (!resp.IsSuccessStatusCode) return [];
+
+        var json = await resp.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement.EnumerateArray().Select(MapCommitInfo).ToList();
+    }
+
+    private static CommitInfo MapCommitInfo(JsonElement c)
+    {
+        var sha    = c.GetProperty("sha").GetString() ?? "";
+        var commit = c.GetProperty("commit");
+        var msg    = commit.GetProperty("message").GetString() ?? "";
+        var date   = commit.GetProperty("author").GetProperty("date").GetString() ?? "";
+        var author = commit.GetProperty("author").GetProperty("name").GetString() ?? "";
+        var parents = c.TryGetProperty("parents", out var p)
+            ? p.EnumerateArray()
+               .Select(x => x.GetProperty("sha").GetString() ?? "")
+               .Where(s => s.Length > 0)
+               .ToArray()
+            : Array.Empty<string>();
+        return new CommitInfo(sha, sha[..Math.Min(7, sha.Length)],
+            msg.Split('\n')[0], author,
+            DateTime.TryParse(date, out var dt) ? dt : DateTime.UtcNow,
+            parents);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

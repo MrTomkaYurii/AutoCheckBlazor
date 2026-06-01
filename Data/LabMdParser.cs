@@ -14,7 +14,7 @@ public record LabParseResult(
 public static class LabMdParser
 {
     private static readonly Regex TaskHeadingRx = new(
-        @"^##\s+(?:Задача|Завдання)\s+(\d+)\.\s+(.+?)(\s+[⭐]+)?\s*$",
+        @"^#{2,3}\s+(?:Задача|Завдання)\s+(\d+)(?:\.|\s+[—–])\s+(.+?)(\s+[⭐]+)?\s*$",
         RegexOptions.Multiline | RegexOptions.Compiled);
 
     public static LabParseResult Parse(string md)
@@ -57,13 +57,7 @@ public static class LabMdParser
             int end = i + 1 < hits.Count ? hits[i + 1].Index : md.Length;
             string section = md[start..end].Trim();
 
-            // prefer ### Умова / Що зараз section; fall back to first 800 chars
-            string? brief = null;
-            var bM = Regex.Match(section,
-                @"###\s+(?:Умова|Що зараз|Завдання|Опис)\s*\n([\s\S]*?)(?=\n###|\n##|\z)");
-            brief = bM.Success
-                ? bM.Groups[1].Value.Trim()
-                : (section.Length > 0 ? section[..Math.Min(section.Length, 800)].Trim() : null);
+            string? brief = section.Length > 0 ? section.Trim() : null;
 
             tasks.Add(new(num, taskTitle, brief, diff));
         }
