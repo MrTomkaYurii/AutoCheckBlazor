@@ -122,8 +122,9 @@
 @code {
     private bool _loading = true;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (!firstRender) return;
         // If already authenticated → redirect to appropriate dashboard
         var state = await AuthProvider.GetAuthenticationStateAsync();
         if (state.User.Identity?.IsAuthenticated == true)
@@ -133,6 +134,7 @@
             return;
         }
         _loading = false;
+        StateHasChanged();
     }
 
     private const string CodeText =
