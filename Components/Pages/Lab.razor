@@ -6,6 +6,7 @@
 @inject IDialogService Dialog
 @inject AppState App
 @inject AppDbContext Db
+@inject GitHubService GitHub
 
 <TopBar Title="@($"Lab{LabInfo.Id:D2} · {LabInfo.Title}")" Crumbs="@(new[] { "Мої лаби", $"Lab{LabInfo.Id:D2}" })" />
 
@@ -104,9 +105,13 @@
         @* RIGHT — results *@
         <div @key="_activeId" class="screen-anim" style="display:flex;flex-direction:column;gap:16px;min-width:0">
             @{
-                var task = LabInfo.Tasks.First(x => x.Id == _activeId);
-                var tv = task.View();
+                var task = LabInfo.Tasks.FirstOrDefault(x => x.Id == _activeId)
+                        ?? LabInfo.Tasks.FirstOrDefault();
             }
+            @if (task is null) { <div style="padding:20px;color:var(--tx-faint)">Завдань немає</div> }
+            else
+            {
+                var tv = task.View();
 
             <section class="glass" style="padding:22px 24px">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:12px">
@@ -160,6 +165,7 @@
                     }
                 </div>
             </section>
+            } @* end else task is not null *@
         </div>
     </div>
 </div>
@@ -172,50 +178,94 @@
 
             @if (_phase == "confirm")
             {
-                <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-                    <span style="width:40px;height:40px;border-radius:11px;display:grid;place-items:center;background:var(--acc-dim);color:var(--acc);border:1px solid var(--glass-border)"><Icon Name="refresh" Size="20" /></span>
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+                    <span style="width:40px;height:40px;border-radius:11px;display:grid;place-items:center;background:var(--acc-dim);color:var(--acc);border:1px solid var(--glass-border)"><Icon Name="upload" Size="20" /></span>
                     <div>
                         <h3 style="margin:0;font-size:18px;font-weight:720">Здати на перевірку</h3>
                         <p style="margin:3px 0 0;font-size:13px;color:var(--tx-3)">Lab@(Id.ToString("D2")) · @LabInfo.Title</p>
                     </div>
                 </div>
 
-                @* GitHub + branch info *@
                 @if (string.IsNullOrWhiteSpace(App.Student.Github))
                 {
-                    <div style="background:rgba(232,128,107,0.1);border:1px solid rgba(232,128,107,0.3);border-radius:12px;padding:13px 16px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-start">
+                    <div style="background:rgba(232,128,107,0.1);border:1px solid rgba(232,128,107,0.3);border-radius:12px;padding:13px 16px;margin-bottom:16px;display:flex;gap:10px">
                         <Icon Name="warn" Size="16" Style="color:var(--st-red);flex:none;margin-top:1px" />
-                        <div style="font-size:13px;line-height:1.6;color:var(--tx-2)">
+                        <div style="font-size:13px;color:var(--tx-2)">
                             <b style="color:var(--st-red)">GitHub репозиторій не вказано.</b><br/>
-                            Додайте URL у <a href="/student/profile" style="color:var(--acc)">профілі</a> перед здачею. Без репо перевірка запускається в режимі симуляції.
+                            Додайте URL у <a href="/student/profile" style="color:var(--acc)">профілі</a>.
                         </div>
                     </div>
                 }
                 else
                 {
-                    <div style="background:rgba(12,20,17,0.5);border:1px solid var(--line);border-radius:12px;padding:13px 16px;margin-bottom:16px;display:flex;flex-direction:column;gap:8px;font-size:13px">
-                        <div style="display:flex;align-items:center;gap:9px;color:var(--tx-2)">
-                            <Icon Name="github" Size="15" Style="color:var(--tx-3)" />
-                            <span class="mono" style="color:var(--acc)">@App.Student.Github</span>
-                        </div>
-                        @if (!string.IsNullOrEmpty(LabInfo.Branch))
+                    @* Переключач режимів *@
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;background:rgba(12,20,17,0.6);border-radius:10px;margin-bottom:16px;border:1px solid var(--line)">
+                        @foreach (var (mode, label, icon) in new[]{ ("branch","По гілці","braces"), ("tree","Дерево","spark") })
                         {
-                            <div style="display:flex;align-items:center;gap:9px;color:var(--tx-2)">
-                                <Icon Name="braces" Size="15" Style="color:var(--tx-3)" />
-                                <span>Гілка: <span class="mono" style="color:var(--acc-bright)">@LabInfo.Branch</span></span>
-                            </div>
+                            var on = _submitMode == mode;
+                            <button type="button" @onclick="@(() => SwitchMode(mode))"
+                                    style="height:34px;border-radius:7px;border:none;cursor:pointer;font-family:var(--font);font-size:12.5px;font-weight:650;display:flex;align-items:center;justify-content:center;gap:7px;background:@(on ? "linear-gradient(180deg,var(--acc-bright),var(--acc))" : "transparent");color:@(on ? "#08110d" : "var(--tx-2)");transition:all .2s">
+                                <Icon Name="@icon" Size="13" />@label
+                            </button>
                         }
-                        <div style="font-size:12px;color:var(--tx-3)">Система клонує репо, запустить build та тести, потім проаналізує кожне завдання.</div>
+                    </div>
+
+                    @if (_submitMode == "branch")
+                    {
+                        @* ── Режим 1: По гілці ── *@
+                        <div class="field" style="margin-bottom:12px">
+                            <label style="font-size:12px;font-weight:600;color:var(--tx-3);margin-bottom:6px;display:block">Гілка</label>
+                            @if (_branchesLoading)
+                            {
+                                <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--tx-3)">
+                                    <span style="width:14px;height:14px;border-radius:50%;border:2px solid var(--acc-dim-2);border-top-color:var(--acc);animation:spin .8s linear infinite"></span>
+                                    Завантаження гілок…
+                                </div>
+                            }
+                            else if (_branches.Count == 0)
+                            {
+                                <div style="font-size:13px;color:var(--st-red)">Не вдалося завантажити гілки.</div>
+                            }
+                            else
+                            {
+                                <select class="select" @onchange="OnBranchSelected" style="height:38px">
+                                    <option value="">— оберіть гілку —</option>
+                                    @foreach (var b in _branches)
+                                    {
+                                        <option value="@b.Name" selected="@(b.Name == _selectedBranch)">@b.Name</option>
+                                    }
+                                </select>
+                            }
+                        </div>
+                        @if (!string.IsNullOrEmpty(_selectedBranch))
+                        {
+                            @RenderCommits(_commits, _commitsLoading, null, LabInfo.Tasks)
+                        }
+                    }
+                    else
+                    {
+                        @* ── Режим 2: Дерево ── *@
+                        @RenderCommits(
+                            _treeCommits.Select(n => new GitHubCommit(n.Sha, n.Message, n.Date)).ToList(),
+                            _treeLoading,
+                            _treeCommits,
+                            LabInfo.Tasks)
+                    }
+                }
+
+                @if (_commitTaskMap.Any(x => !string.IsNullOrEmpty(x.Value)))
+                {
+                    <div style="font-size:12px;color:var(--acc);margin-bottom:10px">
+                        Прив'язано: @_commitTaskMap.Count(x => !string.IsNullOrEmpty(x.Value)) коміт(ів)
                     </div>
                 }
 
-                <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;font-size:13px">
-                    <Icon Name="warn" Size="16" Style="color:var(--st-yellow)" />
-                    <span class="muted">Залишилось спроб: <b style="color:var(--tx-1)">@(LabInfo.AttemptsMax - LabInfo.AttemptsUsed)</b></span>
-                </div>
                 <div style="display:flex;gap:10px">
                     <button class="btn btn-ghost btn-block" @onclick="CloseResubmit">Скасувати</button>
-                    <button class="btn btn-primary btn-block" @onclick="RunCheck"><Icon Name="upload" Size="17" />Запустити перевірку</button>
+                    <button class="btn btn-primary btn-block" @onclick="RunCheck"
+                            disabled="@(!_commitTaskMap.Any(x => !string.IsNullOrEmpty(x.Value)))">
+                        <Icon Name="upload" Size="17" />Здати
+                    </button>
                 </div>
             }
             else if (_phase == "running")
@@ -280,8 +330,206 @@
     private GradingResultDto? _result;
     private int _oldScore;
 
-    private void OpenResubmit() { _modalOpen = true; _phase = "confirm"; _result = null; _oldScore = LabInfo.Auto; }
+    // ── GitHub branch/commit picker ───────────────────────────────────────────
+    private string                          _submitMode      = "branch";  // "branch" | "tree"
+    private List<GitHubBranch>              _branches        = [];
+    private List<GitHubCommit>              _commits         = [];
+    private List<GitHubCommitNode>          _treeCommits     = [];
+    private string                          _selectedBranch  = "";
+    private Dictionary<string, string>      _commitTaskMap   = [];  // sha → taskN
+    private bool                            _branchesLoading;
+    private bool                            _commitsLoading;
+    private bool                            _treeLoading;
+
+    private void OpenResubmit()
+    {
+        _modalOpen      = true;
+        _phase          = "confirm";
+        _result         = null;
+        _oldScore       = LabInfo.Auto;
+        _submitMode     = "branch";
+        _selectedBranch = "";
+        _commitTaskMap  = [];
+        _branches       = [];
+        _commits        = [];
+        _treeCommits    = [];
+        _ = LoadBranchesAsync();
+    }
+
     private void CloseResubmit() => _modalOpen = false;
+
+    private async Task LoadBranchesAsync()
+    {
+        if (string.IsNullOrWhiteSpace(App.Student.Github)) return;
+        _branchesLoading = true; StateHasChanged();
+        _branches = await GitHub.GetBranchesAsync(App.Student.Github, App.Student.GithubToken);
+        // Якщо лаба має гілку і вона є в репо — підставляємо автоматично
+        if (!string.IsNullOrEmpty(LabInfo.Branch) && _branches.Any(b => b.Name == LabInfo.Branch))
+        {
+            _selectedBranch = LabInfo.Branch;
+            await LoadCommitsAsync();
+        }
+        _branchesLoading = false; StateHasChanged();
+    }
+
+    private async Task OnBranchSelected(ChangeEventArgs e)
+    {
+        _selectedBranch = e.Value?.ToString() ?? "";
+        _commitTaskMap  = [];
+        _commits        = [];
+        if (!string.IsNullOrEmpty(_selectedBranch))
+            await LoadCommitsAsync();
+    }
+
+    private async Task LoadCommitsAsync()
+    {
+        _commitsLoading = true; StateHasChanged();
+        // Тільки коміти цієї гілки (не з main)
+        _commits = await GitHub.GetBranchCommitsAsync(
+            App.Student.Github, _selectedBranch, App.Student.GithubToken);
+        // Ініціалізуємо порожній маппінг для кожного коміту
+        _commitTaskMap = _commits.ToDictionary(c => c.Sha, _ => "");
+        _commitsLoading = false; StateHasChanged();
+    }
+
+    private void SetCommitTask(string sha, string taskN)
+    {
+        _commitTaskMap[sha] = taskN;
+        StateHasChanged();
+    }
+
+    private void SwitchMode(string mode)
+    {
+        _submitMode    = mode;
+        _commitTaskMap = [];
+        if (mode == "tree" && _treeCommits.Count == 0)
+            _ = LoadTreeAsync();
+    }
+
+    private async Task LoadTreeAsync()
+    {
+        if (string.IsNullOrWhiteSpace(App.Student.Github)) return;
+        _treeLoading = true; StateHasChanged();
+        _treeCommits = await GitHub.GetCommitTreeAsync(App.Student.Github, App.Student.GithubToken);
+        _commitTaskMap = _treeCommits.ToDictionary(c => c.Sha, _ => "");
+        _treeLoading = false; StateHasChanged();
+    }
+
+    private RenderFragment RenderCommits(
+        List<GitHubCommit> commits, bool loading,
+        List<GitHubCommitNode>? nodes, List<TaskItem> tasks) =>
+    @<div>
+        @if (loading)
+        {
+            <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--tx-3);padding:8px 0">
+                <span style="width:14px;height:14px;border-radius:50%;border:2px solid var(--acc-dim-2);border-top-color:var(--acc);animation:spin .8s linear infinite"></span>
+                Завантаження…
+            </div>
+        }
+        else if (commits.Count == 0)
+        {
+            <div style="font-size:13px;color:var(--tx-3);padding:8px 0">Комітів не знайдено</div>
+        }
+        else
+        {
+            @* Кнопки швидкого вибору *@
+            <div style="display:flex;gap:8px;margin-bottom:8px">
+                <button type="button" class="btn btn-ghost btn-sm"
+                        @onclick="@(() => AutoDetectTasks(commits, tasks))">
+                    <Icon Name="spark" Size="13" />Авто
+                </button>
+                <button type="button" class="btn btn-ghost btn-sm"
+                        @onclick="@(() => SelectAllCommits(commits, tasks))">
+                    Вибрати всі
+                </button>
+                <button type="button" class="btn btn-ghost btn-sm"
+                        @onclick="@(() => ClearAllCommits(commits))">
+                    Очистити
+                </button>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:5px;max-height:240px;overflow-y:auto;margin-bottom:8px">
+                @foreach (var c in commits)
+                {
+                    var mapped = _commitTaskMap.GetValueOrDefault(c.Sha, "");
+                    var node   = nodes?.FirstOrDefault(n => n.Sha == c.Sha);
+                    <div style="display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;padding:8px 10px;border-radius:9px;border:1px solid @(string.IsNullOrEmpty(mapped) ? "var(--line)" : "var(--glass-border-hover)");background:@(string.IsNullOrEmpty(mapped) ? "transparent" : "var(--acc-dim)")">
+                        <div style="min-width:0">
+                            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                                <span class="mono" style="font-size:11px;color:var(--tx-faint);flex:none">@c.Sha</span>
+                                @if (node is not null)
+                                {
+                                    @foreach (var br in node.Branches)
+                                    {
+                                        <span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--acc-dim);color:var(--acc-bright);white-space:nowrap">@br</span>
+                                    }
+                                }
+                                <span style="font-size:12.5px;color:var(--tx-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@c.Message</span>
+                            </div>
+                            <div style="font-size:11px;color:var(--tx-faint);margin-top:2px">@FormatDate(c.Date)</div>
+                        </div>
+                        <select style="height:32px;padding:0 8px;border-radius:8px;background:rgba(12,20,17,0.7);border:1px solid var(--line);color:var(--tx-1);font-size:12.5px;font-family:var(--font);cursor:pointer;min-width:95px"
+                                @onchange="@(e => SetCommitTask(c.Sha, e.Value?.ToString() ?? ""))">
+                            <option value="">— пропустити —</option>
+                            @foreach (var t in tasks)
+                            {
+                                <option value="@t.N" selected="@(mapped == t.N.ToString())">Task @t.N</option>
+                            }
+                        </select>
+                    </div>
+                }
+            </div>
+        }
+    </div>;
+
+    // Авто: визначає Task N з повідомлення коміту (Task1, task1, Task 1, #1, завдання 1)
+    private void AutoDetectTasks(List<GitHubCommit> commits, List<TaskItem> tasks)
+    {
+        foreach (var c in commits)
+        {
+            var msg = c.Message.ToLowerInvariant();
+            foreach (var t in tasks.OrderByDescending(t => t.N))
+            {
+                if (msg.Contains($"task{t.N}")
+                 || msg.Contains($"task {t.N}")
+                 || msg.Contains($"task0{t.N}")
+                 || msg.Contains($"завдання {t.N}")
+                 || msg.Contains($"#{t.N}"))
+                {
+                    _commitTaskMap[c.Sha] = t.N.ToString();
+                    break;
+                }
+            }
+        }
+        StateHasChanged();
+    }
+
+    // Вибрати всі: призначає кожному коміту задачу по порядку (1→Task1, 2→Task2...)
+    private void SelectAllCommits(List<GitHubCommit> commits, List<TaskItem> tasks)
+    {
+        var ordered = commits.OrderBy(c => c.Date).ToList();
+        for (int i = 0; i < ordered.Count; i++)
+        {
+            var taskN = tasks.ElementAtOrDefault(i)?.N ?? tasks.LastOrDefault()?.N ?? 1;
+            _commitTaskMap[ordered[i].Sha] = taskN.ToString();
+        }
+        StateHasChanged();
+    }
+
+    // Очистити всі прив'язки
+    private void ClearAllCommits(List<GitHubCommit> commits)
+    {
+        foreach (var c in commits)
+            _commitTaskMap[c.Sha] = "";
+        StateHasChanged();
+    }
+
+    private static string FormatDate(string iso)
+    {
+        if (DateTime.TryParse(iso, out var d))
+            return d.ToLocalTime().ToString("dd.MM HH:mm");
+        return iso;
+    }
     private void NoOp() { }
 
     private async Task RunCheck()

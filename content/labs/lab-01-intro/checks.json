@@ -1,0 +1,87 @@
+{
+  "sourceDir": "sandbox/intro",
+  "tasks": [
+    {
+      "n": 1,
+      "commitPattern": "Task1",
+      "input": "70\n1.75",
+      "cases": [
+        { "input": "70\n1.75",  "expect": "22.86" },
+        { "input": "90\n1.80",  "expect": "27.78" },
+        { "input": "55\n1.62",  "expect": "20.95" }
+      ]
+    },
+    {
+      "n": 2,
+      "commitPattern": "Task2",
+      "cases": [
+        { "input": "500\n3\n10",  "expect": "1350.00" },
+        { "input": "200\n5\n0",   "expect": "1000.00" },
+        { "input": "750\n2\n15",  "expect": "1275.00" }
+      ]
+    },
+    {
+      "n": 3,
+      "commitPattern": "Task3",
+      "cases": [
+        { "input": "2010", "expect": "16" },
+        { "input": "2010", "expect": "дитин" },
+        { "input": "1990", "expect": "36" },
+        { "input": "1990", "expect": "дорослий" },
+        { "input": "1955", "expect": "71" }
+      ]
+    },
+    {
+      "n": 4,
+      "commitPattern": "Task4",
+      "cases": [
+        { "input": "115\n75",  "expect": "норма" },
+        { "input": "125\n78",  "expect": "підвищений" },
+        { "input": "135\n88",  "expect": "1" },
+        { "input": "155\n100", "expect": "2" }
+      ]
+    },
+    {
+      "n": 5,
+      "commitPattern": "Task5",
+      "cases": [
+        { "input": "1", "expect": "Понеділок" },
+        { "input": "3", "expect": "Середа" },
+        { "input": "7", "expect": "вихідний" },
+        { "input": "9", "expect": "" }
+      ]
+    },
+    {
+      "n": 6,
+      "commitPattern": "Task6",
+      "cases": [
+        { "input": "10240", "expect": "загальна терапія" },
+        { "input": "20003", "expect": "хірургія" },
+        { "input": "11117", "expect": "неврологія" },
+        { "input": "10245", "expect": "кардіологія" }
+      ]
+    },
+    {
+      "n": 7,
+      "commitPattern": "Task7",
+      "cases": [
+        { "input": "5\n350\n800\n200\n1200\n450", "expect": "3000.00" },
+        { "input": "5\n350\n800\n200\n1200\n450", "expect": "600.00" },
+        { "input": "5\n350\n800\n200\n1200\n450", "expect": "200.00" },
+        { "input": "5\n350\n800\n200\n1200\n450", "expect": "1200.00" },
+        { "input": "3\n300\n450\n350",             "expect": "немає" }
+      ]
+    },
+    {
+      "n": 8,
+      "commitPattern": "Task8",
+      "cases": [
+        { "input": "82.0\n1.78\n500\n3\n10\n1990\n120\n80", "expect": "25.88" },
+        { "input": "82.0\n1.78\n500\n3\n10\n1990\n120\n80", "expect": "1350.00" },
+        { "input": "82.0\n1.78\n500\n3\n10\n1990\n120\n80", "expect": "36" },
+        { "input": "55.0\n1.62\n200\n2\n15\n2010\n155\n100", "expect": "20.95" },
+        { "input": "55.0\n1.62\n200\n2\n15\n2010\n155\n100", "expect": "340.00" }
+      ]
+    }
+  ]
+}

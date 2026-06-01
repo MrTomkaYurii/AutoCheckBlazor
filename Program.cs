@@ -116,6 +116,8 @@ builder.Services.AddScoped<IGradingService,        GradingService>();
 builder.Services.AddScoped<INotificationService,   NotificationService>();
 builder.Services.AddScoped<ICommentService,        CommentService>();
 builder.Services.AddScoped<AppState>();
+builder.Services.AddScoped<GitHubService>();
+builder.Services.AddHttpClient("github");
 
 // ── Build ─────────────────────────────────────────────────────────────────────
 var app = builder.Build();

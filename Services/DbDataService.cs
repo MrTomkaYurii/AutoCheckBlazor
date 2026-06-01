@@ -217,5 +217,5 @@ public class DbDataService(AppDbContext db) : IDataService
     }
 
     private static Student Map(StudentRecord s) =>
-        new() { FirstName = s.FirstName, LastName = s.LastName, Group = s.Group, Email = s.Email, Github = s.Github, Initials = s.Initials };
+        new() { FirstName = s.FirstName, LastName = s.LastName, Group = s.Group, Email = s.Email, Github = s.Github, GithubToken = s.GithubToken, Initials = s.Initials };
 }

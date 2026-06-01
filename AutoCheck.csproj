@@ -22,7 +22,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="content\labs\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <Content Update="content\labs\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <Content Remove="content\labs\**\tests\**" />
+    <Compile Remove="content\labs\**\tests\**" />
+    <None    Remove="content\labs\**\tests\**" />
   </ItemGroup>
 
   <!-- Exclude test project and design prototypes from main compilation -->

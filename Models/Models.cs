@@ -20,7 +20,8 @@ public class Student
     public string LastName = "";
     public string Group = "";
     public string Email = "";
-    public string Github = "";
+    public string Github       = "";
+    public string GithubToken = "";
     public string Initials = "";
 }
 

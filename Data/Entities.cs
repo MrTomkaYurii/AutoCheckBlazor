@@ -10,6 +10,7 @@ public class LabDef
     public string Title { get; set; } = "";
     public string? Goal { get; set; }
     public string? BranchName { get; set; }
+    public string? SourceDir { get; set; }   // e.g. "sandbox/intro" or "src"
     public bool MergesMain { get; set; }
     public int OrderIndex { get; set; }
     public string? FullMarkdown { get; set; }
@@ -41,7 +42,8 @@ public class StudentRecord
     public string LastName { get; set; } = "";
     public string Group { get; set; } = "";
     public string Email { get; set; } = "";
-    public string Github { get; set; } = "";
+    public string Github      { get; set; } = "";
+    public string GithubToken { get; set; } = "";   // optional, для вищого rate limit
     public string Initials { get; set; } = "";
 
     public List<Submission> Submissions { get; set; } = [];
