@@ -106,9 +106,16 @@
         @* RIGHT — results *@
         <div @key="_activeId" class="screen-anim" style="display:flex;flex-direction:column;gap:16px;min-width:0">
             @{
-                var task = LabInfo.Tasks.First(x => x.Id == _activeId);
-                var tv = task.View();
+                var task = LabInfo.Tasks.FirstOrDefault(x => x.Id == _activeId)
+                        ?? LabInfo.Tasks.FirstOrDefault();
             }
+            @if (task is null)
+            {
+                <div class="glass" style="padding:40px;text-align:center;color:var(--tx-3)">Завдань поки немає</div>
+            }
+            else
+            {
+            var tv = task.View();
 
             <section class="glass" style="padding:22px 24px">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:12px">
@@ -162,6 +169,7 @@
                     }
                 </div>
             </section>
+            } @* end @if (task is null) else *@
         </div>
     </div>
 </div>
@@ -592,18 +600,17 @@
         _selectedSha  = null;
         _graph        = [];
         _branches     = [];
-        _ = LoadBranchesAsync();   // fire-and-forget, UI updates via StateHasChanged
+        _ = InvokeAsync(LoadBranchesAsync);  // safe fire-and-forget on Blazor dispatcher
     }
 
     private async Task LoadBranchesAsync()
     {
         if (string.IsNullOrWhiteSpace(App.Student.Github)) return;
         _loadingBranches = true;
-        StateHasChanged();
+        await InvokeAsync(StateHasChanged);
         try
         {
             _branches = await GitHub.GetBranchesAsync(App.Student.Github);
-            // Pre-select the lab's default branch if it exists in the list
             var labBranch = LabInfo.Branch;
             if (!string.IsNullOrEmpty(labBranch) && _branches.Any(b => b.Name == labBranch))
                 _branchInput = labBranch;
@@ -614,7 +621,7 @@
         finally
         {
             _loadingBranches = false;
-            StateHasChanged();
+            await InvokeAsync(StateHasChanged);
         }
     }
 
