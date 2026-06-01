@@ -96,6 +96,8 @@ public class Submission
     public string? Deadline { get; set; }
     public bool IsCurrent { get; set; }
     public DateTime? SubmittedAt { get; set; }
+    public string? BranchOverride { get; set; }
+    public string? CommitMappingJson { get; set; }
 
     public List<TaskResult> TaskResults { get; set; } = [];
     public List<LabComment> Comments { get; set; } = [];

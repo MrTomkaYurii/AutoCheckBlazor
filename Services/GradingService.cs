@@ -43,7 +43,14 @@ public class GradingService(
 
         var student = sub.Student;
         var lab     = sub.LabDef;
-        var branch  = lab.BranchName ?? "main";
+        var branch  = sub.BranchOverride ?? lab.BranchName ?? "main";
+
+        List<CommitTaskMap>? commitMap = null;
+        if (!string.IsNullOrEmpty(sub.CommitMappingJson))
+        {
+            try { commitMap = JsonSerializer.Deserialize<List<CommitTaskMap>>(sub.CommitMappingJson); }
+            catch { }
+        }
 
         // ── 1. Prepare repo ──────────────────────────────────────────────────
         string? workDir = null;
@@ -84,7 +91,10 @@ public class GradingService(
         {
             progress?.Report($"Аналіз завдання {taskDef.Number}: {taskDef.Title}…");
 
-            var code   = FindRelevantCode(codeFiles, taskDef.Title);
+            var mappedSha = commitMap?.FirstOrDefault(m => m.TaskNumber == taskDef.Number)?.Sha;
+            var code = !string.IsNullOrEmpty(mappedSha) && workDir is not null
+                ? await GetCommitCodeAsync(workDir, mappedSha, ct)
+                : FindRelevantCode(codeFiles, taskDef.Title);
             var tests  = testResults.TryGetValue(NormalizeTaskTitle(taskDef.Title), out var tr) ? tr : ((int?)null, (int?)null);
             var result = await GradeWithClaudeAsync(taskDef, code, buildOk, tests.Item1, tests.Item2, ct);
 
@@ -278,6 +288,18 @@ public class GradingService(
         }
 
         return $"// {scored.Path}\n{scored.Code}";
+    }
+
+    private async Task<string> GetCommitCodeAsync(string workDir, string sha, CancellationToken ct)
+    {
+        try
+        {
+            var (exit, stdout, _) = await RunProcessAsync(
+                "git", $"show {sha} --unified=5 --no-color", workDir, ct);
+            if (exit != 0) return "(не вдалося отримати коміт)";
+            return stdout.Length > 8000 ? stdout[..8000] + "\n// [truncated]" : stdout;
+        }
+        catch { return "(помилка при отриманні diff коміту)"; }
     }
 
     private static bool IsUkrainianStopWord(string w) =>

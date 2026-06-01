@@ -1,5 +1,8 @@
 namespace AutoCheck.Models;
 
+public record CommitInfo(string Sha, string Short, string Message, string Author, DateTime Date, string[] Parents);
+public record CommitTaskMap(string Sha, int TaskNumber);
+
 public enum LabStatus { Done, Review, Rejected, Locked }
 
 public static class StatusMeta

@@ -6,7 +6,7 @@
 @inject IDialogService Dialog
 @inject AppState App
 @inject AppDbContext Db
-@inject GitHubService GitHub
+@inject IGitBranchService GitBranch
 
 <TopBar Title="@($"Lab{LabInfo.Id:D2} · {LabInfo.Title}")" Crumbs="@(new[] { "Мої лаби", $"Lab{LabInfo.Id:D2}" })" />
 
@@ -105,13 +105,9 @@
         @* RIGHT — results *@
         <div @key="_activeId" class="screen-anim" style="display:flex;flex-direction:column;gap:16px;min-width:0">
             @{
-                var task = LabInfo.Tasks.FirstOrDefault(x => x.Id == _activeId)
-                        ?? LabInfo.Tasks.FirstOrDefault();
-            }
-            @if (task is null) { <div style="padding:20px;color:var(--tx-faint)">Завдань немає</div> }
-            else
-            {
+                var task = LabInfo.Tasks.First(x => x.Id == _activeId);
                 var tv = task.View();
+            }
 
             <section class="glass" style="padding:22px 24px">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:12px">
@@ -165,7 +161,6 @@
                     }
                 </div>
             </section>
-            } @* end else task is not null *@
         </div>
     </div>
 </div>
@@ -173,13 +168,16 @@
 @* ---------- resubmit modal ---------- *@
 @if (_modalOpen)
 {
+    var widePhase = _phase is "branch" or "map";
     <div @onclick="CloseResubmit" style="position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:24px;background:rgba(6,12,10,0.72);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)">
-        <div @onclick:stopPropagation @onclick="NoOp" class="glass" style="width:100%;max-width:480px;padding:26px;animation:popIn .3s cubic-bezier(.22,1,.36,1) both;box-shadow:var(--shadow-pop)">
+        <div @onclick:stopPropagation @onclick="NoOp" class="glass"
+             style="width:100%;max-width:@(widePhase ? "860px" : "480px");padding:26px;animation:popIn .3s cubic-bezier(.22,1,.36,1) both;box-shadow:var(--shadow-pop)">
 
-            @if (_phase == "confirm")
+            @* ── PHASE: branch ── *@
+            @if (_phase == "branch")
             {
-                <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
-                    <span style="width:40px;height:40px;border-radius:11px;display:grid;place-items:center;background:var(--acc-dim);color:var(--acc);border:1px solid var(--glass-border)"><Icon Name="upload" Size="20" /></span>
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">
+                    <span style="width:40px;height:40px;border-radius:11px;display:grid;place-items:center;background:var(--acc-dim);color:var(--acc);border:1px solid var(--glass-border)"><Icon Name="braces" Size="20" /></span>
                     <div>
                         <h3 style="margin:0;font-size:18px;font-weight:720">Здати на перевірку</h3>
                         <p style="margin:3px 0 0;font-size:13px;color:var(--tx-3)">Lab@(Id.ToString("D2")) · @LabInfo.Title</p>
@@ -188,86 +186,207 @@
 
                 @if (string.IsNullOrWhiteSpace(App.Student.Github))
                 {
-                    <div style="background:rgba(232,128,107,0.1);border:1px solid rgba(232,128,107,0.3);border-radius:12px;padding:13px 16px;margin-bottom:16px;display:flex;gap:10px">
+                    <div style="background:rgba(232,128,107,0.1);border:1px solid rgba(232,128,107,0.3);border-radius:12px;padding:13px 16px;margin-bottom:14px;display:flex;gap:10px;align-items:flex-start">
                         <Icon Name="warn" Size="16" Style="color:var(--st-red);flex:none;margin-top:1px" />
-                        <div style="font-size:13px;color:var(--tx-2)">
+                        <div style="font-size:13px;line-height:1.6;color:var(--tx-2)">
                             <b style="color:var(--st-red)">GitHub репозиторій не вказано.</b><br/>
-                            Додайте URL у <a href="/student/profile" style="color:var(--acc)">профілі</a>.
+                            Додайте URL у <a href="/student/profile" style="color:var(--acc)">профілі</a>. Без репо буде використано мок-коміти (режим симуляції).
                         </div>
                     </div>
                 }
                 else
                 {
-                    @* Переключач режимів *@
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;background:rgba(12,20,17,0.6);border-radius:10px;margin-bottom:16px;border:1px solid var(--line)">
-                        @foreach (var (mode, label, icon) in new[]{ ("branch","По гілці","braces"), ("tree","Дерево","spark") })
-                        {
-                            var on = _submitMode == mode;
-                            <button type="button" @onclick="@(() => SwitchMode(mode))"
-                                    style="height:34px;border-radius:7px;border:none;cursor:pointer;font-family:var(--font);font-size:12.5px;font-weight:650;display:flex;align-items:center;justify-content:center;gap:7px;background:@(on ? "linear-gradient(180deg,var(--acc-bright),var(--acc))" : "transparent");color:@(on ? "#08110d" : "var(--tx-2)");transition:all .2s">
-                                <Icon Name="@icon" Size="13" />@label
-                            </button>
-                        }
+                    <div style="background:rgba(12,20,17,0.5);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:9px;font-size:13px">
+                        <Icon Name="github" Size="15" Style="color:var(--tx-3)" />
+                        <span class="mono" style="color:var(--acc)">@App.Student.Github</span>
                     </div>
-
-                    @if (_submitMode == "branch")
-                    {
-                        @* ── Режим 1: По гілці ── *@
-                        <div class="field" style="margin-bottom:12px">
-                            <label style="font-size:12px;font-weight:600;color:var(--tx-3);margin-bottom:6px;display:block">Гілка</label>
-                            @if (_branchesLoading)
-                            {
-                                <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--tx-3)">
-                                    <span style="width:14px;height:14px;border-radius:50%;border:2px solid var(--acc-dim-2);border-top-color:var(--acc);animation:spin .8s linear infinite"></span>
-                                    Завантаження гілок…
-                                </div>
-                            }
-                            else if (_branches.Count == 0)
-                            {
-                                <div style="font-size:13px;color:var(--st-red)">Не вдалося завантажити гілки.</div>
-                            }
-                            else
-                            {
-                                <select class="select" @onchange="OnBranchSelected" style="height:38px">
-                                    <option value="">— оберіть гілку —</option>
-                                    @foreach (var b in _branches)
-                                    {
-                                        <option value="@b.Name" selected="@(b.Name == _selectedBranch)">@b.Name</option>
-                                    }
-                                </select>
-                            }
-                        </div>
-                        @if (!string.IsNullOrEmpty(_selectedBranch))
-                        {
-                            @RenderCommits(_commits, _commitsLoading, null, LabInfo.Tasks)
-                        }
-                    }
-                    else
-                    {
-                        @* ── Режим 2: Дерево ── *@
-                        @RenderCommits(
-                            _treeCommits.Select(n => new GitHubCommit(n.Sha, n.Message, n.Date)).ToList(),
-                            _treeLoading,
-                            _treeCommits,
-                            LabInfo.Tasks)
-                    }
                 }
 
-                @if (_commitTaskMap.Any(x => !string.IsNullOrEmpty(x.Value)))
+                <div class="field" style="margin-bottom:14px">
+                    <label style="font-size:12.5px;font-weight:650;color:var(--tx-2);margin-bottom:6px;display:block">Гілка</label>
+                    <input class="input mono" @bind="_branchInput" @bind:event="oninput" placeholder="main" style="width:100%" />
+                </div>
+
+                <div style="margin-bottom:18px">
+                    <label style="font-size:12.5px;font-weight:650;color:var(--tx-2);margin-bottom:8px;display:block">Режим вибору комітів</label>
+                    <div style="display:flex;gap:8px">
+                        <button class="btn @(_mode=="list" ? "btn-primary" : "btn-ghost")" style="flex:1;justify-content:center"
+                                @onclick='() => _mode = "list"'>
+                            <Icon Name="braces" Size="15" />Список комітів
+                        </button>
+                        <button class="btn @(_mode=="graph" ? "btn-primary" : "btn-ghost")" style="flex:1;justify-content:center"
+                                @onclick='() => _mode = "graph"'>
+                            <Icon Name="spark" Size="15" />Граф гіта
+                        </button>
+                    </div>
+                </div>
+
+                @if (_loadError is not null)
                 {
-                    <div style="font-size:12px;color:var(--acc);margin-bottom:10px">
-                        Прив'язано: @_commitTaskMap.Count(x => !string.IsNullOrEmpty(x.Value)) коміт(ів)
-                    </div>
+                    <div style="padding:9px 13px;background:rgba(232,128,107,0.1);border:1px solid rgba(232,128,107,0.3);border-radius:9px;color:var(--st-red);font-size:13px;margin-bottom:14px">@_loadError</div>
                 }
+
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;font-size:12.5px;color:var(--tx-3)">
+                    <Icon Name="warn" Size="14" Style="color:var(--st-yellow)" />
+                    Залишилось спроб: <b style="color:var(--tx-1)">@(LabInfo.AttemptsMax - LabInfo.AttemptsUsed)</b>
+                </div>
 
                 <div style="display:flex;gap:10px">
                     <button class="btn btn-ghost btn-block" @onclick="CloseResubmit">Скасувати</button>
-                    <button class="btn btn-primary btn-block" @onclick="RunCheck"
-                            disabled="@(!_commitTaskMap.Any(x => !string.IsNullOrEmpty(x.Value)))">
-                        <Icon Name="upload" Size="17" />Здати
+                    <button class="btn btn-primary btn-block" @onclick="LoadCommits" disabled="@(_loadingCommits || string.IsNullOrWhiteSpace(_branchInput))">
+                        @if (_loadingCommits)
+                        {
+                            <span style="width:16px;height:16px;border-radius:50%;border:2px solid var(--acc-dim-2);border-top-color:var(--acc);animation:spin .7s linear infinite;flex:none"></span>
+                        }
+                        Далі →
                     </button>
                 </div>
             }
+
+            @* ── PHASE: map ── *@
+            else if (_phase == "map")
+            {
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+                    <button @onclick='() => _phase = "branch"' style="width:32px;height:32px;border-radius:9px;border:1px solid var(--line);background:transparent;color:var(--tx-2);cursor:pointer;display:grid;place-items:center;flex:none"><Icon Name="x" Size="14" /></button>
+                    <div>
+                        <h3 style="margin:0;font-size:17px;font-weight:720">Прив'яжіть коміти до завдань</h3>
+                        <p style="margin:2px 0 0;font-size:12.5px;color:var(--tx-3)">
+                            <span class="mono" style="color:var(--acc)">@_branchInput</span>
+                            · @_commits.Count комітів
+                            @if (string.IsNullOrWhiteSpace(App.Student.Github)) { <span style="color:var(--st-yellow)"> · симуляція</span> }
+                        </p>
+                    </div>
+                    <div style="margin-left:auto;font-size:12px;color:var(--tx-3)">
+                        @(_mapping.Count(kv => kv.Value > 0)) / @_labTasks.Count завд.
+                    </div>
+                </div>
+
+                @* Commit list *@
+                <div style="max-height:360px;overflow-y:auto;border:1px solid var(--line);border-radius:10px;margin-bottom:14px">
+                    @for (int ci = 0; ci < _commits.Count; ci++)
+                    {
+                        var c       = _commits[ci];
+                        var isFirst = ci == 0;
+                        var isLast  = ci == _commits.Count - 1;
+                        var isMerge = c.Parents.Length > 1;
+                        var sha     = c.Sha;
+                        var isSelected = sha == _selectedSha;
+                        var gr        = ci < _graph.Count ? _graph[ci] : null;
+                        var graphMode = _mode == "graph";
+
+                        <div style="display:flex;align-items:stretch;border-bottom:@(isLast ? "none" : "1px solid var(--line)");background:@(isSelected ? "rgba(118,199,173,0.07)" : "transparent");cursor:@(graphMode ? "pointer" : "default");transition:background .15s"
+                             @onclick="@(() => { if (graphMode) _selectedSha = isSelected ? null : sha; })">
+
+                            @* ── Graph / list column ── *@
+                            @if (graphMode && gr != null)
+                            {
+                                @* CSS git graph: one 22px column per lane *@
+                                var lanes = Math.Max(1, _graphMaxLanes);
+                                <div style="display:flex;flex:none;padding:0 4px;min-width:@(lanes * 22 + 8)px">
+                                    @for (int l = 0; l < lanes; l++)
+                                    {
+                                        var lane     = l;
+                                        var isNode   = lane == gr.Lane;
+                                        var hasTop   = gr.InLanes.Contains(lane);
+                                        var hasBot   = gr.OutLanes.Contains(lane);
+                                        var color    = LC(lane);
+                                        var dotSize  = isMerge && isNode ? "13px" : "10px";
+                                        var dotBorder= isSelected && isNode
+                                            ? $"2px solid rgba(255,255,255,0.9)"
+                                            : "1.5px solid rgba(255,255,255,0.3)";
+                                        var glow     = isSelected && isNode
+                                            ? $"box-shadow:0 0 8px {color};" : "";
+                                        <div style="width:22px;flex:none;display:flex;flex-direction:column;align-items:center">
+                                            @* top line *@
+                                            <div style="width:2px;flex:none;height:20px;background:@(hasTop ? color : "transparent")"></div>
+                                            @* node dot or spacer *@
+                                            @if (isNode)
+                                            {
+                                                <div style="width:@dotSize;height:@dotSize;border-radius:50%;background:@color;flex:none;border:@dotBorder;@glow"></div>
+                                            }
+                                            else
+                                            {
+                                                <div style="width:10px;height:10px;flex:none"></div>
+                                            }
+                                            @* bottom: straight or CSS arc *@
+                                            @if (!hasBot && gr.Converges.TryGetValue(lane, out var convTo))
+                                            {
+                                                @if (convTo < lane)
+                                                {
+                                                    <div style="width:11px;flex:1;min-height:12px;margin-right:auto;border-left:2px solid @color;border-bottom:2px solid @color;border-bottom-left-radius:9px"></div>
+                                                }
+                                                else
+                                                {
+                                                    <div style="width:11px;flex:1;min-height:12px;margin-left:auto;border-right:2px solid @color;border-bottom:2px solid @color;border-bottom-right-radius:9px"></div>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <div style="width:2px;flex:1;min-height:12px;background:@(hasBot ? color : "transparent")"></div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                @* List mode: single accent dot *@
+                                <div style="width:32px;flex:none;display:flex;flex-direction:column;align-items:center;padding:0 5px">
+                                    <div style="width:2px;flex:none;height:20px;background:@(isFirst ? "transparent" : "var(--acc-dim-2)")"></div>
+                                    <div style="width:@(isMerge ? "12px" : "10px");height:@(isMerge ? "12px" : "10px");border-radius:50%;flex:none;background:@(isMerge ? "var(--st-yellow)" : "var(--acc)");border:1.5px solid @(isMerge ? "var(--st-yellow)" : "var(--acc-bright)")"></div>
+                                    <div style="width:2px;flex:1;min-height:12px;background:@(isLast ? "transparent" : "var(--acc-dim-2)")"></div>
+                                </div>
+                            }
+
+                            @* Commit info + task dropdown *@
+                            <div style="flex:1;padding:10px 12px 10px 6px;min-width:0;display:flex;align-items:center;gap:10px">
+                                <div style="flex:1;min-width:0">
+                                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+                                        <span class="mono" style="font-size:11.5px;color:@(gr != null ? LC(gr.Lane) : "var(--acc)");flex:none">@c.Short</span>
+                                        @if (isMerge) { <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:var(--st-yellow-bg);color:var(--st-yellow)">merge</span> }
+                                        <span style="font-size:11px;color:var(--tx-3);margin-left:auto;flex:none">@c.Date.ToLocalTime().ToString("dd.MM HH:mm")</span>
+                                    </div>
+                                    <div style="font-size:13px;font-weight:580;color:var(--tx-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@c.Message</div>
+                                    <div style="font-size:11px;color:var(--tx-3);margin-top:2px">@c.Author</div>
+                                </div>
+                                <select style="flex:none;width:160px;background:var(--glass-bg);border:1px solid @(isSelected ? LC(gr?.Lane ?? 0) : "var(--line)");border-radius:8px;padding:5px 8px;color:var(--tx-1);font-size:12.5px;cursor:pointer;transition:border-color .15s"
+                                        value="@_mapping.GetValueOrDefault(sha, 0)"
+                                        @onchange="@(e => SetMapping(sha, e.Value?.ToString()))"
+                                        @onclick:stopPropagation>
+                                    <option value="0">— не вказано —</option>
+                                    @foreach (var t in _labTasks)
+                                    {
+                                        <option value="@t.Number">Task@(t.Number): @t.Title</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                @* Summary chips *@
+                <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px">
+                    @foreach (var t in _labTasks)
+                    {
+                        var assignedSha = _mapping.FirstOrDefault(kv => kv.Value == t.Number).Key;
+                        var mapped = assignedSha is not null;
+                        <div style="display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:12px;border:1px solid;border-color:@(mapped ? "var(--st-green)" : "var(--line)");background:@(mapped ? "rgba(118,199,173,0.1)" : "transparent");color:@(mapped ? "var(--st-green)" : "var(--tx-3)")">
+                            <Icon Name="@(mapped ? "check" : "x")" Size="11" />
+                            Task@(t.Number)
+                            @if (mapped) { <span class="mono" style="font-size:10.5px;opacity:0.7">@assignedSha[..7]</span> }
+                        </div>
+                    }
+                </div>
+
+                <div style="display:flex;gap:10px">
+                    <button class="btn btn-ghost btn-block" @onclick='() => _phase = "branch"'>← Назад</button>
+                    <button class="btn btn-primary btn-block" @onclick="RunCheck">
+                        <Icon Name="upload" Size="16" />Запустити перевірку
+                    </button>
+                </div>
+            }
+
+            @* ── PHASE: running ── *@
             else if (_phase == "running")
             {
                 <div style="padding:8px 0">
@@ -280,10 +399,12 @@
                     </div>
                 </div>
             }
+
+            @* ── PHASE: done ── *@
             else
             {
                 var newScore = _result?.AutoScore ?? LabInfo.Auto;
-                var delta = newScore - _oldScore;
+                var delta    = newScore - _oldScore;
                 <div style="text-align:center;padding:10px 0">
                     <div style="width:60px;height:60px;border-radius:50%;margin:0 auto 16px;display:grid;place-items:center;background:var(--st-green-bg);border:1px solid var(--glass-border-hover);color:var(--st-green)"><Icon Name="check" Size="30" Stroke="2.4" /></div>
                     <h3 style="margin:0;font-size:19px;font-weight:730">Перевірку завершено</h3>
@@ -325,230 +446,195 @@
 
     // ── Resubmit modal ────────────────────────────────────────────────────────
     private bool _modalOpen;
-    private string _phase = "confirm";
+    private string _phase = "branch";
     private string _currentStep = "";
     private GradingResultDto? _result;
     private int _oldScore;
 
-    // ── GitHub branch/commit picker ───────────────────────────────────────────
-    private string                          _submitMode      = "branch";  // "branch" | "tree"
-    private List<GitHubBranch>              _branches        = [];
-    private List<GitHubCommit>              _commits         = [];
-    private List<GitHubCommitNode>          _treeCommits     = [];
-    private string                          _selectedBranch  = "";
-    private Dictionary<string, string>      _commitTaskMap   = [];  // sha → taskN
-    private bool                            _branchesLoading;
-    private bool                            _commitsLoading;
-    private bool                            _treeLoading;
+    // Commit-mapping state
+    private string _mode = "list";
+    private string _branchInput = "";
+    private List<CommitInfo> _commits = [];
+    private List<LabTask> _labTasks = [];
+    private Dictionary<string, int> _mapping = new();
+    private bool _loadingCommits;
+    private string? _loadError;
+    private string? _selectedSha;
+
+    // ── Git graph (CSS-based, no SVG) ────────────────────────────────────────
+    // Each GraphRow knows: which lane the commit is on, which lanes have
+    // incoming lines from above, and which lanes continue below.
+    private record GraphRow(
+        CommitInfo Commit, int Lane,
+        int[] InLanes,                          // lanes with line coming in from top
+        int[] OutLanes,                         // lanes with line going out to bottom
+        IReadOnlyDictionary<int, int> Converges // lane → target lane  (arc at bottom)
+    );
+    private List<GraphRow> _graph = [];
+    private int _graphMaxLanes = 1;
+
+    private static string LC(int lane) => lane switch
+    {
+        0 => "#76c7ad",
+        1 => "#6ee7b7",
+        2 => "#fcd34d",
+        3 => "#c084fc",
+        4 => "#60a5fa",
+        _ => "#6b7280",
+    };
+
+    private void BuildGraph()
+    {
+        _graph = [];
+        if (_commits.Count == 0) { _graphMaxLanes = 1; return; }
+
+        // slots[i] = sha expected at lane i  (null = free lane)
+        var slots = new List<string?>();
+        var prevOutLanes = Array.Empty<int>();
+
+        foreach (var c in _commits)
+        {
+            var inLanes = prevOutLanes;  // lines arriving from row above
+
+            // Find or assign a lane for this commit
+            int myLane = slots.IndexOf(c.Sha);
+            if (myLane < 0)
+            {
+                myLane = slots.IndexOf(null);
+                if (myLane < 0) { myLane = slots.Count; slots.Add(null); }
+            }
+            slots[myLane] = null;  // consume this slot
+
+            var outLaneSet = new HashSet<int>();
+            var converges  = new Dictionary<int, int>(); // lane → target
+
+            // Assign lanes to parents
+            for (int pi = 0; pi < c.Parents.Length; pi++)
+            {
+                var pSha = c.Parents[pi];
+                int ex = slots.IndexOf(pSha);
+                if (ex >= 0)
+                {
+                    // parent already tracked → myLane converges INTO ex
+                    outLaneSet.Add(ex);
+                    converges[myLane] = ex;
+                }
+                else if (pi == 0)
+                {
+                    // first parent continues in this commit's lane
+                    slots[myLane] = pSha;
+                    outLaneSet.Add(myLane);
+                }
+                else
+                {
+                    // additional parent → open a new lane
+                    int nl = slots.IndexOf(null);
+                    if (nl < 0) { nl = slots.Count; slots.Add(null); }
+                    slots[nl] = pSha;
+                    outLaneSet.Add(nl);
+                }
+            }
+
+            // All other active lanes pass through
+            for (int s = 0; s < slots.Count; s++)
+                if (slots[s] != null) outLaneSet.Add(s);
+
+            // Trim trailing free slots
+            while (slots.Count > 0 && slots[^1] == null) slots.RemoveAt(slots.Count - 1);
+
+            var outLanes = outLaneSet.ToArray();
+            _graph.Add(new GraphRow(c, myLane, inLanes, outLanes, converges));
+            prevOutLanes = outLanes;
+        }
+
+        _graphMaxLanes = _graph.Count > 0
+            ? Math.Max(1, _graph.Max(r => Math.Max(
+                r.InLanes.Length > 0 ? r.InLanes.Max() + 1 : 0,
+                r.OutLanes.Length > 0 ? r.OutLanes.Max() + 1 : 0)))
+            : 1;
+        _graphMaxLanes = Math.Max(_graphMaxLanes,
+            _graph.Count > 0 ? _graph.Max(r => r.Lane + 1) : 1);
+    }
 
     private void OpenResubmit()
     {
-        _modalOpen      = true;
-        _phase          = "confirm";
-        _result         = null;
-        _oldScore       = LabInfo.Auto;
-        _submitMode     = "branch";
-        _selectedBranch = "";
-        _commitTaskMap  = [];
-        _branches       = [];
-        _commits        = [];
-        _treeCommits    = [];
-        _ = LoadBranchesAsync();
+        _modalOpen    = true;
+        _phase        = "branch";
+        _result       = null;
+        _oldScore     = LabInfo.Auto;
+        _branchInput  = LabInfo.Branch.Length > 0 ? LabInfo.Branch : "main";
+        _commits      = [];
+        _mapping      = new();
+        _loadError    = null;
+        _selectedSha  = null;
+        _graph        = [];
     }
 
     private void CloseResubmit() => _modalOpen = false;
-
-    private async Task LoadBranchesAsync()
-    {
-        if (string.IsNullOrWhiteSpace(App.Student.Github)) return;
-        _branchesLoading = true; StateHasChanged();
-        _branches = await GitHub.GetBranchesAsync(App.Student.Github, App.Student.GithubToken);
-        // Якщо лаба має гілку і вона є в репо — підставляємо автоматично
-        if (!string.IsNullOrEmpty(LabInfo.Branch) && _branches.Any(b => b.Name == LabInfo.Branch))
-        {
-            _selectedBranch = LabInfo.Branch;
-            await LoadCommitsAsync();
-        }
-        _branchesLoading = false; StateHasChanged();
-    }
-
-    private async Task OnBranchSelected(ChangeEventArgs e)
-    {
-        _selectedBranch = e.Value?.ToString() ?? "";
-        _commitTaskMap  = [];
-        _commits        = [];
-        if (!string.IsNullOrEmpty(_selectedBranch))
-            await LoadCommitsAsync();
-    }
-
-    private async Task LoadCommitsAsync()
-    {
-        _commitsLoading = true; StateHasChanged();
-        // Тільки коміти цієї гілки (не з main)
-        _commits = await GitHub.GetBranchCommitsAsync(
-            App.Student.Github, _selectedBranch, App.Student.GithubToken);
-        // Ініціалізуємо порожній маппінг для кожного коміту
-        _commitTaskMap = _commits.ToDictionary(c => c.Sha, _ => "");
-        _commitsLoading = false; StateHasChanged();
-    }
-
-    private void SetCommitTask(string sha, string taskN)
-    {
-        _commitTaskMap[sha] = taskN;
-        StateHasChanged();
-    }
-
-    private void SwitchMode(string mode)
-    {
-        _submitMode    = mode;
-        _commitTaskMap = [];
-        if (mode == "tree" && _treeCommits.Count == 0)
-            _ = LoadTreeAsync();
-    }
-
-    private async Task LoadTreeAsync()
-    {
-        if (string.IsNullOrWhiteSpace(App.Student.Github)) return;
-        _treeLoading = true; StateHasChanged();
-        _treeCommits = await GitHub.GetCommitTreeAsync(App.Student.Github, App.Student.GithubToken);
-        _commitTaskMap = _treeCommits.ToDictionary(c => c.Sha, _ => "");
-        _treeLoading = false; StateHasChanged();
-    }
-
-    private RenderFragment RenderCommits(
-        List<GitHubCommit> commits, bool loading,
-        List<GitHubCommitNode>? nodes, List<TaskItem> tasks) =>
-    @<div>
-        @if (loading)
-        {
-            <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--tx-3);padding:8px 0">
-                <span style="width:14px;height:14px;border-radius:50%;border:2px solid var(--acc-dim-2);border-top-color:var(--acc);animation:spin .8s linear infinite"></span>
-                Завантаження…
-            </div>
-        }
-        else if (commits.Count == 0)
-        {
-            <div style="font-size:13px;color:var(--tx-3);padding:8px 0">Комітів не знайдено</div>
-        }
-        else
-        {
-            @* Кнопки швидкого вибору *@
-            <div style="display:flex;gap:8px;margin-bottom:8px">
-                <button type="button" class="btn btn-ghost btn-sm"
-                        @onclick="@(() => AutoDetectTasks(commits, tasks))">
-                    <Icon Name="spark" Size="13" />Авто
-                </button>
-                <button type="button" class="btn btn-ghost btn-sm"
-                        @onclick="@(() => SelectAllCommits(commits, tasks))">
-                    Вибрати всі
-                </button>
-                <button type="button" class="btn btn-ghost btn-sm"
-                        @onclick="@(() => ClearAllCommits(commits))">
-                    Очистити
-                </button>
-            </div>
-
-            <div style="display:flex;flex-direction:column;gap:5px;max-height:240px;overflow-y:auto;margin-bottom:8px">
-                @foreach (var c in commits)
-                {
-                    var mapped = _commitTaskMap.GetValueOrDefault(c.Sha, "");
-                    var node   = nodes?.FirstOrDefault(n => n.Sha == c.Sha);
-                    <div style="display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;padding:8px 10px;border-radius:9px;border:1px solid @(string.IsNullOrEmpty(mapped) ? "var(--line)" : "var(--glass-border-hover)");background:@(string.IsNullOrEmpty(mapped) ? "transparent" : "var(--acc-dim)")">
-                        <div style="min-width:0">
-                            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-                                <span class="mono" style="font-size:11px;color:var(--tx-faint);flex:none">@c.Sha</span>
-                                @if (node is not null)
-                                {
-                                    @foreach (var br in node.Branches)
-                                    {
-                                        <span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--acc-dim);color:var(--acc-bright);white-space:nowrap">@br</span>
-                                    }
-                                }
-                                <span style="font-size:12.5px;color:var(--tx-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@c.Message</span>
-                            </div>
-                            <div style="font-size:11px;color:var(--tx-faint);margin-top:2px">@FormatDate(c.Date)</div>
-                        </div>
-                        <select style="height:32px;padding:0 8px;border-radius:8px;background:rgba(12,20,17,0.7);border:1px solid var(--line);color:var(--tx-1);font-size:12.5px;font-family:var(--font);cursor:pointer;min-width:95px"
-                                @onchange="@(e => SetCommitTask(c.Sha, e.Value?.ToString() ?? ""))">
-                            <option value="">— пропустити —</option>
-                            @foreach (var t in tasks)
-                            {
-                                <option value="@t.N" selected="@(mapped == t.N.ToString())">Task @t.N</option>
-                            }
-                        </select>
-                    </div>
-                }
-            </div>
-        }
-    </div>;
-
-    // Авто: визначає Task N з повідомлення коміту (Task1, task1, Task 1, #1, завдання 1)
-    private void AutoDetectTasks(List<GitHubCommit> commits, List<TaskItem> tasks)
-    {
-        foreach (var c in commits)
-        {
-            var msg = c.Message.ToLowerInvariant();
-            foreach (var t in tasks.OrderByDescending(t => t.N))
-            {
-                if (msg.Contains($"task{t.N}")
-                 || msg.Contains($"task {t.N}")
-                 || msg.Contains($"task0{t.N}")
-                 || msg.Contains($"завдання {t.N}")
-                 || msg.Contains($"#{t.N}"))
-                {
-                    _commitTaskMap[c.Sha] = t.N.ToString();
-                    break;
-                }
-            }
-        }
-        StateHasChanged();
-    }
-
-    // Вибрати всі: призначає кожному коміту задачу по порядку (1→Task1, 2→Task2...)
-    private void SelectAllCommits(List<GitHubCommit> commits, List<TaskItem> tasks)
-    {
-        var ordered = commits.OrderBy(c => c.Date).ToList();
-        for (int i = 0; i < ordered.Count; i++)
-        {
-            var taskN = tasks.ElementAtOrDefault(i)?.N ?? tasks.LastOrDefault()?.N ?? 1;
-            _commitTaskMap[ordered[i].Sha] = taskN.ToString();
-        }
-        StateHasChanged();
-    }
-
-    // Очистити всі прив'язки
-    private void ClearAllCommits(List<GitHubCommit> commits)
-    {
-        foreach (var c in commits)
-            _commitTaskMap[c.Sha] = "";
-        StateHasChanged();
-    }
-
-    private static string FormatDate(string iso)
-    {
-        if (DateTime.TryParse(iso, out var d))
-            return d.ToLocalTime().ToString("dd.MM HH:mm");
-        return iso;
-    }
     private void NoOp() { }
+
+    private void SetMapping(string sha, string? value) =>
+        _mapping[sha] = int.TryParse(value, out var n) ? n : 0;
+
+    private async Task LoadCommits()
+    {
+        _loadingCommits = true;
+        _loadError      = null;
+        StateHasChanged();
+        try
+        {
+            // Load tasks directly from DB — reliable regardless of submission status
+            var labDef = await Db.Labs
+                .Include(l => l.Tasks)
+                .FirstOrDefaultAsync(l => l.Number == Id);
+            _labTasks = labDef?.Tasks.OrderBy(t => t.Number).ToList() ?? [];
+
+            _commits      = await GitBranch.GetCommitsAsync(App.Student.Github, _branchInput);
+            _mapping      = _commits.ToDictionary(c => c.Sha, _ => 0);
+            _selectedSha  = null;
+            BuildGraph();
+            _phase        = "map";
+        }
+        catch (Exception ex)
+        {
+            _loadError = ex.Message;
+        }
+        finally
+        {
+            _loadingCommits = false;
+            StateHasChanged();
+        }
+    }
 
     private async Task RunCheck()
     {
-        _phase = "running"; StateHasChanged();
+        _phase = "running";
+        StateHasChanged();
 
         var sub = await Db.Submissions
             .Include(s => s.LabDef)
             .FirstOrDefaultAsync(s => s.StudentId == _studentId && s.LabDef.Number == Id);
         if (sub is null) return;
 
+        // Persist branch override + commit mapping before grading
+        sub.BranchOverride = _branchInput.Length > 0 ? _branchInput : null;
+        var mapEntries = _mapping
+            .Where(kv => kv.Value > 0)
+            .Select(kv => new CommitTaskMap(kv.Key, kv.Value))
+            .ToList();
+        sub.CommitMappingJson = mapEntries.Count > 0
+            ? System.Text.Json.JsonSerializer.Serialize(mapEntries)
+            : null;
+        await Db.SaveChangesAsync();
+
         var progress = new Progress<string>(step => { _currentStep = step; InvokeAsync(StateHasChanged); });
         _result = await Grader.RunAsync(sub.Id, _studentId, progress);
 
-        // Reload lab detail to show new task results
         var detail = await Data.GetLabDetailAsync(Id, _studentId);
         if (detail is not null) { LabInfo = detail; _activeId = "task" + (detail.Tasks.FirstOrDefault()?.N ?? 1); }
 
-        _phase = "done"; StateHasChanged();
+        _phase = "done";
+        StateHasChanged();
     }
 
     // ── Comments ──────────────────────────────────────────────────────────────

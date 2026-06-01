@@ -19,10 +19,11 @@ public class DatabaseSeeder(
         {
             try
             {
-                // Quick schema check — query a table that was added recently
+                // Quick schema check — query columns added recently
                 await db.UserLinks.AnyAsync();
                 await db.Notifications.AnyAsync();
                 await db.Comments.AnyAsync();
+                _ = await db.Submissions.Select(s => s.BranchOverride).FirstOrDefaultAsync();
             }
             catch (Exception)
             {
