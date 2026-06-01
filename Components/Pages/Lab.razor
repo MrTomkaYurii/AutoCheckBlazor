@@ -270,33 +270,70 @@
                         var isLast  = ci == _commits.Count - 1;
                         var isMerge = c.Parents.Length > 1;
                         var sha     = c.Sha;
+                        var isSelected = sha == _selectedSha;
+                        var gr      = _mode == "graph" && ci < _graph.Count ? _graph[ci] : null;
 
-                        <div style="display:flex;align-items:stretch;border-bottom:@(isLast ? "none" : "1px solid var(--line)")">
+                        <div style="display:flex;align-items:stretch;border-bottom:@(isLast ? "none" : "1px solid var(--line)");background:@(isSelected ? "rgba(118,199,173,0.07)" : "transparent");cursor:@(_mode=="graph" ? "pointer" : "default");transition:background .15s"
+                             @onclick="@(() => { if (_mode == "graph") _selectedSha = isSelected ? null : sha; })">
 
-                            @* Graph column (both modes — just styled differently) *@
-                            <div style="width:32px;flex:none;display:flex;flex-direction:column;align-items:center;padding:0">
-                                @* top connector *@
-                                <div style="width:2px;height:@(isFirst ? "18px" : "18px");background:@(isFirst ? "transparent" : "var(--acc-dim-2)");flex:none"></div>
-                                @* dot *@
-                                <div style="width:@(isMerge ? "12px" : "10px");height:@(isMerge ? "12px" : "10px");border-radius:50%;background:@(isMerge ? "var(--st-yellow)" : (_mode=="graph" ? "var(--acc)" : "var(--tx-3)"));flex:none;border:@(isMerge ? "2px solid var(--st-yellow)" : (_mode=="graph" ? "2px solid var(--acc-bright)" : "2px solid var(--tx-3)"))"></div>
-                                @* bottom connector *@
-                                <div style="width:2px;flex:1;min-height:12px;background:@(isLast ? "transparent" : "var(--acc-dim-2)")"></div>
-                            </div>
+                            @* ── Graph column ── *@
+                            @if (gr != null)
+                            {
+                                @* CSS-only git graph: one div-column per lane *@
+                                <div style="display:flex;flex:none;padding-left:4px">
+                                    @for (int l = 0; l < _graphMaxLanes; l++)
+                                    {
+                                        var lane    = l;
+                                        var isNode  = lane == gr.Lane;
+                                        var hasTop  = gr.InLanes.Contains(lane);
+                                        var hasBot  = gr.OutLanes.Contains(lane);
+                                        var color   = LC(lane);
+                                        var nodeSize = isMerge ? "11px" : "9px";
+                                        var nodeBorder = isSelected && isNode
+                                            ? $"2px solid rgba(255,255,255,0.85)"
+                                            : "1.5px solid rgba(255,255,255,0.25)";
+                                        var glow = isSelected && isNode
+                                            ? $"box-shadow:0 0 7px {color};" : "";
+                                        <div style="width:18px;flex:none;display:flex;flex-direction:column;align-items:center">
+                                            <div style="width:2px;height:20px;background:@(hasTop ? color : "transparent");flex:none"></div>
+                                            @if (isNode)
+                                            {
+                                                <div style="width:@nodeSize;height:@nodeSize;border-radius:50%;background:@color;flex:none;border:@nodeBorder;@glow"></div>
+                                            }
+                                            else
+                                            {
+                                                <div style="width:9px;height:9px;flex:none"></div>
+                                            }
+                                            <div style="width:2px;flex:1;min-height:10px;background:@(hasBot ? color : "transparent")"></div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                @* List mode: single grey dot column *@
+                                <div style="width:28px;flex:none;display:flex;flex-direction:column;align-items:center">
+                                    <div style="width:2px;height:20px;background:@(isFirst ? "transparent" : "var(--acc-dim-2)");flex:none"></div>
+                                    <div style="width:@(isMerge ? "11px" : "9px");height:@(isMerge ? "11px" : "9px");border-radius:50%;background:@(isMerge ? "var(--st-yellow)" : "var(--tx-3)");flex:none;border:1.5px solid @(isMerge ? "var(--st-yellow)" : "var(--tx-3)")"></div>
+                                    <div style="width:2px;flex:1;min-height:10px;background:@(isLast ? "transparent" : "var(--acc-dim-2)")"></div>
+                                </div>
+                            }
 
-                            @* Commit info + task picker *@
-                            <div style="flex:1;padding:10px 12px 10px 4px;min-width:0;display:flex;align-items:center;gap:10px">
+                            @* Commit info + task dropdown *@
+                            <div style="flex:1;padding:10px 12px 10px 6px;min-width:0;display:flex;align-items:center;gap:10px">
                                 <div style="flex:1;min-width:0">
                                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
-                                        <span class="mono" style="font-size:11.5px;color:var(--acc);flex:none">@c.Short</span>
+                                        <span class="mono" style="font-size:11.5px;color:@(gr != null ? LC(gr.Lane) : "var(--acc)");flex:none">@c.Short</span>
                                         @if (isMerge) { <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:var(--st-yellow-bg);color:var(--st-yellow)">merge</span> }
                                         <span style="font-size:11px;color:var(--tx-3);margin-left:auto;flex:none">@c.Date.ToLocalTime().ToString("dd.MM HH:mm")</span>
                                     </div>
                                     <div style="font-size:13px;font-weight:580;color:var(--tx-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@c.Message</div>
                                     <div style="font-size:11px;color:var(--tx-3);margin-top:2px">@c.Author</div>
                                 </div>
-                                <select style="flex:none;width:160px;background:var(--glass-bg);border:1px solid var(--line);border-radius:8px;padding:5px 8px;color:var(--tx-1);font-size:12.5px;cursor:pointer"
+                                <select style="flex:none;width:160px;background:var(--glass-bg);border:1px solid @(isSelected ? LC(gr?.Lane ?? 0) : "var(--line)");border-radius:8px;padding:5px 8px;color:var(--tx-1);font-size:12.5px;cursor:pointer;transition:border-color .15s"
                                         value="@_mapping.GetValueOrDefault(sha, 0)"
-                                        @onchange="@(e => SetMapping(sha, e.Value?.ToString()))">
+                                        @onchange="@(e => SetMapping(sha, e.Value?.ToString()))"
+                                        @onclick:stopPropagation>
                                     <option value="0">— не вказано —</option>
                                     @foreach (var t in _labTasks)
                                     {
@@ -403,6 +440,99 @@
     private Dictionary<string, int> _mapping = new();
     private bool _loadingCommits;
     private string? _loadError;
+    private string? _selectedSha;
+
+    // ── Git graph (CSS-based, no SVG) ────────────────────────────────────────
+    // Each GraphRow knows: which lane the commit is on, which lanes have
+    // incoming lines from above, and which lanes continue below.
+    private record GraphRow(
+        CommitInfo Commit, int Lane,
+        int[] InLanes,              // lanes with line coming in from top
+        int[] OutLanes              // lanes with line going out to bottom
+    );
+    private List<GraphRow> _graph = [];
+    private int _graphMaxLanes = 1;
+
+    private static string LC(int lane) => lane switch
+    {
+        0 => "#76c7ad",
+        1 => "#6ee7b7",
+        2 => "#fcd34d",
+        3 => "#c084fc",
+        4 => "#60a5fa",
+        _ => "#6b7280",
+    };
+
+    private void BuildGraph()
+    {
+        _graph = [];
+        if (_commits.Count == 0) { _graphMaxLanes = 1; return; }
+
+        // slots[i] = sha expected at lane i  (null = free lane)
+        var slots = new List<string?>();
+        var prevOutLanes = Array.Empty<int>();
+
+        foreach (var c in _commits)
+        {
+            var inLanes = prevOutLanes;  // lines arriving from row above
+
+            // Find or assign a lane for this commit
+            int myLane = slots.IndexOf(c.Sha);
+            if (myLane < 0)
+            {
+                myLane = slots.IndexOf(null);
+                if (myLane < 0) { myLane = slots.Count; slots.Add(null); }
+            }
+            slots[myLane] = null;  // consume this slot
+
+            var outLaneSet = new HashSet<int>();
+
+            // Assign lanes to parents
+            for (int pi = 0; pi < c.Parents.Length; pi++)
+            {
+                var pSha = c.Parents[pi];
+                int ex = slots.IndexOf(pSha);
+                if (ex >= 0)
+                {
+                    // parent already has a lane → this commit merges into it
+                    outLaneSet.Add(ex);
+                }
+                else if (pi == 0)
+                {
+                    // first parent continues in this commit's lane
+                    slots[myLane] = pSha;
+                    outLaneSet.Add(myLane);
+                }
+                else
+                {
+                    // additional parent → open a new lane
+                    int nl = slots.IndexOf(null);
+                    if (nl < 0) { nl = slots.Count; slots.Add(null); }
+                    slots[nl] = pSha;
+                    outLaneSet.Add(nl);
+                }
+            }
+
+            // All other active lanes pass through
+            for (int s = 0; s < slots.Count; s++)
+                if (slots[s] != null) outLaneSet.Add(s);
+
+            // Trim trailing free slots
+            while (slots.Count > 0 && slots[^1] == null) slots.RemoveAt(slots.Count - 1);
+
+            var outLanes = outLaneSet.ToArray();
+            _graph.Add(new GraphRow(c, myLane, inLanes, outLanes));
+            prevOutLanes = outLanes;
+        }
+
+        _graphMaxLanes = _graph.Count > 0
+            ? Math.Max(1, _graph.Max(r => Math.Max(
+                r.InLanes.Length > 0 ? r.InLanes.Max() + 1 : 0,
+                r.OutLanes.Length > 0 ? r.OutLanes.Max() + 1 : 0)))
+            : 1;
+        _graphMaxLanes = Math.Max(_graphMaxLanes,
+            _graph.Count > 0 ? _graph.Max(r => r.Lane + 1) : 1);
+    }
 
     private void OpenResubmit()
     {
@@ -414,6 +544,8 @@
         _commits      = [];
         _mapping      = new();
         _loadError    = null;
+        _selectedSha  = null;
+        _graph        = [];
     }
 
     private void CloseResubmit() => _modalOpen = false;
@@ -435,9 +567,11 @@
                 .FirstOrDefaultAsync(l => l.Number == Id);
             _labTasks = labDef?.Tasks.OrderBy(t => t.Number).ToList() ?? [];
 
-            _commits = await GitBranch.GetCommitsAsync(App.Student.Github, _branchInput);
-            _mapping = _commits.ToDictionary(c => c.Sha, _ => 0);
-            _phase   = "map";
+            _commits      = await GitBranch.GetCommitsAsync(App.Student.Github, _branchInput);
+            _mapping      = _commits.ToDictionary(c => c.Sha, _ => 0);
+            _selectedSha  = null;
+            BuildGraph();
+            _phase        = "map";
         }
         catch (Exception ex)
         {
