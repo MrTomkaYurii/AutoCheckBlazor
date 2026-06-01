@@ -171,7 +171,7 @@
     var widePhase = _phase is "branch" or "map";
     <div @onclick="CloseResubmit" style="position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:24px;background:rgba(6,12,10,0.72);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)">
         <div @onclick:stopPropagation @onclick="NoOp" class="glass"
-             style="width:100%;max-width:@(widePhase ? "640px" : "480px");padding:26px;animation:popIn .3s cubic-bezier(.22,1,.36,1) both;box-shadow:var(--shadow-pop)">
+             style="width:100%;max-width:@(widePhase ? "860px" : "480px");padding:26px;animation:popIn .3s cubic-bezier(.22,1,.36,1) both;box-shadow:var(--shadow-pop)">
 
             @* ── PHASE: branch ── *@
             @if (_phase == "branch")
@@ -271,58 +271,58 @@
                         var isMerge = c.Parents.Length > 1;
                         var sha     = c.Sha;
                         var isSelected = sha == _selectedSha;
-                        var gr      = _mode == "graph" && ci < _graph.Count ? _graph[ci] : null;
+                        var gr        = ci < _graph.Count ? _graph[ci] : null;
+                        var graphMode = _mode == "graph";
 
-                        <div style="display:flex;align-items:stretch;border-bottom:@(isLast ? "none" : "1px solid var(--line)");background:@(isSelected ? "rgba(118,199,173,0.07)" : "transparent");cursor:@(_mode=="graph" ? "pointer" : "default");transition:background .15s"
-                             @onclick="@(() => { if (_mode == "graph") _selectedSha = isSelected ? null : sha; })">
+                        <div style="display:flex;align-items:stretch;border-bottom:@(isLast ? "none" : "1px solid var(--line)");background:@(isSelected ? "rgba(118,199,173,0.07)" : "transparent");cursor:@(graphMode ? "pointer" : "default");transition:background .15s"
+                             @onclick="@(() => { if (graphMode) _selectedSha = isSelected ? null : sha; })">
 
-                            @* ── Graph column ── *@
-                            @if (gr != null)
+                            @* ── Graph / list column ── *@
+                            @if (graphMode && gr != null)
                             {
-                                @* CSS-only git graph: one div-column per lane *@
-                                <div style="display:flex;flex:none;padding-left:4px">
-                                    @for (int l = 0; l < _graphMaxLanes; l++)
+                                @* CSS git graph: one 22px column per lane *@
+                                var lanes = Math.Max(1, _graphMaxLanes);
+                                <div style="display:flex;flex:none;padding:0 4px;min-width:@(lanes * 22 + 8)px">
+                                    @for (int l = 0; l < lanes; l++)
                                     {
-                                        var lane    = l;
-                                        var isNode  = lane == gr.Lane;
-                                        var hasTop  = gr.InLanes.Contains(lane);
-                                        var hasBot  = gr.OutLanes.Contains(lane);
-                                        var color   = LC(lane);
-                                        var nodeSize = isMerge ? "11px" : "9px";
-                                        var nodeBorder = isSelected && isNode
-                                            ? $"2px solid rgba(255,255,255,0.85)"
-                                            : "1.5px solid rgba(255,255,255,0.25)";
-                                        var glow = isSelected && isNode
-                                            ? $"box-shadow:0 0 7px {color};" : "";
-                                        <div style="width:18px;flex:none;display:flex;flex-direction:column;align-items:center">
-                                            @* top connector *@
-                                            <div style="width:2px;height:20px;background:@(hasTop ? color : "transparent");flex:none"></div>
-                                            @* node or spacer *@
+                                        var lane     = l;
+                                        var isNode   = lane == gr.Lane;
+                                        var hasTop   = gr.InLanes.Contains(lane);
+                                        var hasBot   = gr.OutLanes.Contains(lane);
+                                        var color    = LC(lane);
+                                        var dotSize  = isMerge && isNode ? "13px" : "10px";
+                                        var dotBorder= isSelected && isNode
+                                            ? $"2px solid rgba(255,255,255,0.9)"
+                                            : "1.5px solid rgba(255,255,255,0.3)";
+                                        var glow     = isSelected && isNode
+                                            ? $"box-shadow:0 0 8px {color};" : "";
+                                        <div style="width:22px;flex:none;display:flex;flex-direction:column;align-items:center">
+                                            @* top line *@
+                                            <div style="width:2px;flex:none;height:20px;background:@(hasTop ? color : "transparent")"></div>
+                                            @* node dot or spacer *@
                                             @if (isNode)
                                             {
-                                                <div style="width:@nodeSize;height:@nodeSize;border-radius:50%;background:@color;flex:none;border:@nodeBorder;@glow"></div>
+                                                <div style="width:@dotSize;height:@dotSize;border-radius:50%;background:@color;flex:none;border:@dotBorder;@glow"></div>
                                             }
                                             else
                                             {
-                                                <div style="width:9px;height:9px;flex:none"></div>
+                                                <div style="width:10px;height:10px;flex:none"></div>
                                             }
-                                            @* bottom: straight line, or CSS arc when lane converges *@
+                                            @* bottom: straight or CSS arc *@
                                             @if (!hasBot && gr.Converges.TryGetValue(lane, out var convTo))
                                             {
                                                 @if (convTo < lane)
                                                 {
-                                                    @* arc curving LEFT toward a lower lane *@
-                                                    <div style="width:9px;flex:1;min-height:10px;margin-right:auto;border-left:2px solid @color;border-bottom:2px solid @color;border-bottom-left-radius:8px"></div>
+                                                    <div style="width:11px;flex:1;min-height:12px;margin-right:auto;border-left:2px solid @color;border-bottom:2px solid @color;border-bottom-left-radius:9px"></div>
                                                 }
                                                 else
                                                 {
-                                                    @* arc curving RIGHT toward a higher lane *@
-                                                    <div style="width:9px;flex:1;min-height:10px;margin-left:auto;border-right:2px solid @color;border-bottom:2px solid @color;border-bottom-right-radius:8px"></div>
+                                                    <div style="width:11px;flex:1;min-height:12px;margin-left:auto;border-right:2px solid @color;border-bottom:2px solid @color;border-bottom-right-radius:9px"></div>
                                                 }
                                             }
                                             else
                                             {
-                                                <div style="width:2px;flex:1;min-height:10px;background:@(hasBot ? color : "transparent")"></div>
+                                                <div style="width:2px;flex:1;min-height:12px;background:@(hasBot ? color : "transparent")"></div>
                                             }
                                         </div>
                                     }
@@ -330,11 +330,11 @@
                             }
                             else
                             {
-                                @* List mode: single grey dot column *@
-                                <div style="width:28px;flex:none;display:flex;flex-direction:column;align-items:center">
-                                    <div style="width:2px;height:20px;background:@(isFirst ? "transparent" : "var(--acc-dim-2)");flex:none"></div>
-                                    <div style="width:@(isMerge ? "11px" : "9px");height:@(isMerge ? "11px" : "9px");border-radius:50%;background:@(isMerge ? "var(--st-yellow)" : "var(--tx-3)");flex:none;border:1.5px solid @(isMerge ? "var(--st-yellow)" : "var(--tx-3)")"></div>
-                                    <div style="width:2px;flex:1;min-height:10px;background:@(isLast ? "transparent" : "var(--acc-dim-2)")"></div>
+                                @* List mode: single accent dot *@
+                                <div style="width:32px;flex:none;display:flex;flex-direction:column;align-items:center;padding:0 5px">
+                                    <div style="width:2px;flex:none;height:20px;background:@(isFirst ? "transparent" : "var(--acc-dim-2)")"></div>
+                                    <div style="width:@(isMerge ? "12px" : "10px");height:@(isMerge ? "12px" : "10px");border-radius:50%;flex:none;background:@(isMerge ? "var(--st-yellow)" : "var(--acc)");border:1.5px solid @(isMerge ? "var(--st-yellow)" : "var(--acc-bright)")"></div>
+                                    <div style="width:2px;flex:1;min-height:12px;background:@(isLast ? "transparent" : "var(--acc-dim-2)")"></div>
                                 </div>
                             }
 
