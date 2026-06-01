@@ -83,7 +83,14 @@ public class AuthService(AppDbContext db) : IAuthService
         }
 
         db.UserLinks.Add(link);
-        await db.SaveChangesAsync();
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException)
+        {
+            // Race condition: another concurrent request already created the link — ignore
+        }
     }
 
     private async Task<StudentRecord> CreateStudentAsync(string first, string last, string email)
