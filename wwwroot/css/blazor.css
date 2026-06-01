@@ -1,0 +1,33 @@
+/* Blazor-specific tweaks layered on top of the 1:1 design CSS (app.css) */
+
+html, body { height: 100%; }
+
+/* full-height host for routed content */
+.page-host { height: 100%; }
+
+/* MudBlazor dialog surface — let our glass styling show through */
+.mud-dialog-container .mud-dialog {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.mud-overlay-dialog { background: rgba(6, 12, 10, 0.72) !important; backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px); }
+
+/* Blazor connection error toast */
+#blazor-error-ui {
+  display: none;
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 1000;
+  padding: 12px 22px;
+  background: var(--st-red-bg);
+  color: var(--st-red);
+  border-top: 1px solid rgba(232, 128, 107, 0.3);
+  font-family: var(--font);
+  font-size: 13.5px;
+  text-align: center;
+}
+#blazor-error-ui .reload { color: var(--acc-bright); margin: 0 8px; }
+#blazor-error-ui .dismiss { cursor: pointer; position: absolute; right: 16px; top: 12px; }
+
+/* reset default link color inside app */
+a { color: inherit; }

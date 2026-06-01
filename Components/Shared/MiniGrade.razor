@@ -1,0 +1,11 @@
+@* small Захист / Фінал grade box used in lab cards *@
+<div style="flex:1;padding:9px 11px;border-radius:10px;background:@(Highlight ? "var(--acc-dim)" : "rgba(255,255,255,0.025)");border:1px solid @(Highlight ? "var(--glass-border)" : "var(--line)")">
+    <div style="font-size:10.5px;color:var(--tx-3);font-weight:500;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.04em">@Label</div>
+    <div class="mono tnum" style="font-size:16px;font-weight:750;color:@(Value is not null ? (Highlight ? "var(--acc-bright)" : "var(--tx-1)") : "var(--tx-faint)")">@(Value is not null ? Value.ToString() : "—")</div>
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public int? Value { get; set; }
+    [Parameter] public bool Highlight { get; set; }
+}

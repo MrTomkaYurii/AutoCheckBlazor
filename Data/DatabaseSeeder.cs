@@ -1,0 +1,307 @@
+using AutoCheck.Models;
+using Microsoft.EntityFrameworkCore;
+
+namespace AutoCheck.Data;
+
+/// <summary>
+/// Seeds the SQLite database from MD files and static demo data.
+/// Runs at startup; skips tables that already have rows.
+/// </summary>
+public class DatabaseSeeder(
+    AppDbContext db,
+    IWebHostEnvironment env,
+    ILogger<DatabaseSeeder> log)
+{
+    public async Task SeedAsync()
+    {
+        // In development: if the schema is stale (missing tables), drop and recreate.
+        if (env.IsDevelopment())
+        {
+            try
+            {
+                // Quick schema check — query a table that was added recently
+                await db.UserLinks.AnyAsync();
+                await db.Notifications.AnyAsync();
+                await db.Comments.AnyAsync();
+            }
+            catch (Exception)
+            {
+                log.LogWarning("DB schema is outdated — recreating database…");
+                await db.Database.EnsureDeletedAsync();
+            }
+        }
+
+        await db.Database.EnsureCreatedAsync();
+
+        if (!await db.Labs.AnyAsync())     await SeedLabsAsync();
+        if (!await db.Groups.AnyAsync())   await SeedGroupsAsync();
+        if (!await db.Teachers.AnyAsync()) await SeedTeachersAsync();
+        if (!await db.Students.AnyAsync()) await SeedStudentsAsync();
+    }
+
+    // ── Labs ─────────────────────────────────────────────────────────────
+
+    private async Task SeedLabsAsync()
+    {
+        var dir = Path.Combine(env.ContentRootPath, "content", "labs");
+        if (!Directory.Exists(dir))
+        {
+            log.LogWarning("Labs directory not found at {Dir}", dir);
+            return;
+        }
+
+        var slugs = Directory.GetDirectories(dir)
+            .Select(Path.GetFileName)
+            .Where(s => s?.StartsWith("lab-") == true)
+            .OrderBy(s => s)
+            .ToArray();
+
+        for (int i = 0; i < slugs.Length; i++)
+        {
+            var slug = slugs[i]!;
+            var mdPath = Path.Combine(dir, slug, "instructions.md");
+            if (!File.Exists(mdPath)) continue;
+
+            var markdown = await File.ReadAllTextAsync(mdPath);
+            var parsed = LabMdParser.Parse(markdown);
+            int num = int.Parse(slug.Split('-')[1]);
+
+            var lab = new LabDef
+            {
+                Number = num, Slug = slug, OrderIndex = i,
+                Title = parsed.Title, Goal = parsed.Goal,
+                BranchName = parsed.BranchName, MergesMain = parsed.MergesMain,
+                FullMarkdown = markdown,
+                Deadline = null,   // set by teacher via UI
+            };
+            foreach (var t in parsed.Tasks)
+                lab.Tasks.Add(new LabTask
+                {
+                    Number = t.Number, Title = t.Title,
+                    Brief = t.Brief, Difficulty = t.Difficulty,
+                });
+
+            db.Labs.Add(lab);
+            log.LogInformation("Lab {Num}: {Title} ({Count} tasks)", num, parsed.Title, parsed.Tasks.Count);
+        }
+        await db.SaveChangesAsync();
+    }
+
+    // ── Groups ───────────────────────────────────────────────────────────
+
+    private async Task SeedGroupsAsync()
+    {
+        var groups = new[] { "КІ-31", "КІ-32", "КІ-33", "КН-31", "КН-32", "СП-31" };
+        for (int i = 0; i < groups.Length; i++)
+            db.Groups.Add(new GroupRecord { Name = groups[i], OrderIndex = i });
+        await db.SaveChangesAsync();
+    }
+
+    // ── Teacher ───────────────────────────────────────────────────────────
+
+    private async Task SeedTeachersAsync()
+    {
+        db.Teachers.Add(new TeacherRecord
+        {
+            FirstName = "Олена", LastName = "Ковальчук",
+            Initials = "ОК", Title = "Доцент кафедри КН", Course = "ООП на C#",
+            // teacher@test.com matches the Keycloak test account
+        });
+        await db.SaveChangesAsync();
+    }
+
+    // ── Students + Submissions ────────────────────────────────────────────
+
+    private record Spec(string Last, string First, string Group,
+        int Lvl = 0, int Done = 0, bool Review = false, int Rej = 0, bool Custom = false);
+
+    private static Func<double> Rng(uint a) => () =>
+    {
+        a += 0x6D2B79F5u;
+        uint t = a;
+        t = (uint)((t ^ (t >> 15)) * (t | 1u));
+        t ^= t + (uint)((t ^ (t >> 7)) * (t | 61u));
+        return ((t ^ (t >> 14)) & 0xFFFFFFFFu) / 4294967296.0;
+    };
+    private static int Clamp(int v) => Math.Max(0, Math.Min(100, v));
+    private static int Final(int a, int d) => Clamp((int)Math.Round(0.4 * a + 0.6 * d));
+
+    // Demo statuses for student 0 (Петро Іваненко), covering the first 13 labs.
+    // Tuple: (status, autoScore, defenseScore, isCurrent)
+    private static readonly (LabStatus Status, int Auto, int Def, bool Current)[] CustomStatuses =
+    [
+        (LabStatus.Done,     96, 90, false),
+        (LabStatus.Done,     88, 85, false),
+        (LabStatus.Review,   74, -1, true),   // Lab03 — current
+        (LabStatus.Done,     95, 94, false),
+        (LabStatus.Done,     82, 88, false),
+        (LabStatus.Done,     91, 89, false),
+        (LabStatus.Rejected, 41, -1, false),
+        (LabStatus.Locked,    0,  0, false),
+        (LabStatus.Locked,    0,  0, false),
+        (LabStatus.Locked,    0,  0, false),
+        (LabStatus.Locked,    0,  0, false),
+        (LabStatus.Locked,    0,  0, false),
+        (LabStatus.Locked,    0,  0, false),
+    ];
+
+    private async Task SeedStudentsAsync()
+    {
+        var labs = await db.Labs.OrderBy(l => l.Number).ToListAsync();
+
+        var specs = new List<Spec>
+        {
+            new("Іваненко",   "Петро",      "КІ-31", Custom: true),
+            new("Коваленко",  "Олександра", "КІ-31", 94, 8),
+            new("Бондаренко", "Андрій",     "КІ-31", 78, 6, true),
+            new("Ткаченко",   "Софія",      "КІ-31", 88, 7, true),
+            new("Мельник",    "Дмитро",     "КІ-31", 64, 5, true, 4),
+            new("Шевченко",   "Марія",      "КІ-31", 91, 8),
+            new("Кравчук",    "Назар",      "КІ-31", 72, 4, true),
+            new("Поліщук",    "Вікторія",   "КІ-32", 85, 7),
+            new("Савченко",   "Артем",      "КІ-32", 58, 3, true, 3),
+            new("Руденко",    "Юлія",       "КІ-32", 96, 9),
+            new("Захарчук",   "Богдан",     "КІ-32", 69, 5),
+            new("Лисенко",    "Катерина",   "КІ-32", 81, 6, true),
+            new("Гончаренко", "Максим",     "КІ-32", 75, 5, true, 5),
+            new("Марченко",   "Дарина",     "КІ-31", 89, 7),
+        };
+
+        for (int si = 0; si < specs.Count; si++)
+        {
+            var s = specs[si];
+            var rec = new StudentRecord
+            {
+                FirstName = s.First, LastName = s.Last, Group = s.Group,
+                // student@test.com matches the Keycloak test account → auto-links on first login
+                Email  = si == 0 ? "student@test.com" : "",
+                Github = si == 0 ? "github.com/petro-iv" : "",
+                Initials = "" + s.First[0] + s.Last[0],
+            };
+            db.Students.Add(rec);
+            await db.SaveChangesAsync();  // get rec.Id
+
+            var rng = Rng((uint)(1000 + si * 7));
+            double Noise(double sp) => (rng() - 0.5) * 2 * sp;
+
+            for (int li = 0; li < labs.Count; li++)
+            {
+                var lab = labs[li];
+                int j = li + 1; // 1-based within first 13 labs
+
+                Submission sub;
+                if (s.Custom)
+                {
+                    if (li < CustomStatuses.Length)
+                    {
+                        var (status, auto, def, cur) = CustomStatuses[li];
+                        sub = new Submission
+                        {
+                            StudentId = rec.Id, LabDefId = lab.Id,
+                            Status = (int)status, IsCurrent = cur,
+                            AutoScore    = status != LabStatus.Locked ? auto : null,
+                            DefenseScore = status == LabStatus.Done && def > 0 ? def : null,
+                            FinalScore   = status == LabStatus.Done && def > 0 ? Final(auto, def) : null,
+                            Deadline = null,
+                            AttemptsUsed = li == 2 ? 1 : 0, AttemptsMax = 3,
+                        };
+                    }
+                    else
+                    {
+                        sub = new Submission { StudentId = rec.Id, LabDefId = lab.Id, Status = (int)LabStatus.Locked, AttemptsMax = 3 };
+                    }
+                }
+                else if (s.Rej > 0 && j == s.Rej)
+                {
+                    int a = Clamp((int)Math.Round(s.Lvl - 25 + Noise(8)));
+                    sub = new Submission { StudentId = rec.Id, LabDefId = lab.Id, Status = (int)LabStatus.Rejected, AutoScore = a, AttemptsMax = 3 };
+                }
+                else if (j <= s.Done)
+                {
+                    int a = Clamp((int)Math.Round(s.Lvl + Noise(9)));
+                    int d = Clamp((int)Math.Round(s.Lvl + Noise(7)));
+                    sub = new Submission { StudentId = rec.Id, LabDefId = lab.Id, Status = (int)LabStatus.Done, AutoScore = a, DefenseScore = d, FinalScore = Final(a, d), AttemptsMax = 3 };
+                }
+                else if (j == s.Done + 1 && s.Review)
+                {
+                    int a = Clamp((int)Math.Round(s.Lvl + Noise(9)));
+                    sub = new Submission { StudentId = rec.Id, LabDefId = lab.Id, Status = (int)LabStatus.Review, AutoScore = a, AttemptsMax = 3 };
+                }
+                else
+                {
+                    sub = new Submission { StudentId = rec.Id, LabDefId = lab.Id, Status = (int)LabStatus.Locked, AttemptsMax = 3 };
+                }
+
+                db.Submissions.Add(sub);
+            }
+            await db.SaveChangesAsync();
+
+            // Detailed task results for the demo submission of student 0, lab 3 (index 2)
+            if (si == 0)
+            {
+                var lab3 = labs[2];
+                var lab3Sub = await db.Submissions.FirstAsync(x => x.StudentId == rec.Id && x.LabDefId == lab3.Id);
+                var lab3Tasks = await db.LabTasks.Where(t => t.LabDefId == lab3.Id).OrderBy(t => t.Number).ToListAsync();
+                if (lab3Tasks.Count >= 3)
+                    await SeedLab3TaskResultsAsync(lab3Sub.Id, lab3Tasks);
+            }
+        }
+    }
+
+    private async Task SeedLab3TaskResultsAsync(int subId, List<LabTask> tasks)
+    {
+        db.TaskResults.AddRange(
+        [
+            new TaskResult
+            {
+                SubmissionId = subId, LabTaskId = tasks[0].Id,
+                State = "pass", Score = 100, TestsPassed = 8, TestsTotal = 8,
+                Feedback = "Чудово. Усі поля інкапсульовані, конструктор валідує вхідні дані, ToString() повертає читабельний формат. 8/8 тестів пройдено.",
+                DiffLines =
+                [
+                    new() { OrderIndex=0, Type="ctx", N1=10, N2=10, Text="public class Book" },
+                    new() { OrderIndex=1, Type="ctx", N1=11, N2=11, Text="{" },
+                    new() { OrderIndex=2, Type="del", N1=12, Text="    public string title;" },
+                    new() { OrderIndex=3, Type="add", N2=12, Text="    public string Title { get; private set; }" },
+                    new() { OrderIndex=4, Type="del", N1=13, Text="    public int year;" },
+                    new() { OrderIndex=5, Type="add", N2=13, Text="    public int Year { get; private set; }" },
+                    new() { OrderIndex=6, Type="ctx", N1=14, N2=14, Text="" },
+                    new() { OrderIndex=7, Type="add", N2=15, Text="    public override string ToString() =>" },
+                    new() { OrderIndex=8, Type="add", N2=16, Text="        $\"{Title} — {Author} ({Year})\";" },
+                    new() { OrderIndex=9, Type="ctx", N1=15, N2=17, Text="}" },
+                ],
+            },
+            new TaskResult
+            {
+                SubmissionId = subId, LabTaskId = tasks[1].Id,
+                State = "warn", Score = 68, TestsPassed = 5, TestsTotal = 8,
+                Feedback = "Логіка працює, але FindByAuthor чутливий до регістру і не обробляє null. Рекомендується StringComparison.OrdinalIgnoreCase. 5/8 тестів пройдено.",
+                DiffLines =
+                [
+                    new() { OrderIndex=0, Type="ctx", N1=22, N2=22, Text="public Book FindByAuthor(string author)" },
+                    new() { OrderIndex=1, Type="ctx", N1=23, N2=23, Text="{" },
+                    new() { OrderIndex=2, Type="del", N1=24, Text="    return books.First(b => b.Author == author);" },
+                    new() { OrderIndex=3, Type="add", N2=24, Text="    return books.FirstOrDefault(b =>" },
+                    new() { OrderIndex=4, Type="add", N2=25, Text="        b.Author.Equals(author," },
+                    new() { OrderIndex=5, Type="add", N2=26, Text="        StringComparison.OrdinalIgnoreCase));" },
+                    new() { OrderIndex=6, Type="ctx", N1=25, N2=27, Text="}" },
+                ],
+            },
+            new TaskResult
+            {
+                SubmissionId = subId, LabTaskId = tasks[2].Id,
+                State = "fail", Score = 0, TestsPassed = 0, TestsTotal = 6,
+                Feedback = "Не вдалося скомпілювати: відсутній конструктор за замовчуванням, а BorrowBook посилається на неіснуюче поле isAvailable. Виправте та здайте повторно.",
+                DiffLines =
+                [
+                    new() { OrderIndex=0, Type="ctx", N1=31, N2=31, Text="public void BorrowBook(Book book)" },
+                    new() { OrderIndex=1, Type="ctx", N1=32, N2=32, Text="{" },
+                    new() { OrderIndex=2, Type="del", N1=33, Text="    if (book.isAvailable)   // CS1061" },
+                    new() { OrderIndex=3, Type="del", N1=34, Text="        borrowed.Add(book);" },
+                    new() { OrderIndex=4, Type="ctx", N1=35, N2=33, Text="}" },
+                ],
+            },
+        ]);
+        await db.SaveChangesAsync();
+    }
+}

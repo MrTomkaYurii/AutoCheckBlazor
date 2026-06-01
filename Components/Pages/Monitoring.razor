@@ -1,0 +1,146 @@
+@page "/teacher/monitoring"
+@inject AppDbContext Db
+@inject IDataService DataSvc
+
+<TopBar Title="Моніторинг" Sub="Детальна аналітика курсу" />
+
+<div class="screen-anim" style="padding:0 34px 40px;position:relative;z-index:1">
+
+    @* Stat strip *@
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
+        <TStat Icon="users"   Tone="var(--acc)"       Value="@_stats.Students.ToString()"     Label="Студентів" />
+        <TStat Icon="upload"  Tone="var(--st-blue)"   Value="@_stats.Submissions.ToString()"  Label="Здач всього" />
+        <TStat Icon="target"  Tone="var(--st-green)"  Value="@($"{_stats.PassRate}%")"         Label="Успішність" />
+        <TStat Icon="clock"   Tone="var(--st-yellow)" Value="@_stats.PendingReview.ToString()" Label="Очікують захисту" />
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start;margin-bottom:18px">
+
+        @* Score distribution *@
+        <section class="glass" style="padding:20px 24px">
+            <h4 style="margin:0 0 18px;font-size:14px;font-weight:720;display:flex;align-items:center;gap:8px">
+                <Icon Name="target" Size="16" Style="color:var(--acc)" />Розподіл фінальних оцінок
+            </h4>
+            @{ var bands = GetBands(); }
+            @foreach (var (label, count, color) in bands)
+            {
+                var pct = _totalFinals > 0 ? (int)Math.Round(100.0 * count / _totalFinals) : 0;
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+                    <span class="mono" style="width:58px;font-size:12px;color:var(--tx-3)">@label</span>
+                    <div class="prog" style="flex:1;height:10px;border-radius:5px">
+                        <span style="width:@pct%;background:@color;border-radius:5px;box-shadow:none"></span>
+                    </div>
+                    <span class="mono tnum" style="width:28px;text-align:right;font-size:12.5px;font-weight:700;color:var(--tx-2)">@count</span>
+                </div>
+            }
+        </section>
+
+        @* Top students *@
+        <section class="glass" style="padding:20px 24px">
+            <h4 style="margin:0 0 16px;font-size:14px;font-weight:720;display:flex;align-items:center;gap:8px">
+                <Icon Name="spark" Size="16" Style="color:var(--st-yellow)" />Топ студентів
+            </h4>
+            @foreach (var (s, rank) in _topStudents.Select((s, i) => (s, i + 1)))
+            {
+                <div style="display:flex;align-items:center;gap:11px;margin-bottom:10px">
+                    <span class="mono" style="width:20px;font-size:12px;color:var(--tx-faint)">@rank.</span>
+                    <div style="@SmAvatar">@s.Initials</div>
+                    <div style="flex:1;min-width:0">
+                        <div style="font-size:13.5px;font-weight:620">@s.Last @(s.First.Length > 0 ? s.First[0] + "." : "")</div>
+                        <div style="font-size:11px;color:var(--tx-3)">@s.Group · @s.DoneCount зараховано</div>
+                    </div>
+                    <span class="mono tnum" style="font-size:17px;font-weight:780;color:var(--acc-bright)">@s.Avg</span>
+                </div>
+            }
+        </section>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+
+        @* Recent submissions *@
+        <section class="glass" style="padding:0;overflow:hidden">
+            <div style="padding:16px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px">
+                <Icon Name="clock" Size="16" Style="color:var(--tx-3)" />
+                <h4 style="margin:0;font-size:14px;font-weight:720">Останні здачі</h4>
+            </div>
+            @foreach (var r in _recent)
+            {
+                <div style="display:flex;align-items:center;gap:12px;padding:12px 22px;border-bottom:1px solid var(--line)">
+                    <div style="@SmAvatar">@r.Initials</div>
+                    <div style="flex:1;min-width:0">
+                        <div style="font-size:13.5px;font-weight:620">@r.Name</div>
+                        <div style="font-size:11.5px;color:var(--tx-3)">@r.LabShort · @r.LabTitle</div>
+                    </div>
+                    <div style="text-align:right">
+                        <span class="mono tnum" style="font-size:14px;font-weight:750;color:@(r.Auto >= 85 ? "var(--st-green)" : r.Auto >= 60 ? "var(--st-yellow)" : "var(--st-red)")">@r.Auto</span>
+                        <div style="font-size:10.5px;color:var(--tx-faint)">@r.When</div>
+                    </div>
+                </div>
+            }
+            @if (_recent.Count == 0)
+            {
+                <div style="padding:24px;text-align:center;color:var(--tx-faint);font-size:13px">Здач поки немає</div>
+            }
+        </section>
+
+        @* Problematic students *@
+        <section class="glass" style="padding:0;overflow:hidden">
+            <div style="padding:16px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px">
+                <Icon Name="warn" Size="16" Style="color:var(--st-yellow)" />
+                <h4 style="margin:0;font-size:14px;font-weight:720">Найбільше відхилень</h4>
+            </div>
+            @foreach (var s in _problematic)
+            {
+                <div style="display:flex;align-items:center;gap:12px;padding:12px 22px;border-bottom:1px solid var(--line)">
+                    <div style="@SmAvatar">@s.Initials</div>
+                    <div style="flex:1;min-width:0">
+                        <div style="font-size:13.5px;font-weight:620">@s.Last @(s.First.Length > 0 ? s.First[0] + "." : "")</div>
+                        <div style="font-size:11.5px;color:var(--tx-3)">@s.Group</div>
+                    </div>
+                    <div style="text-align:right">
+                        <span style="font-size:12px;color:var(--st-red);font-weight:650">@s.Labs.Count(c => c.Kind == "rejected") відхилено</span>
+                        <div style="font-size:10.5px;color:var(--tx-faint)">@s.DoneCount зараховано</div>
+                    </div>
+                </div>
+            }
+            @if (_problematic.Count == 0)
+            {
+                <div style="padding:24px;text-align:center;color:var(--tx-faint);font-size:13px">Немає відхилених здач</div>
+            }
+        </section>
+    </div>
+</div>
+
+@code {
+    private TeacherStats _stats = new();
+    private List<RosterStudent> _topStudents = [];
+    private List<RosterStudent> _problematic = [];
+    private List<ReviewItem> _recent = [];
+    private int _totalFinals;
+    private List<int> _finals = [];
+
+    private const string SmAvatar = "width:34px;height:34px;border-radius:9px;flex:none;display:grid;place-items:center;font-weight:700;font-size:12px;background:linear-gradient(150deg, rgba(118,199,173,0.3), rgba(118,199,173,0.12));border:1px solid var(--glass-border-hover);color:var(--acc-bright)";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _stats = await DataSvc.GetStatsAsync();
+        var roster = await DataSvc.GetRosterAsync();
+        _topStudents = roster.Where(s => s.Avg.HasValue).OrderByDescending(s => s.Avg).Take(5).ToList();
+        _problematic = roster.Where(s => s.Labs.Any(c => c.Kind == "rejected")).OrderByDescending(s => s.Labs.Count(c => c.Kind == "rejected")).Take(5).ToList();
+        _recent = await DataSvc.GetReviewQueueAsync();
+
+        _finals = await Db.Submissions.Where(s => s.FinalScore.HasValue).Select(s => s.FinalScore!.Value).ToListAsync();
+        _totalFinals = _finals.Count;
+    }
+
+    private List<(string Label, int Count, string Color)> GetBands() =>
+    [
+        ("91–100", _finals.Count(f => f >= 91),              "var(--st-green)"),
+        ("81–90",  _finals.Count(f => f >= 81 && f <= 90),   "var(--acc)"),
+        ("71–80",  _finals.Count(f => f >= 71 && f <= 80),   "var(--acc)"),
+        ("61–70",  _finals.Count(f => f >= 61 && f <= 70),   "var(--st-yellow)"),
+        ("51–60",  _finals.Count(f => f >= 51 && f <= 60),   "var(--st-yellow)"),
+        ("36–50",  _finals.Count(f => f >= 36 && f <= 50),   "var(--st-red)"),
+        ("0–35",   _finals.Count(f => f <= 35),               "var(--st-red)"),
+    ];
+}

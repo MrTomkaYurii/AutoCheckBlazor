@@ -1,0 +1,234 @@
+@* Grade-defense dialog — shows auto-check task results, saves to DB, sends notification *@
+<MudDialog>
+    <DialogContent>
+        <div class="glass" style="width:580px;max-width:92vw;padding:26px;box-shadow:var(--shadow-pop)">
+
+            @* ── Header ── *@
+            <div style="display:flex;align-items:center;gap:14px;margin-bottom:22px">
+                <div style="width:48px;height:48px;border-radius:13px;flex:none;display:grid;place-items:center;font-weight:700;font-size:16px;background:linear-gradient(150deg, rgba(118,199,173,0.3), rgba(118,199,173,0.12));border:1px solid var(--glass-border-hover);color:var(--acc-bright)">@_initials</div>
+                <div style="flex:1;min-width:0">
+                    <h3 style="margin:0;font-size:18px;font-weight:730;letter-spacing:-0.02em">@_name</h3>
+                    <div style="display:flex;gap:9px;margin-top:5px;align-items:center;font-size:12.5px;color:var(--tx-3)">
+                        <span class="badge badge-grey" style="height:22px"><span class="dot"></span>@_group</span>
+                        <span class="mono">Lab@(LabId.ToString("D2"))</span>
+                        <span>· @_labTitle</span>
+                    </div>
+                </div>
+                <button @onclick="Cancel" class="topbar-icon" style="width:42px;height:42px;border-radius:12px;flex:none;border:1px solid var(--line);background:rgba(255,255,255,0.03);color:var(--tx-2);cursor:pointer;display:grid;place-items:center"><Icon Name="x" Size="18" /></button>
+            </div>
+
+            @* ── Task results breakdown ── *@
+            @if (_taskResults.Count > 0)
+            {
+                <div style="margin-bottom:16px">
+                    <div style="font-size:11.5px;font-weight:700;color:var(--tx-3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:9px">
+                        Результати авто-перевірки
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto;padding-right:2px">
+                        @foreach (var tr in _taskResults)
+                        {
+                            var tone  = tr.State == "pass" ? "var(--st-green)" : tr.State == "warn" ? "var(--st-yellow)" : "var(--st-red)";
+                            var icon  = tr.State == "pass" ? "check" : tr.State == "warn" ? "warn" : "x";
+                            <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,0.025);border:1px solid var(--line)">
+                                <span style="width:22px;height:22px;border-radius:6px;flex:none;display:grid;place-items:center;background:@(tone)22;color:@tone;border:1px solid @(tone)44">
+                                    <Icon Name="@icon" Size="13" Stroke="2.4" />
+                                </span>
+                                <div style="flex:1;min-width:0">
+                                    <div style="font-size:13px;font-weight:640">@tr.TaskTitle</div>
+                                    @if (!string.IsNullOrEmpty(tr.Feedback))
+                                    {
+                                        <div style="font-size:11.5px;color:var(--tx-faint);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@tr.Feedback</div>
+                                    }
+                                </div>
+                                <div style="text-align:right;flex:none">
+                                    <span class="mono tnum" style="font-size:14px;font-weight:700;color:@tone">@tr.Score</span>
+                                    <div class="mono" style="font-size:10.5px;color:var(--tx-faint)">@tr.TestsPassed/@tr.TestsTotal тестів</div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            @* ── Scores ── *@
+            <div style="display:flex;flex-direction:column;gap:12px">
+                <div style="@Row">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <Icon Name="spark" Size="17" Style="color:var(--tx-3)" />
+                        <span style="font-size:13.5px;color:var(--tx-2);font-weight:600">Авто-оцінка</span>
+                        <span style="font-size:11.5px;color:var(--tx-faint)">· вага 40%</span>
+                    </div>
+                    <span class="mono tnum" style="font-size:19px;font-weight:760;color:@AutoColor">@_auto<span style="font-size:12px;opacity:0.5">/100</span></span>
+                </div>
+
+                <div style="@Row;flex-direction:column;align-items:stretch;gap:14px;background:var(--acc-dim);border-color:var(--glass-border)">
+                    <div style="display:flex;align-items:center;justify-content:space-between">
+                        <div style="display:flex;align-items:center;gap:10px">
+                            <Icon Name="user" Size="17" Style="color:var(--acc-bright)" />
+                            <span style="font-size:13.5px;color:var(--tx-1);font-weight:650">Оцінка захисту</span>
+                            <span style="font-size:11.5px;color:var(--tx-3)">· вага 60%</span>
+                        </div>
+                        <div style="display:flex;align-items:baseline;gap:4px">
+                            <input type="number" min="0" max="100" value="@_defense" @oninput="OnDefenseInput" placeholder="—" class="mono tnum"
+                                   style="width:78px;height:46px;text-align:center;font-size:22px;font-weight:750;background:rgba(12,20,17,0.7);border:1px solid var(--glass-border-hover);border-radius:11px;color:var(--acc-bright);outline:none" />
+                            <span style="font-size:13px;color:var(--tx-3)">/100</span>
+                        </div>
+                    </div>
+                    <input type="range" min="0" max="100" value="@(_defNum ?? 0)" @oninput="OnDefenseInput" class="grade-range" style="accent-color:var(--acc);width:100%" />
+                    <div style="display:flex;gap:7px">
+                        @foreach (var q in new[] { 60, 70, 80, 90, 100 })
+                        {
+                            var sel = _defense == q.ToString();
+                            <button @onclick="@(() => SetDefense(q.ToString()))"
+                                    style="flex:1;height:32px;border-radius:8px;cursor:pointer;font-family:var(--mono);font-weight:700;font-size:13px;border:1px solid @(sel ? "var(--glass-border-hover)" : "var(--line)");background:@(sel ? "var(--acc-dim-2)" : "rgba(255,255,255,0.03)");color:@(sel ? "var(--acc-bright)" : "var(--tx-2)");transition:all .14s">@q</button>
+                        }
+                    </div>
+                </div>
+
+                <div style="@Row;background:rgba(12,20,17,0.45);border-color:@(FinalColor)44">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <Icon Name="target" Size="18" Style="@($"color:{FinalColor}")" />
+                        <span style="font-size:14px;color:var(--tx-1);font-weight:700">Фінальна оцінка</span>
+                        <span style="font-size:11.5px;color:var(--tx-faint)">розрахунок наживо</span>
+                    </div>
+                    <div style="display:flex;align-items:baseline;gap:6px">
+                        @if (_defNum is not null)
+                        {
+                            <span class="mono" style="font-size:12px;color:var(--tx-faint)">@((int)Math.Round(0.4 * _auto)) + @((int)Math.Round(0.6 * _defNum.Value)) =</span>
+                        }
+                        <span class="mono tnum" style="font-size:32px;font-weight:800;letter-spacing:-0.03em;color:@FinalColor;line-height:1">@(Final?.ToString() ?? "—")</span>
+                    </div>
+                </div>
+            </div>
+
+            @* ── Actions ── *@
+            <div style="display:flex;gap:10px;margin-top:22px;align-items:center">
+                @if (_saved)
+                {
+                    <span style="display:flex;align-items:center;gap:7px;color:var(--st-green);font-size:13px;font-weight:600;margin-right:auto"><Icon Name="check" Size="16" Stroke="2.4" />Збережено в БД</span>
+                }
+                else
+                {
+                    <button class="btn btn-ghost btn-sm" style="color:var(--st-red);margin-right:auto" @onclick="Reject" disabled="@_saving">
+                        <Icon Name="x" Size="15" />Відхилити
+                    </button>
+                }
+                <button class="btn btn-ghost" @onclick="Cancel">Скасувати</button>
+                <button class="btn btn-primary" disabled="@(_defNum is null || _saving)"
+                        style="opacity:@(_defNum is null || _saving ? "0.5" : "1")" @onclick="Save">
+                    <Icon Name="check" Size="17" />@(_saving ? "Збереження…" : "Зберегти оцінку")
+                </button>
+            </div>
+        </div>
+    </DialogContent>
+</MudDialog>
+
+@inject AppDbContext Db
+@inject INotificationService Notif
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public int StudentId { get; set; }
+    [Parameter] public int LabId { get; set; }
+
+    private record TaskResultView(string TaskTitle, string State, int Score, int TestsPassed, int TestsTotal, string? Feedback);
+
+    private string _name = "", _initials = "", _group = "", _labTitle = "";
+    private int _auto;
+    private string _defense = "";
+    private bool _saved, _saving;
+    private List<TaskResultView> _taskResults = [];
+
+    private int? _defNum => string.IsNullOrEmpty(_defense)
+        ? null
+        : int.TryParse(_defense, out var n) ? Math.Max(0, Math.Min(100, n)) : (int?)null;
+
+    private int? Final => _defNum is null ? null : (int)Math.Round(0.4 * _auto + 0.6 * _defNum.Value);
+
+    private string AutoColor  => _auto  >= 85 ? "var(--st-green)" : _auto  >= 60 ? "var(--st-yellow)" : "var(--st-red)";
+    private string FinalColor => Final is null ? "var(--tx-faint)" : Final >= 85 ? "var(--st-green)" : Final >= 60 ? "var(--st-yellow)" : "var(--st-red)";
+
+    private const string Row = "display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-radius:12px;background:rgba(255,255,255,0.025);border:1px solid var(--line)";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var student = await Db.Students.FindAsync(StudentId);
+        if (student is null) return;
+        _name     = student.LastName + " " + student.FirstName;
+        _initials = student.Initials;
+        _group    = student.Group;
+
+        var sub = await Db.Submissions
+            .Include(s => s.LabDef)
+            .Include(s => s.TaskResults).ThenInclude(tr => tr.LabTask)
+            .FirstOrDefaultAsync(s => s.StudentId == StudentId && s.LabDef.Number == LabId);
+        if (sub is null) return;
+
+        _labTitle = sub.LabDef.Title;
+        _auto     = sub.AutoScore ?? 0;
+        if (sub.DefenseScore.HasValue)
+            _defense = sub.DefenseScore.Value.ToString();
+
+        _taskResults = sub.TaskResults
+            .OrderBy(tr => tr.LabTask.Number)
+            .Select(tr => new TaskResultView(
+                tr.LabTask.Title, tr.State, tr.Score,
+                tr.TestsPassed, tr.TestsTotal, tr.Feedback))
+            .ToList();
+    }
+
+    private void OnDefenseInput(ChangeEventArgs e) { _defense = e.Value?.ToString() ?? ""; _saved = false; }
+    private void SetDefense(string v) { _defense = v; _saved = false; }
+
+    private async Task Save()
+    {
+        if (_defNum is null) return;
+        _saving = true; StateHasChanged();
+
+        var sub = await Db.Submissions
+            .Include(s => s.LabDef)
+            .FirstOrDefaultAsync(s => s.StudentId == StudentId && s.LabDef.Number == LabId);
+
+        if (sub is not null)
+        {
+            sub.DefenseScore = _defNum.Value;
+            sub.FinalScore   = Final!.Value;
+            sub.Status       = (int)LabStatus.Done;
+            await Db.SaveChangesAsync();
+
+            await Notif.SendAsync(StudentId,
+                $"Lab{LabId:D2} зарахована!",
+                $"Фінальна оцінка: {Final}/100 (авто: {_auto}, захист: {_defNum})",
+                "grade");
+        }
+
+        _saving = false; _saved = true; StateHasChanged();
+        await Task.Delay(800);
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private async Task Reject()
+    {
+        _saving = true; StateHasChanged();
+
+        var sub = await Db.Submissions
+            .Include(s => s.LabDef)
+            .FirstOrDefaultAsync(s => s.StudentId == StudentId && s.LabDef.Number == LabId);
+
+        if (sub is not null)
+        {
+            sub.Status = (int)LabStatus.Rejected;
+            await Db.SaveChangesAsync();
+
+            await Notif.SendAsync(StudentId,
+                $"Lab{LabId:D2} відхилено",
+                $"Викладач відхилив лабораторну. Авто-оцінка: {_auto}/100. Виправте помилки та здайте повторно.",
+                "grade");
+        }
+
+        _saving = false; StateHasChanged();
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private void Cancel() => MudDialog.Close(DialogResult.Cancel());
+}

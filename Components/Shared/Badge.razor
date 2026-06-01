@@ -1,0 +1,22 @@
+@* Status / generic badge. Pass either Status (enum) or Color + ChildContent. *@
+@if (Status.HasValue)
+{
+    var meta = StatusMeta.Of(Status.Value);
+    <span class="badge badge-@meta.Color">
+        <span class="dot"></span>@meta.Label
+    </span>
+}
+else
+{
+    <span class="badge badge-@Color" style="@Style">
+        <span class="dot @(Pulse ? "pulse" : "")"></span>@ChildContent
+    </span>
+}
+
+@code {
+    [Parameter] public LabStatus? Status { get; set; }
+    [Parameter] public string Color { get; set; } = "grey";
+    [Parameter] public bool Pulse { get; set; }
+    [Parameter] public string Style { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

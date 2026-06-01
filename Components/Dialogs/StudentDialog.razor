@@ -1,0 +1,135 @@
+@* Add / Edit student dialog *@
+<MudDialog>
+    <DialogContent>
+        <div class="glass" style="width:520px;max-width:92vw;padding:26px;box-shadow:var(--shadow-pop)">
+            <div style="display:flex;align-items:center;gap:13px;margin-bottom:20px">
+                <span style="width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:var(--acc-dim);border:1px solid var(--glass-border);color:var(--acc-bright)"><Icon Name="profile" Size="20" /></span>
+                <h3 style="margin:0;font-size:17px;font-weight:720">@(IsNew ? "Новий студент" : "Редагування студента")</h3>
+                <button @onclick="Cancel" style="margin-left:auto;width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--tx-2);cursor:pointer;display:grid;place-items:center"><Icon Name="x" Size="16" /></button>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:13px">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                    <div class="field">
+                        <label>Ім'я *</label>
+                        <input class="input" @bind="_first" placeholder="Петро" />
+                    </div>
+                    <div class="field">
+                        <label>Прізвище *</label>
+                        <input class="input" @bind="_last" placeholder="Іваненко" />
+                    </div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 80px;gap:12px;align-items:end">
+                    <div class="field">
+                        <label>Академічна група *</label>
+                        @if (_groups.Length > 1)
+                        {
+                            <select class="select" @bind="_group">
+                                @foreach (var g in _groups.Where(g => g != "Усі групи"))
+                                {
+                                    <option value="@g">@g</option>
+                                }
+                                <option value="__new__">+ Нова група</option>
+                            </select>
+                        }
+                        else
+                        {
+                            <input class="input" @bind="_group" placeholder="КІ-31" />
+                        }
+                    </div>
+                    @if (_group == "__new__")
+                    {
+                        <div class="field">
+                            <label>Нова</label>
+                            <input class="input" @bind="_newGroup" placeholder="КІ-33" />
+                        </div>
+                    }
+                </div>
+
+                <div class="field">
+                    <label>Email</label>
+                    <input class="input" type="email" @bind="_email" placeholder="p.ivanenko@lpnu.ua" />
+                </div>
+
+                <div class="field">
+                    <label>GitHub репозиторій</label>
+                    <input class="input mono" @bind="_github" placeholder="github.com/username/csharp-oop" />
+                </div>
+
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <div style="padding:9px 13px;background:rgba(232,128,107,0.1);border:1px solid rgba(232,128,107,0.3);border-radius:9px;color:var(--st-red);font-size:13px">@_error</div>
+                }
+            </div>
+
+            <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end">
+                <button class="btn btn-ghost" @onclick="Cancel">Скасувати</button>
+                <button class="btn btn-primary" @onclick="Save" disabled="@_saving">
+                    <Icon Name="check" Size="16" />@(_saving ? "Збереження…" : (IsNew ? "Додати" : "Зберегти"))
+                </button>
+            </div>
+        </div>
+    </DialogContent>
+</MudDialog>
+
+@inject AppDbContext Db
+@inject IDataService DataSvc
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public StudentRecord? Existing { get; set; }
+
+    private bool IsNew => Existing is null;
+    private string _first = "", _last = "", _group = "", _newGroup = "", _email = "", _github = "", _error = "";
+    private bool _saving;
+    private string[] _groups = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _groups = await DataSvc.GetTeacherGroupsAsync();
+        if (!IsNew)
+        {
+            _first = Existing!.FirstName; _last = Existing.LastName; _group = Existing.Group;
+            _email = Existing.Email; _github = Existing.Github;
+        }
+        else if (_groups.Length > 1)
+            _group = _groups.FirstOrDefault(g => g != "Усі групи") ?? "";
+    }
+
+    private async Task Save()
+    {
+        _error = "";
+        if (string.IsNullOrWhiteSpace(_first) || string.IsNullOrWhiteSpace(_last)) { _error = "Ім'я та прізвище обов'язкові"; return; }
+        var finalGroup = _group == "__new__" ? _newGroup.Trim() : _group;
+        if (string.IsNullOrWhiteSpace(finalGroup)) { _error = "Введіть групу"; return; }
+
+        _saving = true; StateHasChanged();
+        var initials = (_first.Length > 0 ? _first[0].ToString() : "") + (_last.Length > 0 ? _last[0].ToString() : "");
+
+        try
+        {
+            if (IsNew)
+            {
+                var s = new StudentRecord { FirstName = _first.Trim(), LastName = _last.Trim(), Group = finalGroup, Email = _email.Trim(), Github = _github.Trim(), Initials = initials };
+                Db.Students.Add(s);
+                await Db.SaveChangesAsync();
+                // create locked submissions for all labs
+                var labs = await Db.Labs.Select(l => l.Id).ToListAsync();
+                foreach (var lid in labs)
+                    Db.Submissions.Add(new Submission { StudentId = s.Id, LabDefId = lid, Status = (int)LabStatus.Locked, AttemptsMax = 3 });
+                await Db.SaveChangesAsync();
+            }
+            else
+            {
+                Existing!.FirstName = _first.Trim(); Existing.LastName = _last.Trim(); Existing.Group = finalGroup;
+                Existing.Email = _email.Trim(); Existing.Github = _github.Trim(); Existing.Initials = initials;
+                await Db.SaveChangesAsync();
+            }
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex) { _error = ex.Message; _saving = false; }
+    }
+
+    private void Cancel() => MudDialog.Close(DialogResult.Cancel());
+}

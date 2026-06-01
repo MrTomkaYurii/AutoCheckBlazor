@@ -1,0 +1,52 @@
+# ── Build output ─────────────────────────────────────────────────────────────
+bin/
+obj/
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.rsuser
+
+# ── Runtime / local config ────────────────────────────────────────────────────
+appsettings.Development.json
+appsettings.Local.json
+
+# ── Secrets — NEVER commit API keys or passwords ──────────────────────────────
+**/secrets.json
+**/*.pfx
+**/*.p12
+**/*.key
+
+# ── Database ──────────────────────────────────────────────────────────────────
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# ── Grading temp repos ────────────────────────────────────────────────────────
+/tmp/
+autocheck-repos/
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── NuGet ────────────────────────────────────────────────────────────────────
+*.nupkg
+.nuget/
+packages/
+
+# ── Publish output ────────────────────────────────────────────────────────────
+publish/
+/out/

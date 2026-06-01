@@ -1,0 +1,42 @@
+@inherits LayoutComponentBase
+@inject AppState App
+@inject IAuthService Auth
+@inject NavigationManager Nav
+
+<MudThemeProvider IsDarkMode="true" Theme="@_theme" />
+<MudPopoverProvider />
+<MudDialogProvider Position="DialogPosition.Center" CloseButton="false" />
+<MudSnackbarProvider />
+
+<div style="display:flex;height:100%;position:relative;z-index:1">
+    <Sidebar />
+    <main class="scroll-area" style="flex:1;height:100%;overflow-y:auto;min-width:0">
+        @Body
+    </main>
+</div>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> AuthStateTask { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthStateTask;
+        if (!state.User.Identity?.IsAuthenticated ?? true)
+        {
+            Nav.NavigateTo($"/account/login?returnUrl={Uri.EscapeDataString(Nav.Uri)}", forceLoad: true);
+            return;
+        }
+        await Auth.EnsureLinkedAsync(state.User);
+        await App.PreloadAsync(state.User);
+    }
+
+    private readonly MudTheme _theme = new()
+    {
+        PaletteDark = new PaletteDark
+        {
+            Primary = "#76c7ad", Surface = "#1c2622", Background = "#0f1a16",
+            AppbarBackground = "#0f1a16", DrawerBackground = "#151c19",
+            TextPrimary = "#eaf3ef", TextSecondary = "#aebbb5",
+        },
+    };
+}

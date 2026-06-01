@@ -1,0 +1,12 @@
+@* dashboard mini-stat with colored dot *@
+<div style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--tx-3)">
+    <span style="width:8px;height:8px;border-radius:50%;background:@Color"></span>
+    <b class="tnum" style="color:var(--tx-1);font-weight:700">@Value</b> @Label
+</div>
+
+@code {
+    [Parameter] public string Tone { get; set; } = "grey";
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public int Value { get; set; }
+    private string Color => Tone switch { "yellow" => "var(--st-yellow)", "red" => "var(--st-red)", _ => "var(--st-grey)" };
+}

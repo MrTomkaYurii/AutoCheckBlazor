@@ -1,0 +1,96 @@
+@page "/student/profile"
+@inject AppState App
+@inject IAuthService Auth
+@inject AppDbContext Db
+
+<TopBar Title="Профіль" Sub="Дані студента" />
+
+<div class="screen-anim" style="padding:0 34px 40px;position:relative;z-index:1;max-width:720px">
+    <section class="glass" style="padding:0;overflow:hidden">
+        <div style="padding:32px 30px;display:flex;align-items:center;gap:20px;background:radial-gradient(500px 200px at 0% 0%, rgba(118,199,173,0.12), transparent 60%);border-bottom:1px solid var(--line)">
+            <div style="width:72px;height:72px;border-radius:20px;display:grid;place-items:center;font-weight:750;font-size:26px;background:linear-gradient(150deg, rgba(118,199,173,0.32), rgba(118,199,173,0.12));border:1px solid var(--glass-border-hover);color:var(--acc-bright)">@App.Student.Initials</div>
+            <div style="flex:1">
+                <h2 style="margin:0;font-size:22px;font-weight:740">@App.Student.FirstName @App.Student.LastName</h2>
+                <div style="display:flex;gap:10px;margin-top:8px">
+                    <span class="badge badge-green"><span class="dot"></span>Студент</span>
+                    <span class="badge badge-grey"><span class="dot"></span>@App.Student.Group</span>
+                </div>
+            </div>
+            <button class="btn btn-outline btn-sm" @onclick="ToggleEdit">
+                <Icon Name="@(_editing ? "x" : "settings")" Size="15" />
+                @(_editing ? "Скасувати" : "Редагувати")
+            </button>
+        </div>
+
+        @if (!_editing)
+        {
+            <div style="padding:10px 30px 24px">
+                @foreach (var (k, v, mono) in new[]
+                {
+                    ("Email",  App.Student.Email,  true),
+                    ("GitHub", App.Student.Github, true),
+                    ("Група",  App.Student.Group,  false),
+                })
+                {
+                    <div style="display:flex;align-items:center;padding:14px 0;border-bottom:1px solid var(--line)">
+                        <span style="width:140px;font-size:13px;color:var(--tx-3);font-weight:600">@k</span>
+                        <span class="@(mono ? "mono" : "")" style="font-size:14px;color:var(--tx-1)">@v</span>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div style="padding:24px 30px;display:flex;flex-direction:column;gap:14px">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+                    <div class="field"><label>Email</label><input class="input" type="email" @bind="_email" /></div>
+                    <div class="field"><label>GitHub</label><input class="input mono" @bind="_github" /></div>
+                </div>
+                @if (!string.IsNullOrEmpty(_msg))
+                {
+                    <div style="padding:9px 13px;background:rgba(118,199,173,0.1);border:1px solid rgba(118,199,173,0.25);border-radius:9px;color:var(--st-green);font-size:13px">@_msg</div>
+                }
+                <div style="display:flex;justify-content:flex-end">
+                    <button class="btn btn-primary" @onclick="SaveProfile" disabled="@_saving">
+                        <Icon Name="check" Size="16" />@(_saving ? "Збереження…" : "Зберегти")
+                    </button>
+                </div>
+            </div>
+        }
+    </section>
+</div>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> AuthStateTask { get; set; } = default!;
+
+    private bool _editing, _saving;
+    private string _email = "", _github = "", _msg = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _email  = App.Student.Email;
+        _github = App.Student.Github;
+    }
+
+    private void ToggleEdit()
+    {
+        _editing = !_editing; _msg = "";
+        if (_editing) { _email = App.Student.Email; _github = App.Student.Github; }
+    }
+
+    private async Task SaveProfile()
+    {
+        _saving = true; StateHasChanged();
+        var state = await AuthStateTask;
+        var rec = await Auth.GetStudentRecordAsync(state.User);
+        if (rec is not null)
+        {
+            rec.Email  = _email.Trim();
+            rec.Github = _github.Trim();
+            await Db.SaveChangesAsync();
+            await App.PreloadAsync(state.User);
+        }
+        _saving = false; _editing = false; _msg = "Профіль оновлено"; StateHasChanged();
+        await Task.Delay(2000); _msg = ""; StateHasChanged();
+    }
+}

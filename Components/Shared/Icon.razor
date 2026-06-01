@@ -1,0 +1,16 @@
+@* Stroke icon — mirrors the prototype's <Icon> component *@
+<svg width="@Size" height="@Size" viewBox="0 0 24 24" fill="none"
+     class="@Class" style="@Style" xmlns="http://www.w3.org/2000/svg">
+    <path d="@IconData.Get(Name)" stroke="currentColor" stroke-width="@Stroke"
+          stroke-linecap="round" stroke-linejoin="round"
+          fill="@(Fill ? "currentColor" : "none")" />
+</svg>
+
+@code {
+    [Parameter] public string Name { get; set; } = "";
+    [Parameter] public double Size { get; set; } = 20;
+    [Parameter] public double Stroke { get; set; } = 1.7;
+    [Parameter] public bool Fill { get; set; } = false;
+    [Parameter] public string Class { get; set; } = "";
+    [Parameter] public string Style { get; set; } = "";
+}

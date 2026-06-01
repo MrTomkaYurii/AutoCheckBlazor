@@ -1,0 +1,26 @@
+@* Full markdown renderer using Markdig *@
+@((MarkupString)_html)
+
+@using Markdig
+@using Markdig.Extensions.Tables
+
+@code {
+    [Parameter] public string Text { get; set; } = "";
+
+    private string _html = "";
+
+    protected override void OnParametersSet()
+    {
+        if (string.IsNullOrWhiteSpace(Text))
+        {
+            _html = "";
+            return;
+        }
+
+        var pipeline = new MarkdownPipelineBuilder()
+            .UsePipeTables()
+            .Build();
+
+        _html = Markdown.ToHtml(Text, pipeline);
+    }
+}

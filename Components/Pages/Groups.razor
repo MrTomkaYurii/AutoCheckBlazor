@@ -1,0 +1,168 @@
+@page "/teacher/groups"
+@inject AppDbContext Db
+
+<TopBar Title="Групи" Sub="Управління академічними групами" />
+
+<div class="screen-anim" style="padding:0 34px 40px;position:relative;z-index:1">
+
+    @* Toolbar *@
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+        <div class="input-wrap" style="flex:1 1 240px;max-width:300px">
+            <span class="lead"><Icon Name="search" Size="16" /></span>
+            <input class="input" placeholder="Пошук групи…" @bind="_query" @bind:event="oninput" style="height:40px" />
+        </div>
+        <button class="btn btn-primary btn-sm" style="margin-left:auto" @onclick="StartAdd">
+            <Icon Name="braces" Size="15" />Нова група
+        </button>
+    </div>
+
+    <section class="glass" style="padding:0;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:11px;padding:16px 22px;border-bottom:1px solid var(--line)">
+            <Icon Name="users" Size="18" Style="color:var(--acc)" />
+            <h3 style="margin:0;font-size:16px;font-weight:720">Академічні групи</h3>
+            <span class="badge badge-grey"><span class="dot"></span>@Filtered.Count груп</span>
+        </div>
+
+        @if (_loading)
+        {
+            <div style="padding:40px;text-align:center;color:var(--tx-3)">Завантаження…</div>
+        }
+        else if (Filtered.Count == 0)
+        {
+            <div style="padding:40px;text-align:center;color:var(--tx-3)">Груп не знайдено.</div>
+        }
+        else
+        {
+            @foreach (var g in Filtered)
+            {
+                var isEditing = _editId == g.Id;
+                <div style="display:flex;align-items:center;gap:16px;padding:14px 22px;border-bottom:1px solid var(--line)">
+
+                    @if (isEditing)
+                    {
+                        @* Inline edit row *@
+                        <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
+                            <input class="input" style="height:38px;max-width:160px;font-family:var(--mono);font-weight:650"
+                                   @bind="_editName" @bind:event="oninput" @onkeydown="OnEditKey" placeholder="Назва групи" autofocus />
+                            <input class="input" style="height:38px;flex:1" @bind="_editDesc" placeholder="Опис (необов'язково)" />
+                        </div>
+                        <div style="display:flex;gap:6px;flex:none">
+                            <button class="btn btn-primary btn-sm" @onclick="SaveEdit" disabled="@string.IsNullOrWhiteSpace(_editName)">
+                                <Icon Name="check" Size="14" />Зберегти
+                            </button>
+                            <button class="btn btn-ghost btn-sm" @onclick="CancelEdit">Скасувати</button>
+                        </div>
+                    }
+                    else
+                    {
+                        @* Normal row *@
+                        <span class="mono" style="font-size:15px;font-weight:750;color:var(--acc-bright);background:var(--acc-dim);padding:5px 14px;border-radius:8px;border:1px solid var(--glass-border);flex:none">@g.Name</span>
+                        <span style="flex:1;font-size:13px;color:var(--tx-3)">@(g.Description ?? "")</span>
+                        <div style="display:flex;gap:6px;flex:none">
+                            <button class="btn btn-ghost btn-sm" @onclick="@(() => StartEdit(g))"><Icon Name="settings" Size="14" /></button>
+                            <button class="btn btn-ghost btn-sm" style="color:var(--st-red)" @onclick="@(() => Delete(g))"><Icon Name="x" Size="14" /></button>
+                        </div>
+                    }
+                </div>
+            }
+        }
+
+        @* Add new row *@
+        @if (_adding)
+        {
+            <div style="display:flex;align-items:center;gap:16px;padding:14px 22px;border-top:1px solid var(--line);background:rgba(118,199,173,0.04)">
+                <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
+                    <input class="input" style="height:38px;max-width:160px;font-family:var(--mono);font-weight:650"
+                           @bind="_newName" @bind:event="oninput" @onkeydown="OnAddKey" placeholder="КІ-31" autofocus />
+                    <input class="input" style="height:38px;flex:1" @bind="_newDesc" placeholder="Опис (необов'язково)" />
+                </div>
+                <div style="display:flex;gap:6px;flex:none">
+                    <button class="btn btn-primary btn-sm" @onclick="ConfirmAdd" disabled="@string.IsNullOrWhiteSpace(_newName)">
+                        <Icon Name="check" Size="14" />Додати
+                    </button>
+                    <button class="btn btn-ghost btn-sm" @onclick="CancelAdd">Скасувати</button>
+                </div>
+            </div>
+        }
+    </section>
+</div>
+
+@code {
+    private List<GroupRecord> _groups = [];
+    private string _query = "";
+    private bool _loading = true;
+
+    // Add state
+    private bool _adding;
+    private string _newName = "", _newDesc = "";
+
+    // Edit state
+    private int _editId;
+    private string _editName = "", _editDesc = "";
+
+    private List<GroupRecord> Filtered => string.IsNullOrEmpty(_query)
+        ? _groups
+        : _groups.Where(g => g.Name.Contains(_query, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Reload();
+        _loading = false;
+    }
+
+    private async Task Reload() =>
+        _groups = await Db.Groups.OrderBy(g => g.OrderIndex).ThenBy(g => g.Name).ToListAsync();
+
+    // ── Add ──────────────────────────────────────────────────────────────────
+
+    private void StartAdd() { _adding = true; _newName = ""; _newDesc = ""; CancelEdit(); }
+    private void CancelAdd() { _adding = false; _newName = ""; _newDesc = ""; }
+
+    private async Task ConfirmAdd()
+    {
+        if (string.IsNullOrWhiteSpace(_newName)) return;
+        var maxOrder = _groups.Count > 0 ? _groups.Max(g => g.OrderIndex) + 1 : 0;
+        Db.Groups.Add(new GroupRecord { Name = _newName.Trim(), Description = _newDesc.Trim().Length > 0 ? _newDesc.Trim() : null, OrderIndex = maxOrder });
+        await Db.SaveChangesAsync();
+        await Reload();
+        CancelAdd();
+    }
+
+    private async Task OnAddKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await ConfirmAdd();
+        else if (e.Key == "Escape") CancelAdd();
+    }
+
+    // ── Edit ─────────────────────────────────────────────────────────────────
+
+    private void StartEdit(GroupRecord g) { _editId = g.Id; _editName = g.Name; _editDesc = g.Description ?? ""; CancelAdd(); }
+    private void CancelEdit() { _editId = 0; _editName = ""; _editDesc = ""; }
+
+    private async Task SaveEdit()
+    {
+        if (string.IsNullOrWhiteSpace(_editName)) return;
+        var g = await Db.Groups.FindAsync(_editId);
+        if (g is null) return;
+        g.Name = _editName.Trim();
+        g.Description = _editDesc.Trim().Length > 0 ? _editDesc.Trim() : null;
+        await Db.SaveChangesAsync();
+        await Reload();
+        CancelEdit();
+    }
+
+    private async Task OnEditKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await SaveEdit();
+        else if (e.Key == "Escape") CancelEdit();
+    }
+
+    // ── Delete ────────────────────────────────────────────────────────────────
+
+    private async Task Delete(GroupRecord g)
+    {
+        Db.Groups.Remove(g);
+        await Db.SaveChangesAsync();
+        await Reload();
+    }
+}

@@ -1,0 +1,20 @@
+@* Colored 0–100 score pill. *@
+@if (Value is null)
+{
+    <span class="faint mono" style="font-size:14px">—</span>
+}
+else
+{
+    var v = Value.Value;
+    var color = v >= 85 ? "var(--st-green)" : v >= 60 ? "var(--st-yellow)" : "var(--st-red)";
+    var bg = v >= 85 ? "var(--st-green-bg)" : v >= 60 ? "var(--st-yellow-bg)" : "var(--st-red-bg)";
+    var big = Size == "lg";
+    <span class="mono tnum" style="display:inline-flex;align-items:baseline;gap:1px;color:@color;background:@bg;font-weight:700;padding:@(big ? "5px 12px" : "3px 9px");border-radius:9px;font-size:@(big ? "20px" : "13.5px");border:1px solid @bg">
+        @v<span style="font-size:@(big ? "12px" : "10px");opacity:0.6;font-weight:600">/100</span>
+    </span>
+}
+
+@code {
+    [Parameter] public int? Value { get; set; }
+    [Parameter] public string Size { get; set; } = "md";
+}

@@ -1,0 +1,112 @@
+@* Create / Edit lab dialog *@
+<MudDialog>
+    <DialogContent>
+        <div class="glass" style="width:560px;max-width:92vw;padding:28px;box-shadow:var(--shadow-pop)">
+            <div style="display:flex;align-items:center;gap:13px;margin-bottom:22px">
+                <span style="width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:var(--acc-dim);border:1px solid var(--glass-border);color:var(--acc-bright)"><Icon Name="labs" Size="20" /></span>
+                <h3 style="margin:0;font-size:18px;font-weight:730">@(IsNew ? "Нова лаба" : "Редагування лаби")</h3>
+                <button @onclick="Cancel" style="margin-left:auto;width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--tx-2);cursor:pointer;display:grid;place-items:center"><Icon Name="x" Size="16" /></button>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:14px">
+                <div style="display:grid;grid-template-columns:100px 1fr;gap:14px">
+                    <div class="field">
+                        <label>Номер *</label>
+                        <input class="input" type="number" min="1" @bind="_number" placeholder="1" />
+                    </div>
+                    <div class="field">
+                        <label>Назва *</label>
+                        <input class="input" @bind="_title" placeholder="Основи C#" />
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label>Мета (markdown)</label>
+                    <textarea class="input" rows="3" @bind="_goal" placeholder="Навчитися…" style="resize:vertical;height:80px;font-family:var(--mono);font-size:13px"></textarea>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+                    <div class="field">
+                        <label>Гілка git</label>
+                        <input class="input mono" @bind="_branch" placeholder="feature/classes" />
+                    </div>
+                    <div class="field">
+                        <label>Дедлайн здачі</label>
+                        <input class="input" type="datetime-local"
+                               value="@_deadlineStr"
+                               @oninput="@(e => _deadlineStr = e.Value?.ToString() ?? "")"
+                               style="color-scheme:dark" />
+                    </div>
+                </div>
+
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13.5px;color:var(--tx-2)">
+                    <input type="checkbox" @bind="_mergesMain" style="accent-color:var(--acc);width:16px;height:16px" />
+                    Гілка зливається в main після захисту
+                </label>
+
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <div style="padding:10px 14px;background:rgba(232,128,107,0.12);border:1px solid rgba(232,128,107,0.3);border-radius:10px;color:var(--st-red);font-size:13px">@_error</div>
+                }
+            </div>
+
+            <div style="display:flex;gap:10px;margin-top:22px;justify-content:flex-end">
+                <button class="btn btn-ghost" @onclick="Cancel">Скасувати</button>
+                <button class="btn btn-primary" @onclick="Save" disabled="@_saving">
+                    <Icon Name="check" Size="17" />@(_saving ? "Збереження…" : (IsNew ? "Додати" : "Зберегти"))
+                </button>
+            </div>
+        </div>
+    </DialogContent>
+</MudDialog>
+
+@inject ILabManagementService LabSvc
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public LabDef? Existing { get; set; }
+
+    private bool IsNew => Existing is null;
+    private int _number;
+    private string _title = "", _goal = "", _branch = "";
+    private string _deadlineStr = "";   // bound to <input type="datetime-local">
+    private bool _mergesMain, _saving;
+    private string _error = "";
+
+    private DateTime? DeadlineParsed =>
+        string.IsNullOrWhiteSpace(_deadlineStr)
+            ? null
+            : DateTime.TryParse(_deadlineStr, out var d) ? d.ToUniversalTime() : (DateTime?)null;
+
+    protected override void OnInitialized()
+    {
+        if (Existing is null) return;
+        _number = Existing.Number;
+        _title  = Existing.Title;
+        _goal   = Existing.Goal ?? "";
+        _branch = Existing.BranchName ?? "";
+        _mergesMain = Existing.MergesMain;
+        _deadlineStr = Existing.Deadline.HasValue
+            ? Existing.Deadline.Value.ToLocalTime().ToString("yyyy-MM-ddTHH:mm")
+            : "";
+    }
+
+    private async Task Save()
+    {
+        _error = "";
+        if (_number <= 0)                        { _error = "Введіть номер лаби (>0)"; return; }
+        if (string.IsNullOrWhiteSpace(_title))   { _error = "Назва обов'язкова"; return; }
+
+        _saving = true; StateHasChanged();
+        var dto = new CreateLabDto(_number, _title.Trim(), _goal.Trim(), _branch.Trim(), _mergesMain, DeadlineParsed);
+        try
+        {
+            if (IsNew) await LabSvc.CreateAsync(dto);
+            else        await LabSvc.UpdateAsync(Existing!.Id, dto);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex) { _error = ex.Message; _saving = false; }
+    }
+
+    private void Cancel() => MudDialog.Close(DialogResult.Cancel());
+}

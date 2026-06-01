@@ -1,0 +1,25 @@
+@using Microsoft.AspNetCore.Components.Authorization
+
+<Router AppAssembly="@typeof(Program).Assembly">
+    <Found Context="routeData">
+        <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+            <NotAuthorized>
+                @{
+                    var returnUrl = Uri.EscapeDataString(new Uri(NavigationManager.Uri).PathAndQuery);
+                    NavigationManager.NavigateTo($"/account/login?returnUrl={returnUrl}", forceLoad: true);
+                }
+            </NotAuthorized>
+            <Authorizing>
+                <div style="display:grid;place-items:center;height:100vh;color:var(--tx-3)">Завантаження…</div>
+            </Authorizing>
+        </AuthorizeRouteView>
+        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+    </Found>
+    <NotFound>
+        <LayoutView Layout="@typeof(MainLayout)">
+            <div style="padding:60px;text-align:center;color:var(--tx-2)">Сторінку не знайдено.</div>
+        </LayoutView>
+    </NotFound>
+</Router>
+
+@inject NavigationManager NavigationManager

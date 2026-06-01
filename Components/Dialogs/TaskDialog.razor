@@ -1,0 +1,85 @@
+@* Create / Edit task dialog *@
+<MudDialog>
+    <DialogContent>
+        <div class="glass" style="width:540px;max-width:92vw;padding:26px;box-shadow:var(--shadow-pop)">
+            <div style="display:flex;align-items:center;gap:13px;margin-bottom:20px">
+                <span style="width:40px;height:40px;border-radius:11px;display:grid;place-items:center;background:var(--acc-dim);border:1px solid var(--glass-border);color:var(--acc-bright)"><Icon Name="spark" Size="18" /></span>
+                <h3 style="margin:0;font-size:17px;font-weight:720">@(IsNew ? "Нове завдання" : "Редагування завдання")</h3>
+                <button @onclick="Cancel" style="margin-left:auto;width:36px;height:36px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--tx-2);cursor:pointer;display:grid;place-items:center"><Icon Name="x" Size="15" /></button>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:13px">
+                <div style="display:grid;grid-template-columns:80px 1fr 110px;gap:12px;align-items:end">
+                    <div class="field">
+                        <label>№ *</label>
+                        <input class="input" type="number" min="1" @bind="_number" />
+                    </div>
+                    <div class="field">
+                        <label>Назва *</label>
+                        <input class="input" @bind="_title" placeholder="Клас Patient" />
+                    </div>
+                    <div class="field">
+                        <label>Складність</label>
+                        <select class="select" @bind="_difficulty">
+                            <option value="1">⭐ 1</option>
+                            <option value="2">⭐⭐ 2</option>
+                            <option value="3">⭐⭐⭐ 3</option>
+                            <option value="4">⭐⭐⭐⭐ 4</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label>Умова (markdown)</label>
+                    <textarea class="input mono" rows="6" @bind="_brief" placeholder="Напишіть програму, яка…" style="resize:vertical;min-height:100px;font-size:12.5px;line-height:1.6"></textarea>
+                </div>
+
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <div style="padding:9px 13px;background:rgba(232,128,107,0.1);border:1px solid rgba(232,128,107,0.3);border-radius:9px;color:var(--st-red);font-size:13px">@_error</div>
+                }
+            </div>
+
+            <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end">
+                <button class="btn btn-ghost" @onclick="Cancel">Скасувати</button>
+                <button class="btn btn-primary" @onclick="Save" disabled="@_saving">
+                    <Icon Name="check" Size="16" />@(_saving ? "Збереження…" : (IsNew ? "Додати" : "Зберегти"))
+                </button>
+            </div>
+        </div>
+    </DialogContent>
+</MudDialog>
+
+@inject ILabManagementService LabSvc
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public int LabId { get; set; }
+    [Parameter] public LabTask? Existing { get; set; }
+
+    private bool IsNew => Existing is null;
+    private int _number = 1, _difficulty = 2; private string _title = "", _brief = "", _error = ""; private bool _saving;
+
+    protected override void OnInitialized()
+    {
+        if (Existing is null) return;
+        _number = Existing.Number; _title = Existing.Title; _brief = Existing.Brief ?? ""; _difficulty = Existing.Difficulty;
+    }
+
+    private async Task Save()
+    {
+        _error = "";
+        if (string.IsNullOrWhiteSpace(_title)) { _error = "Назва обов'язкова"; return; }
+        _saving = true; StateHasChanged();
+        var dto = new CreateTaskDto(_number, _title.Trim(), _brief.Trim(), _difficulty);
+        try
+        {
+            if (IsNew) await LabSvc.CreateTaskAsync(LabId, dto);
+            else        await LabSvc.UpdateTaskAsync(Existing!.Id, dto);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex) { _error = ex.Message; _saving = false; }
+    }
+
+    private void Cancel() => MudDialog.Close(DialogResult.Cancel());
+}

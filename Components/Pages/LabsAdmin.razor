@@ -1,0 +1,201 @@
+@page "/teacher/labs"
+@inject ILabManagementService LabSvc
+@inject IDialogService Dialog
+@inject IDataService DataSvc
+@inject AppDbContext Db
+
+<TopBar Title="Лабораторні" Sub="Управління лабами та завданнями" />
+
+<div class="screen-anim" style="padding:0 34px 40px;position:relative;z-index:1">
+
+    @* Header toolbar *@
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+        <div class="input-wrap" style="flex:1 1 240px;max-width:300px">
+            <span class="lead"><Icon Name="search" Size="16" /></span>
+            <input class="input" placeholder="Пошук лаби…" @bind="_query" @bind:event="oninput" style="height:40px" />
+        </div>
+        <button class="btn btn-ghost btn-sm" @onclick="OpenImport" style="margin-left:auto">
+            <Icon Name="upload" Size="15" />Імпорт з MD
+        </button>
+        <button class="btn btn-primary btn-sm" @onclick="AddLab">
+            <Icon Name="braces" Size="15" />Нова лаба
+        </button>
+    </div>
+
+    @* Lab list *@
+    <section class="glass" style="padding:0;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:11px;padding:16px 22px;border-bottom:1px solid var(--line)">
+            <Icon Name="settings" Size="18" Style="color:var(--acc)" />
+            <h3 style="margin:0;font-size:16px;font-weight:720">Лабораторні роботи</h3>
+            <span class="badge badge-grey"><span class="dot"></span>@Filtered.Count лаб</span>
+        </div>
+
+        @if (Filtered.Count == 0 && !_loading)
+        {
+            <div style="padding:40px;text-align:center;color:var(--tx-3)">Лаби не знайдено. Натисніть «Нова лаба» або «Імпорт з MD».</div>
+        }
+
+        @foreach (var lab in Filtered)
+        {
+            var stat = _stats.FirstOrDefault(s => s.Id == lab.Number);
+            var isExpanded = _expanded == lab.Id;
+            <div style="border-bottom:1px solid var(--line)">
+                @* Lab row *@
+                <div style="display:grid;grid-template-columns:50px 1fr 160px 80px auto;align-items:center;gap:16px;padding:14px 22px;min-width:0">
+                    <span class="mono" style="font-size:12.5px;font-weight:750;color:var(--acc-bright);background:var(--acc-dim);padding:5px 0;border-radius:8px;text-align:center;border:1px solid var(--glass-border)">@lab.Number.ToString("D2")</span>
+                    <div>
+                        <div style="font-size:14.5px;font-weight:650">@lab.Title</div>
+                        <div style="font-size:11.5px;color:var(--tx-3);margin-top:3px;display:flex;gap:10px;flex-wrap:wrap">
+                            @if (!string.IsNullOrEmpty(lab.BranchName))
+                            {
+                                <span class="mono" style="color:var(--acc)">@lab.BranchName</span>
+                            }
+                            @if (lab.Deadline.HasValue)
+                            {
+                                var dlLocal = lab.Deadline.Value.ToLocalTime();
+                                var dlOver  = DateTime.UtcNow > lab.Deadline.Value;
+                                <span style="color:@(dlOver ? "var(--st-red)" : "inherit")">
+                                    <Icon Name="calendar" Size="11" /> @dlLocal.ToString("dd.MM.yyyy HH:mm")
+                                </span>
+                            }
+                            <span style="color:var(--acc-bright)">@lab.Tasks.Count завд.</span>
+                        </div>
+                    </div>
+                    <div style="font-size:12px;color:var(--tx-3)">
+                        @if (stat is not null)
+                        {
+                            <div>Здано: @stat.Submitted / @stat.Total</div>
+                            @if (stat.Avg.HasValue)
+                            {
+                                <div>Серед.: <span class="mono" style="color:var(--acc-bright)">@stat.Avg</span></div>
+                            }
+                        }
+                    </div>
+                    <div>
+                        @if (stat is not null && stat.Submitted > 0)
+                        {
+                            <span class="badge badge-green"><span class="dot"></span>Активна</span>
+                        }
+                        else
+                        {
+                            <span class="badge badge-grey"><span class="dot"></span>Нова</span>
+                        }
+                    </div>
+                    <div style="display:flex;gap:6px;justify-content:flex-end;white-space:nowrap">
+                        <button class="btn btn-ghost btn-sm" @onclick="@(() => ToggleExpand(lab.Id))" title="@(isExpanded ? "Закрити" : "Завдання")">
+                            <Icon Name="@(isExpanded ? "x" : "spark")" Size="14" />
+                            @(isExpanded ? "Закрити" : "Завдання")
+                        </button>
+                        <button class="btn btn-ghost btn-sm" @onclick="@(() => EditLab(lab))" title="Редагувати"><Icon Name="settings" Size="14" /></button>
+                        <button class="btn btn-ghost btn-sm" style="color:var(--st-red)" @onclick="@(() => DeleteLab(lab))" title="Видалити"><Icon Name="x" Size="14" /></button>
+                    </div>
+                </div>
+
+                @* Expanded task section *@
+                @if (isExpanded)
+                {
+                    <div style="background:rgba(0,0,0,0.18);border-top:1px solid var(--line);padding:16px 22px 16px 72px">
+                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+                            <span style="font-size:12.5px;font-weight:700;color:var(--tx-2);text-transform:uppercase;letter-spacing:0.04em">Завдання</span>
+                            <button class="btn btn-primary btn-sm" @onclick="@(() => AddTask(lab))">
+                                <Icon Name="braces" Size="13" />Нове завдання
+                            </button>
+                        </div>
+                        @if (lab.Tasks.Count == 0)
+                        {
+                            <div style="color:var(--tx-faint);font-size:13px;padding:8px 0">Завдань ще немає</div>
+                        }
+                        else
+                        {
+                            @foreach (var t in lab.Tasks.OrderBy(t => t.Number))
+                            {
+                                <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+                                    <span class="mono" style="width:24px;font-size:12px;color:var(--tx-3)">@t.Number</span>
+                                    <span style="flex:1;font-size:13.5px">@t.Title</span>
+                                    <span style="font-size:11px;color:var(--tx-faint)">@("⭐".PadRight(t.Difficulty, '⭐').Trim())</span>
+                                    <div style="display:flex;gap:4px">
+                                        <button class="btn btn-ghost btn-sm" @onclick="@(() => EditTask(lab, t))"><Icon Name="settings" Size="13" /></button>
+                                        <button class="btn btn-ghost btn-sm" style="color:var(--st-red)" @onclick="@(() => DeleteTask(t))"><Icon Name="x" Size="13" /></button>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </section>
+</div>
+
+@code {
+    private List<LabDef> _labs = [];
+    private List<LabStat> _stats = [];
+    private string _query = "";
+    private int _expanded;
+    private bool _loading = true;
+
+    private List<LabDef> Filtered => string.IsNullOrEmpty(_query)
+        ? _labs
+        : _labs.Where(l => l.Title.Contains(_query, StringComparison.OrdinalIgnoreCase)
+                         || l.Number.ToString().Contains(_query)).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Reload();
+        _loading = false;
+    }
+
+    private async Task Reload()
+    {
+        _labs  = await LabSvc.GetAllAsync();
+        _stats = await DataSvc.GetLabStatsAsync();
+    }
+
+    private void ToggleExpand(int id) => _expanded = _expanded == id ? 0 : id;
+
+    private async Task AddLab()
+    {
+        var dlg = await Dialog.ShowAsync<LabDialog>("", new DialogOptions { BackdropClick = true, NoHeader = true });
+        if ((await dlg.Result)?.Data is true) await Reload();
+    }
+
+    private async Task EditLab(LabDef lab)
+    {
+        var p = new DialogParameters { ["Existing"] = lab };
+        var dlg = await Dialog.ShowAsync<LabDialog>("", p, new DialogOptions { BackdropClick = true, NoHeader = true });
+        if ((await dlg.Result)?.Data is true) await Reload();
+    }
+
+    private async Task DeleteLab(LabDef lab)
+    {
+        // simple confirm via js
+        await LabSvc.DeleteAsync(lab.Id);
+        await Reload();
+    }
+
+    private async Task AddTask(LabDef lab)
+    {
+        var p = new DialogParameters { ["LabId"] = lab.Id };
+        var dlg = await Dialog.ShowAsync<TaskDialog>("", p, new DialogOptions { BackdropClick = true, NoHeader = true });
+        if ((await dlg.Result)?.Data is true) await Reload();
+    }
+
+    private async Task EditTask(LabDef lab, LabTask t)
+    {
+        var p = new DialogParameters { ["LabId"] = lab.Id, ["Existing"] = t };
+        var dlg = await Dialog.ShowAsync<TaskDialog>("", p, new DialogOptions { BackdropClick = true, NoHeader = true });
+        if ((await dlg.Result)?.Data is true) await Reload();
+    }
+
+    private async Task DeleteTask(LabTask t)
+    {
+        await LabSvc.DeleteTaskAsync(t.Id);
+        await Reload();
+    }
+
+    private async Task OpenImport()
+    {
+        var dlg = await Dialog.ShowAsync<MdImportDialog>("", new DialogOptions { BackdropClick = false, NoHeader = true });
+        if ((await dlg.Result)?.Data is true) await Reload();
+    }
+}

@@ -1,0 +1,151 @@
+@page "/student"
+@inject NavigationManager Nav
+@inject IDataService Data
+@inject INotificationService NotifSvc
+@inject AppState App
+
+<TopBar Title="Дашборд" Sub="Огляд твого прогресу на курсі">
+    @if (_unread > 0)
+    {
+        <button class="btn btn-outline btn-sm" @onclick="ShowNotifications" style="margin-right:8px;position:relative">
+            <Icon Name="clock" Size="15" />
+            <span style="position:absolute;top:-4px;right:-4px;width:16px;height:16px;border-radius:50%;background:var(--st-yellow);color:#000;font-size:10px;font-weight:750;display:grid;place-items:center">@_unread</span>
+        </button>
+    }
+    @if (CurrentLab is not null)
+    {
+        <button class="btn btn-outline btn-sm" @onclick="@(() => Nav.NavigateTo($"/student/lab/{CurrentLab.Id}"))" style="margin-right:4px">
+            <Icon Name="upload" Size="15" />Продовжити Lab@(CurrentLab.Id.ToString("D2"))
+        </button>
+    }
+</TopBar>
+
+<div class="screen-anim" style="padding:0 34px 40px;position:relative;z-index:1">
+
+    @* greeting hero *@
+    <section class="glass" style="padding:28px 30px;margin-bottom:22px;position:relative;overflow:hidden">
+        <div style="position:absolute;right:-40px;top:-60px;width:320px;height:320px;border-radius:50%;background:radial-gradient(circle, rgba(118,199,173,0.16), transparent 65%);pointer-events:none"></div>
+        <div style="display:flex;align-items:flex-start;gap:24px;flex-wrap:wrap;position:relative">
+            <div style="flex:1 1 380px;min-width:0">
+                <div class="badge badge-green" style="margin-bottom:14px"><span class="dot"></span>Семестр 2 · Тиждень 9</div>
+                <h2 style="margin:0;font-size:28px;font-weight:760;letter-spacing:-0.03em">Привіт, @Student.FirstName <span style="display:inline-block">👋</span></h2>
+                <p style="margin:8px 0 22px;color:var(--tx-2);font-size:14.5px;max-width:460px">Ти проходиш курс впевнено. Залишилось здати ще @(Total - Done) лабораторних до заліку.</p>
+
+                <div style="max-width:520px">
+                    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:9px">
+                        <span style="font-size:13.5px;font-weight:600;color:var(--tx-2)"><b style="color:var(--acc-bright);font-size:15px">@Done</b> з @Total лаб зараховано</span>
+                        <span class="mono" style="font-size:13px;color:var(--tx-3)">@Pct%</span>
+                    </div>
+                    <Progress Value="Pct" />
+                    <div style="display:flex;gap:14px;margin-top:12px;flex-wrap:wrap">
+                        <MiniStat Tone="yellow" Label="на перевірці" Value="Review" />
+                        <MiniStat Tone="red" Label="на доопрацюванні" Value="Rejected" />
+                        <MiniStat Tone="grey" Label="попереду" Value="@(Total - Done - Review - Rejected)" />
+                    </div>
+                </div>
+            </div>
+
+            <div style="flex:none;display:flex;flex-direction:column;align-items:center;gap:6px">
+                <Ring Value="Avg" />
+                <div style="font-size:12.5px;color:var(--tx-3);font-weight:500">середній бал</div>
+            </div>
+        </div>
+    </section>
+
+    @* section title + filters *@
+    <div style="display:flex;align-items:center;gap:14px;margin:4px 2px 18px">
+        <h3 style="margin:0;font-size:17px;font-weight:700;letter-spacing:-0.02em">Лабораторні роботи</h3>
+        <span class="badge badge-grey"><span class="dot"></span>@Total всього</span>
+        <div style="margin-left:auto;display:flex;gap:8px">
+            @foreach (var (label, key) in new[] { ("Усі", "all"), ("Активні", "active"), ("Зараховані", "done") })
+            {
+                var on = _filter == key;
+                <button class="fchip" @onclick="@(() => _filter = key)"
+                        style="height:32px;padding:0 14px;border-radius:9px;cursor:pointer;font-size:12.5px;font-weight:600;font-family:var(--font);border:1px solid @(on ? "var(--glass-border-hover)" : "var(--line)");background:@(on ? "var(--acc-dim)" : "transparent");color:@(on ? "var(--acc-bright)" : "var(--tx-3)");transition:all .16s">@label</button>
+            }
+        </div>
+    </div>
+
+    @* lab cards grid *@
+    <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:16px">
+        @{ var visible = FilteredLabs; }
+        @for (int i = 0; i < visible.Count; i++)
+        {
+            <LabCard Lab="visible[i]" Index="i" />
+        }
+    </div>
+</div>
+
+@* ── Notifications overlay ─────────────────────────────────────────────────── *@
+@if (_showNotif)
+{
+    <div @onclick="@(() => _showNotif = false)" style="position:fixed;inset:0;z-index:200;background:rgba(6,12,10,0.6);backdrop-filter:blur(5px)">
+        <div @onclick:stopPropagation class="glass" style="position:fixed;top:80px;right:30px;width:360px;max-height:480px;overflow-y:auto;border-radius:18px;padding:0;box-shadow:var(--shadow-pop)">
+            <div style="padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px">
+                <Icon Name="clock" Size="16" Style="color:var(--st-yellow)" />
+                <span style="font-size:14px;font-weight:720">Сповіщення</span>
+                <button @onclick="@(() => _showNotif = false)" style="margin-left:auto;width:30px;height:30px;border-radius:8px;border:none;background:transparent;color:var(--tx-3);cursor:pointer;display:grid;place-items:center"><Icon Name="x" Size="14" /></button>
+            </div>
+            @if (_notifications.Count == 0)
+            {
+                <div style="padding:24px;text-align:center;color:var(--tx-faint);font-size:13.5px">Нових сповіщень немає</div>
+            }
+            @foreach (var n in _notifications)
+            {
+                var tone = n.Type == "grade" ? "var(--st-green)" : n.Type == "grading" ? "var(--acc)" : "var(--tx-2)";
+                <div style="padding:14px 20px;border-bottom:1px solid var(--line)">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                        <span style="width:8px;height:8px;border-radius:50%;background:@tone;flex:none"></span>
+                        <span style="font-size:13.5px;font-weight:640;color:var(--tx-1)">@n.Title</span>
+                    </div>
+                    <p style="margin:0;font-size:12.5px;color:var(--tx-2);line-height:1.5">@n.Body</p>
+                    <span style="font-size:11px;color:var(--tx-faint)">@n.CreatedAt.ToLocalTime().ToString("dd.MM HH:mm")</span>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private Student Student = new();
+    private List<Lab> Labs = [];
+    private List<Notification> _notifications = [];
+    private int _unread;
+    private bool _showNotif;
+    private string _filter = "all";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var sid = App.StudentDbId ?? 1;
+        Student = await Data.GetCurrentStudentAsync();
+        Labs    = await Data.GetStudentLabsAsync(sid);
+        _unread = await NotifSvc.GetUnreadCountAsync(sid);
+    }
+
+    private async Task ShowNotifications()
+    {
+        var sid = App.StudentDbId ?? 1;
+        _notifications = await NotifSvc.GetUnreadAsync(sid);
+        _showNotif = true;
+        await NotifSvc.MarkAllReadAsync(sid);
+        _unread = 0;
+    }
+
+    private List<Lab> FilteredLabs => _filter switch
+    {
+        "active" => Labs.Where(l => l.Status is LabStatus.Review or LabStatus.Rejected).ToList(),
+        "done"   => Labs.Where(l => l.Status == LabStatus.Done).ToList(),
+        _        => Labs,
+    };
+
+    private int Total    => Labs.Count;
+    private int Done     => Labs.Count(l => l.Status == LabStatus.Done);
+    private int Review   => Labs.Count(l => l.Status == LabStatus.Review);
+    private int Rejected => Labs.Count(l => l.Status == LabStatus.Rejected);
+    private int Pct      => Total > 0 ? (int)Math.Round(100.0 * Done / Total) : 0;
+    private int Avg      => Labs.Any(l => l.Final.HasValue)
+        ? (int)Math.Round(Labs.Where(l => l.Final.HasValue).Average(l => l.Final!.Value))
+        : 0;
+    private Lab? CurrentLab => Labs.FirstOrDefault(l => l.Current)
+        ?? Labs.FirstOrDefault(l => l.Status == LabStatus.Review);
+}

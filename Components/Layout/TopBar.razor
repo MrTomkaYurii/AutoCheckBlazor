@@ -1,0 +1,64 @@
+@inject AppState App
+
+<header style="display:flex;align-items:center;gap:18px;padding:22px 34px 20px;position:sticky;top:0;z-index:10;background:linear-gradient(180deg, rgba(15,26,22,0.92) 55%, rgba(15,26,22,0.7));backdrop-filter:blur(14px) saturate(1.1);-webkit-backdrop-filter:blur(14px) saturate(1.1);border-bottom:1px solid var(--line)">
+    <div style="min-width:0">
+        @if (Crumbs is not null)
+        {
+            <div style="display:flex;align-items:center;gap:7px;margin-bottom:7px;color:var(--tx-3);font-size:12.5px;font-weight:500">
+                @for (int i = 0; i < Crumbs.Length; i++)
+                {
+                    if (i > 0)
+                    {
+                        <Icon Name="chevR" Size="13" />
+                    }
+                    <span style="color:@(i == Crumbs.Length - 1 ? "var(--tx-2)" : "var(--tx-3)")">@Crumbs[i]</span>
+                }
+            </div>
+        }
+        <h1 style="margin:0;font-size:25px;font-weight:750;letter-spacing:-0.03em">@Title</h1>
+        @if (!string.IsNullOrEmpty(Sub))
+        {
+            <p style="margin:5px 0 0;color:var(--tx-2);font-size:14px">@Sub</p>
+        }
+    </div>
+
+    <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
+        @ChildContent
+        <button class="topbar-icon" style="@IconBtn"><Icon Name="search" Size="18" /></button>
+        <button class="topbar-icon" style="@IconBtn;position:relative">
+            <Icon Name="bell" Size="18" />
+            <span style="position:absolute;top:9px;right:10px;width:7px;height:7px;border-radius:50%;background:var(--st-yellow);box-shadow:0 0 8px var(--st-yellow)"></span>
+        </button>
+        <div style="display:flex;align-items:center;gap:10px;padding-left:6px">
+            <div style="text-align:right;line-height:1.25">
+                <div style="font-size:13.5px;font-weight:650">@Name</div>
+                <div style="font-size:11px;color:var(--tx-3)">@RoleLabel</div>
+                <div style="font-size:10.5px;color:var(--tx-faint);margin-top:1px">Кафедра КН · ЧНУ</div>
+            </div>
+            <div style="@Avatar">@Initials</div>
+        </div>
+    </div>
+</header>
+
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string? Sub { get; set; }
+    [Parameter] public string[]? Crumbs { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    [CascadingParameter] private Task<AuthenticationState> AuthStateTask { get; set; } = default!;
+    private bool _isTeacher;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthStateTask;
+        _isTeacher = App.IsTeacher(state.User);
+    }
+
+    private string Name => _isTeacher ? $"{App.Teacher.FirstName} {App.Teacher.LastName}" : $"{App.Student.FirstName} {App.Student.LastName}";
+    private string Initials => _isTeacher ? App.Teacher.Initials : App.Student.Initials;
+    private string RoleLabel => _isTeacher ? $"Викладач · {App.Teacher.Title}" : $"{App.Student.Group} · Студент";
+
+    private const string IconBtn = "width:42px;height:42px;border-radius:12px;flex:none;border:1px solid var(--line);background:rgba(255,255,255,0.03);color:var(--tx-2);cursor:pointer;display:grid;place-items:center;transition:background .18s, color .18s, border-color .18s";
+    private const string Avatar = "width:44px;height:44px;border-radius:13px;flex:none;display:grid;place-items:center;font-weight:700;font-size:15px;background:linear-gradient(150deg, rgba(118,199,173,0.3), rgba(118,199,173,0.12));border:1px solid var(--glass-border-hover);color:var(--acc-bright)";
+}

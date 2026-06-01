@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>AutoCheck</RootNamespace>
+    <AssemblyName>AutoCheck</AssemblyName>
+    <!-- Force '.' as decimal separator so CSS values (width:38.5%) never break under uk-UA / de-DE etc. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MudBlazor" Version="9.5.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="9.0.0" />
+    <PackageReference Include="Markdig" Version="0.38.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="content\labs\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- Exclude test project and design prototypes from main compilation -->
+  <ItemGroup>
+    <Compile Remove="AutoCheck.Tests\**" />
+    <Content Remove="AutoCheck.Tests\**" />
+    <EmbeddedResource Remove="AutoCheck.Tests\**" />
+    <None Remove="AutoCheck.Tests\**" />
+    <Compile Remove="_design\**" />
+    <Content Remove="_design\**" />
+    <EmbeddedResource Remove="_design\**" />
+    <None Remove="_design\**" />
+  </ItemGroup>
+
+</Project>

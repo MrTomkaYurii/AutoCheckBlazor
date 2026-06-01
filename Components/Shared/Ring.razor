@@ -1,0 +1,35 @@
+@* Animated circular average ring *@
+<div style="position:relative;width:132px;height:132px">
+    <svg width="132" height="132" viewBox="0 0 132 132" style="transform:rotate(-90deg)">
+        <circle cx="66" cy="66" r="52" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="10" />
+        <circle cx="66" cy="66" r="52" fill="none" stroke="url(#ringg)" stroke-width="10" stroke-linecap="round"
+                stroke-dasharray="@C" stroke-dashoffset="@Offset" style="transition:stroke-dashoffset 1s cubic-bezier(.22,1,.36,1)" />
+        <defs>
+            <linearGradient id="ringg" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="var(--acc-bright)" />
+                <stop offset="1" stop-color="var(--acc)" />
+            </linearGradient>
+        </defs>
+    </svg>
+    <div style="position:absolute;inset:0;display:grid;place-items:center">
+        <div class="mono tnum" style="font-size:32px;font-weight:780;letter-spacing:-0.03em;color:var(--acc-bright);line-height:1">@_shown</div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int Value { get; set; }
+    private double _v = 0;
+    private int _shown = 0;
+    private const double C = 2 * Math.PI * 52;
+    private double Offset => C - (_v / 100.0) * C;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Task.Delay(120);
+            _v = Value; _shown = Value;
+            StateHasChanged();
+        }
+    }
+}

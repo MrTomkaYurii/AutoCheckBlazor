@@ -1,0 +1,321 @@
+@page "/student/lab/{Id:int}"
+@namespace AutoCheck.Components.Pages.LabPage
+@inject NavigationManager Nav
+@inject IDataService Data
+@inject IGradingService Grader
+@inject IDialogService Dialog
+@inject AppState App
+@inject AppDbContext Db
+
+<TopBar Title="@($"Lab{LabInfo.Id:D2} · {LabInfo.Title}")" Crumbs="@(new[] { "Мої лаби", $"Lab{LabInfo.Id:D2}" })" />
+
+<div class="screen-anim" style="padding:0 34px 40px;position:relative;z-index:1">
+
+    @* lab header bar *@
+    <section class="glass" style="padding:20px 24px;margin-bottom:18px;display:flex;align-items:center;gap:20px">
+        <div style="display:flex;align-items:center;gap:14px;flex:1 1 auto;min-width:0">
+            <span class="mono" style="font-size:17px;font-weight:750;color:var(--acc-bright);background:var(--acc-dim);padding:8px 12px;border-radius:11px;border:1px solid var(--glass-border)">@LabInfo.Id.ToString("D2")</span>
+            <div style="min-width:0">
+                <div style="display:flex;align-items:center;gap:10px">
+                    <h2 style="margin:0;font-size:20px;font-weight:740;letter-spacing:-0.02em">@LabInfo.Title</h2>
+                    <Badge Status="LabInfo.Auto > 0 ? LabStatus.Review : LabStatus.Locked" />
+                </div>
+                <div style="display:flex;gap:16px;margin-top:6px;font-size:12.5px;color:var(--tx-3);flex-wrap:wrap">
+                    @if (LabInfo.DeadlineAt.HasValue)
+                    {
+                        var dl = LabInfo.DeadlineAt.Value.ToLocalTime();
+                        var dlColor = LabInfo.IsOverdue ? "var(--st-red)" : (dl - DateTime.Now).TotalHours <= 24 ? "var(--st-yellow)" : "inherit";
+                        <span style="display:flex;align-items:center;gap:6px;color:@dlColor">
+                            <Icon Name="calendar" Size="14" />
+                            @(LabInfo.IsOverdue ? "Дедлайн минув · " : "Здати до ")@dl.ToString("dd.MM.yyyy HH:mm")
+                        </span>
+                    }
+                    <span style="display:flex;align-items:center;gap:6px"><Icon Name="refresh" Size="14" />Спроба @LabInfo.AttemptsUsed з @LabInfo.AttemptsMax</span>
+                    @if (!string.IsNullOrEmpty(App.Student.Github))
+                    {
+                        <span style="display:flex;align-items:center;gap:6px"><Icon Name="github" Size="14" />@App.Student.Github</span>
+                    }
+                </div>
+            </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:18px;flex:none">
+            <div style="text-align:right">
+                <div style="font-size:11px;color:var(--tx-3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Авто-оцінка</div>
+                <div class="mono tnum" style="font-size:30px;font-weight:780;line-height:1;color:var(--st-yellow)">@LabInfo.Auto<span style="font-size:15px;opacity:0.5">/100</span></div>
+            </div>
+            <div style="display:flex;gap:8px">
+                <button class="btn btn-ghost btn-sm" @onclick="OpenComments"><Icon Name="spark" Size="15" />Коментарі</button>
+                @if (LabInfo.IsOverdue)
+                {
+                    <button class="btn btn-ghost btn-sm" disabled style="opacity:0.45;color:var(--st-red)"><Icon Name="lock" Size="15" />Дедлайн минув</button>
+                }
+                else
+                {
+                    <button class="btn btn-primary" @onclick="OpenResubmit"><Icon Name="refresh" Size="17" />Здати</button>
+                }
+            </div>
+        </div>
+    </section>
+
+    @* master / detail *@
+    <div style="display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start">
+
+        @* LEFT — task list *@
+        <div style="display:flex;flex-direction:column;gap:12px;position:sticky;top:90px">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:0 4px">
+                <span style="font-size:12.5px;font-weight:700;color:var(--tx-2);text-transform:uppercase;letter-spacing:0.05em">Завдання</span>
+                <span class="mono" style="font-size:12px;color:var(--tx-3)">@LabInfo.Tasks.Count</span>
+            </div>
+            @foreach (var t in LabInfo.Tasks)
+            {
+                var v = t.View();
+                var on = t.Id == _activeId;
+                <button @onclick="@(() => _activeId = t.Id)" class="tasktab glass"
+                        style="text-align:left;padding:14px 15px;cursor:pointer;border:1px solid;border-color:@(on ? v.Tone : "var(--glass-border)");background:@(on ? $"linear-gradient(180deg, {v.Tone}14, var(--glass-bg))" : "var(--glass-bg)");transition:all .18s;position:relative;display:block;width:100%">
+                    @if (on)
+                    {
+                        <span style="position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:3px;background:@v.Tone;box-shadow:0 0 10px @v.Tone"></span>
+                    }
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:7px">
+                        <span style="width:24px;height:24px;border-radius:7px;flex:none;display:grid;place-items:center;background:@(v.Tone)22;color:@v.Tone;border:1px solid @(v.Tone)44"><Icon Name="@v.Icon" Size="14" Stroke="2.2" /></span>
+                        <span class="mono" style="font-size:12px;color:var(--tx-3);font-weight:600">task@(t.N)</span>
+                        <span class="mono tnum" style="margin-left:auto;font-size:13px;font-weight:700;color:@v.Tone">@t.Score</span>
+                    </div>
+                    <div style="font-size:14px;font-weight:640;letter-spacing:-0.01em;margin-bottom:8px;color:var(--tx-1)">@t.Title</div>
+                    <Progress Value="t.Score" Tone="@(t.State == "pass" ? "" : t.ColorClass)" />
+                </button>
+            }
+
+            @* summary mini-card *@
+            <div class="glass" style="padding:14px 15px;margin-top:4px">
+                <div style="font-size:12px;color:var(--tx-3);margin-bottom:10px;font-weight:600">Підсумок тестів</div>
+                @foreach (var t in LabInfo.Tasks)
+                {
+                    var v = t.View();
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12.5px">
+                        <span class="mono faint" style="width:42px">task@(t.N)</span>
+                        <div class="prog" style="flex:1;height:6px"><span style="width:@(100.0 * t.TestsPassed / t.TestsTotal)%;background:@v.Tone;box-shadow:none"></span></div>
+                        <span class="mono tnum" style="color:var(--tx-2);width:34px;text-align:right">@t.TestsPassed/@t.TestsTotal</span>
+                    </div>
+                }
+            </div>
+        </div>
+
+        @* RIGHT — results *@
+        <div @key="_activeId" class="screen-anim" style="display:flex;flex-direction:column;gap:16px;min-width:0">
+            @{
+                var task = LabInfo.Tasks.First(x => x.Id == _activeId);
+                var tv = task.View();
+            }
+
+            <section class="glass" style="padding:22px 24px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:12px">
+                    <div style="display:flex;align-items:center;gap:12px">
+                        <span style="width:32px;height:32px;border-radius:9px;display:grid;place-items:center;background:@(tv.Tone)22;color:@tv.Tone;border:1px solid @(tv.Tone)44"><Icon Name="@tv.Icon" Size="18" Stroke="2.2" /></span>
+                        <div>
+                            <div style="display:flex;align-items:center;gap:9px">
+                                <span class="mono" style="font-size:12.5px;color:var(--tx-3)">task@(task.N)</span>
+                                <span class="badge badge-@task.ColorClass" style="height:22px"><span class="dot"></span>@tv.Label</span>
+                            </div>
+                            <h3 style="margin:4px 0 0;font-size:18px;font-weight:720;letter-spacing:-0.02em">@task.Title</h3>
+                        </div>
+                    </div>
+                    <ScorePill Value="task.Score" Size="lg" />
+                </div>
+                <div class="md" style="font-size:13.5px;line-height:1.7;color:var(--tx-2)"><MarkdownText Text="@task.Brief" /></div>
+            </section>
+
+            <section class="glass" style="padding:20px 24px;border-color:@(tv.Tone)33">
+                <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px">
+                    <Icon Name="spark" Size="17" Style="@($"color:{tv.Tone}")" />
+                    <h4 style="margin:0;font-size:14px;font-weight:700;letter-spacing:-0.01em">Фідбек перевірки</h4>
+                    <span class="mono" style="margin-left:auto;font-size:12px;color:var(--tx-3)">@task.TestsPassed/@task.TestsTotal тестів</span>
+                </div>
+                <p style="margin:0;font-size:13.5px;line-height:1.7;color:var(--tx-1)">@task.Feedback</p>
+            </section>
+
+            <section class="glass" style="padding:0;overflow:hidden">
+                <div style="display:flex;align-items:center;gap:10px;padding:14px 20px;border-bottom:1px solid var(--line)">
+                    <Icon Name="braces" Size="16" Style="color:var(--acc)" />
+                    <h4 style="margin:0;font-size:14px;font-weight:700">Запропоновані зміни</h4>
+                    <span class="mono" style="font-size:12px;color:var(--tx-3);margin-left:4px">Models/@(task.Title.Split(' ').Last()).cs</span>
+                    <div style="margin-left:auto;display:flex;gap:12px;font-size:12px">
+                        <span class="mono" style="color:var(--st-green)">+@(task.Diff.Count(d => d.Type == "add"))</span>
+                        <span class="mono" style="color:var(--st-red)">−@(task.Diff.Count(d => d.Type == "del"))</span>
+                    </div>
+                </div>
+                <div class="mono" style="font-size:12.8px;line-height:1.85;overflow-x:auto">
+                    @foreach (var ln in task.Diff)
+                    {
+                        var bg = ln.Type == "add" ? "rgba(118,199,173,0.10)" : ln.Type == "del" ? "rgba(232,128,107,0.10)" : "transparent";
+                        var gut = ln.Type != "ctx" ? bg : "rgba(255,255,255,0.015)";
+                        var mark = ln.Type == "add" ? "+" : ln.Type == "del" ? "−" : " ";
+                        var mc = ln.Type == "add" ? "var(--st-green)" : ln.Type == "del" ? "var(--st-red)" : "var(--tx-faint)";
+                        <div style="display:flex;background:@bg;min-width:max-content">
+                            <span style="width:42px;flex:none;text-align:right;padding:0 8px;color:var(--tx-faint);user-select:none;border-right:1px solid var(--line);background:@gut">@(ln.N1?.ToString() ?? "")</span>
+                            <span style="width:42px;flex:none;text-align:right;padding:0 8px;color:var(--tx-faint);user-select:none;border-right:1px solid var(--line);background:@gut">@(ln.N2?.ToString() ?? "")</span>
+                            <span style="width:20px;flex:none;text-align:center;color:@mc;font-weight:700;user-select:none">@mark</span>
+                            <span style="padding:0 12px 0 4px;white-space:pre;color:@(ln.Type == "ctx" ? "var(--tx-2)" : "var(--tx-1)")">@(string.IsNullOrEmpty(ln.Text) ? " " : ln.Text)</span>
+                        </div>
+                    }
+                </div>
+            </section>
+        </div>
+    </div>
+</div>
+
+@* ---------- resubmit modal ---------- *@
+@if (_modalOpen)
+{
+    <div @onclick="CloseResubmit" style="position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:24px;background:rgba(6,12,10,0.72);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)">
+        <div @onclick:stopPropagation @onclick="NoOp" class="glass" style="width:100%;max-width:480px;padding:26px;animation:popIn .3s cubic-bezier(.22,1,.36,1) both;box-shadow:var(--shadow-pop)">
+
+            @if (_phase == "confirm")
+            {
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+                    <span style="width:40px;height:40px;border-radius:11px;display:grid;place-items:center;background:var(--acc-dim);color:var(--acc);border:1px solid var(--glass-border)"><Icon Name="refresh" Size="20" /></span>
+                    <div>
+                        <h3 style="margin:0;font-size:18px;font-weight:720">Здати на перевірку</h3>
+                        <p style="margin:3px 0 0;font-size:13px;color:var(--tx-3)">Lab@(Id.ToString("D2")) · @LabInfo.Title</p>
+                    </div>
+                </div>
+
+                @* GitHub + branch info *@
+                @if (string.IsNullOrWhiteSpace(App.Student.Github))
+                {
+                    <div style="background:rgba(232,128,107,0.1);border:1px solid rgba(232,128,107,0.3);border-radius:12px;padding:13px 16px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-start">
+                        <Icon Name="warn" Size="16" Style="color:var(--st-red);flex:none;margin-top:1px" />
+                        <div style="font-size:13px;line-height:1.6;color:var(--tx-2)">
+                            <b style="color:var(--st-red)">GitHub репозиторій не вказано.</b><br/>
+                            Додайте URL у <a href="/student/profile" style="color:var(--acc)">профілі</a> перед здачею. Без репо перевірка запускається в режимі симуляції.
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div style="background:rgba(12,20,17,0.5);border:1px solid var(--line);border-radius:12px;padding:13px 16px;margin-bottom:16px;display:flex;flex-direction:column;gap:8px;font-size:13px">
+                        <div style="display:flex;align-items:center;gap:9px;color:var(--tx-2)">
+                            <Icon Name="github" Size="15" Style="color:var(--tx-3)" />
+                            <span class="mono" style="color:var(--acc)">@App.Student.Github</span>
+                        </div>
+                        @if (!string.IsNullOrEmpty(LabInfo.Branch))
+                        {
+                            <div style="display:flex;align-items:center;gap:9px;color:var(--tx-2)">
+                                <Icon Name="braces" Size="15" Style="color:var(--tx-3)" />
+                                <span>Гілка: <span class="mono" style="color:var(--acc-bright)">@LabInfo.Branch</span></span>
+                            </div>
+                        }
+                        <div style="font-size:12px;color:var(--tx-3)">Система клонує репо, запустить build та тести, потім проаналізує кожне завдання.</div>
+                    </div>
+                }
+
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;font-size:13px">
+                    <Icon Name="warn" Size="16" Style="color:var(--st-yellow)" />
+                    <span class="muted">Залишилось спроб: <b style="color:var(--tx-1)">@(LabInfo.AttemptsMax - LabInfo.AttemptsUsed)</b></span>
+                </div>
+                <div style="display:flex;gap:10px">
+                    <button class="btn btn-ghost btn-block" @onclick="CloseResubmit">Скасувати</button>
+                    <button class="btn btn-primary btn-block" @onclick="RunCheck"><Icon Name="upload" Size="17" />Запустити перевірку</button>
+                </div>
+            }
+            else if (_phase == "running")
+            {
+                <div style="padding:8px 0">
+                    <div style="display:flex;align-items:center;gap:12px;margin-bottom:22px">
+                        <span style="width:22px;height:22px;border-radius:50%;border:2.5px solid var(--acc-dim-2);border-top-color:var(--acc);animation:spin .8s linear infinite;flex:none"></span>
+                        <h3 style="margin:0;font-size:17px;font-weight:700">Перевірка триває…</h3>
+                    </div>
+                    <div style="padding:12px 16px;background:rgba(12,20,17,0.5);border-radius:10px;border:1px solid var(--line)">
+                        <span class="mono" style="font-size:13px;color:var(--acc-bright)">@_currentStep</span>
+                    </div>
+                </div>
+            }
+            else
+            {
+                var newScore = _result?.AutoScore ?? LabInfo.Auto;
+                var delta = newScore - _oldScore;
+                <div style="text-align:center;padding:10px 0">
+                    <div style="width:60px;height:60px;border-radius:50%;margin:0 auto 16px;display:grid;place-items:center;background:var(--st-green-bg);border:1px solid var(--glass-border-hover);color:var(--st-green)"><Icon Name="check" Size="30" Stroke="2.4" /></div>
+                    <h3 style="margin:0;font-size:19px;font-weight:730">Перевірку завершено</h3>
+                    <p style="margin:8px 0 4px;font-size:13.5px;color:var(--tx-2)">
+                        Нова авто-оцінка: <b class="mono" style="color:var(--st-green);font-size:16px">@newScore</b>
+                        @if (delta > 0) { <span style="color:var(--st-green)">▲ +@delta</span> }
+                        else if (delta < 0) { <span style="color:var(--st-red)">▼ @delta</span> }
+                    </p>
+                    <p style="margin:0 0 18px;font-size:12.5px;color:var(--tx-3)">Тестів пройдено: @(_result?.TasksPassed ?? 0) / @(_result?.TasksTotal ?? 0)</p>
+                    <button class="btn btn-primary btn-block" @onclick="CloseResubmit">Переглянути результати</button>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+    [CascadingParameter] private Task<AuthenticationState> AuthStateTask { get; set; } = default!;
+
+    private LabDetail LabInfo = new();
+    private string _activeId = "task1";
+    private int _studentId = 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _studentId = App.StudentDbId ?? 1;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var detail = await Data.GetLabDetailAsync(Id, _studentId);
+        if (detail is not null)
+        {
+            LabInfo   = detail;
+            _activeId = "task" + (detail.Tasks.FirstOrDefault()?.N ?? 1);
+        }
+    }
+
+    // ── Resubmit modal ────────────────────────────────────────────────────────
+    private bool _modalOpen;
+    private string _phase = "confirm";
+    private string _currentStep = "";
+    private GradingResultDto? _result;
+    private int _oldScore;
+
+    private void OpenResubmit() { _modalOpen = true; _phase = "confirm"; _result = null; _oldScore = LabInfo.Auto; }
+    private void CloseResubmit() => _modalOpen = false;
+    private void NoOp() { }
+
+    private async Task RunCheck()
+    {
+        _phase = "running"; StateHasChanged();
+
+        var sub = await Db.Submissions
+            .Include(s => s.LabDef)
+            .FirstOrDefaultAsync(s => s.StudentId == _studentId && s.LabDef.Number == Id);
+        if (sub is null) return;
+
+        var progress = new Progress<string>(step => { _currentStep = step; InvokeAsync(StateHasChanged); });
+        _result = await Grader.RunAsync(sub.Id, _studentId, progress);
+
+        // Reload lab detail to show new task results
+        var detail = await Data.GetLabDetailAsync(Id, _studentId);
+        if (detail is not null) { LabInfo = detail; _activeId = "task" + (detail.Tasks.FirstOrDefault()?.N ?? 1); }
+
+        _phase = "done"; StateHasChanged();
+    }
+
+    // ── Comments ──────────────────────────────────────────────────────────────
+    private async Task OpenComments()
+    {
+        var sub = await Db.Submissions.Include(s => s.LabDef)
+            .FirstOrDefaultAsync(s => s.StudentId == _studentId && s.LabDef.Number == Id);
+        if (sub is null) return;
+        var p = new DialogParameters
+        {
+            ["SubmissionId"] = sub.Id,
+            ["LabTitle"]     = LabInfo.Title,
+            ["StudentName"]  = App.Student.FirstName + " " + App.Student.LastName,
+            ["CanDelete"]    = false,
+        };
+        await Dialog.ShowAsync<CommentDialog>("", p, new DialogOptions { BackdropClick = true, NoHeader = true });
+    }
+}

@@ -1,0 +1,22 @@
+@* Animated progress bar. Tone: "" | "yellow" | "red" | "grey" *@
+<div class="prog @Tone" style="@Style">
+    <span style="width:@(_w)%"></span>
+</div>
+
+@code {
+    [Parameter] public double Value { get; set; }
+    [Parameter] public string Tone { get; set; } = "";
+    [Parameter] public string Style { get; set; } = "";
+
+    private double _w = 0;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Task.Delay(60);
+            _w = Value;
+            StateHasChanged();
+        }
+    }
+}

@@ -1,0 +1,120 @@
+@page "/teacher/students"
+@inject NavigationManager Nav
+@inject IDataService Data
+@inject IDialogService Dialog
+@inject AppDbContext Db
+
+<TopBar Title="Студенти" Sub="Прогрес та управління студентами курсу">
+    <button class="btn btn-primary btn-sm" @onclick="AddStudent"><Icon Name="profile" Size="15" />Додати студента</button>
+</TopBar>
+
+<div class="screen-anim" style="padding:0 34px 40px;position:relative;z-index:1">
+
+    <section class="glass" style="padding:14px 20px;margin-bottom:18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <Icon Name="users" Size="18" Style="color:var(--tx-3)" />
+        <div style="display:flex;gap:4px;padding:4px;background:rgba(12,20,17,0.6);border-radius:11px;border:1px solid var(--line)">
+            @foreach (var g in _groups)
+            {
+                var on = _group == g;
+                <button @onclick="@(() => _group = g)" style="height:32px;padding:0 14px;border-radius:8px;border:none;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:650;background:@(on ? "var(--acc-dim-2)" : "transparent");color:@(on ? "var(--acc-bright)" : "var(--tx-3)");transition:all .15s">@g</button>
+            }
+        </div>
+        <div class="input-wrap" style="flex:1 1 180px;max-width:240px">
+            <span class="lead"><Icon Name="search" Size="16" /></span>
+            <input class="input" placeholder="Пошук…" @bind="_query" @bind:event="oninput" style="height:36px" />
+        </div>
+        <span class="badge badge-grey" style="margin-left:auto"><span class="dot"></span>@Filtered.Count студентів</span>
+    </section>
+
+    <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:16px">
+        @{ int i = 0; }
+        @foreach (var s in Filtered)
+        {
+            var idx = i++;
+            var pct = Total > 0 ? (int)Math.Round(100.0 * s.DoneCount / Total) : 0;
+            <article class="glass lift" style="padding:18px 20px;animation:stagger .5s cubic-bezier(.22,1,.36,1) both;animation-delay:@(idx * 0.03)s">
+                <div style="display:flex;align-items:center;gap:13px;margin-bottom:16px">
+                    <div style="@Avatar">@s.Initials</div>
+                    <div style="min-width:0;flex:1">
+                        <div style="font-size:15px;font-weight:670;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@s.Last @s.First</div>
+                        <div style="font-size:12px;color:var(--tx-3);margin-top:2px">@s.Group</div>
+                    </div>
+                    <div style="text-align:center;flex:none">
+                        <div class="mono tnum" style="font-size:22px;font-weight:780;color:@(s.Avg is null ? "var(--tx-faint)" : "var(--acc-bright)");line-height:1">@(s.Avg?.ToString() ?? "—")</div>
+                        <div style="font-size:10px;color:var(--tx-faint);margin-top:3px">серед.</div>
+                    </div>
+                </div>
+
+                <div style="display:flex;justify-content:space-between;margin-bottom:7px;font-size:12px">
+                    <span style="color:var(--tx-2)"><b style="color:var(--acc-bright)">@s.DoneCount</b> / @Total зараховано</span>
+                    @if (s.ReviewCount > 0)
+                    {
+                        <span style="color:var(--st-yellow);display:flex;align-items:center;gap:4px"><Icon Name="clock" Size="12" />@s.ReviewCount ⏳</span>
+                    }
+                </div>
+                <Progress Value="pct" />
+
+                <div style="display:flex;gap:4px;margin-top:14px;flex-wrap:wrap">
+                    @foreach (var c in s.Labs)
+                    {
+                        var color = c.Kind == "done" ? "var(--st-green)" : c.Kind == "review" ? "var(--st-yellow)" : c.Kind == "rejected" ? "var(--st-red)" : "rgba(255,255,255,0.08)";
+                        <span style="width:14px;height:14px;border-radius:4px;background:@color;opacity:0.9"></span>
+                    }
+                </div>
+
+                <div style="display:flex;gap:6px;margin-top:14px">
+                    <button class="btn btn-ghost btn-block btn-sm" @onclick="@(() => Nav.NavigateTo("/teacher/journal"))"><Icon Name="grades" Size="14" />Журнал</button>
+                    <button class="btn btn-ghost btn-sm" @onclick="@(() => EditStudent(s.Id))"><Icon Name="settings" Size="14" /></button>
+                    <button class="btn btn-ghost btn-sm" style="color:var(--st-red)" @onclick="@(() => DeleteStudent(s.Id))"><Icon Name="x" Size="14" /></button>
+                </div>
+            </article>
+        }
+    </div>
+</div>
+
+@code {
+    private string _group = "Усі групи", _query = "";
+    private string[] _groups = ["Усі групи"];
+    private List<RosterStudent> _allStudents = [];
+    private int _totalLabs;
+
+    protected override async Task OnInitializedAsync() => await Reload();
+
+    private async Task Reload()
+    {
+        _groups      = await Data.GetTeacherGroupsAsync();
+        _allStudents = await Data.GetRosterAsync();
+        _totalLabs   = (await Data.GetLabColumnsAsync()).Count;
+    }
+
+    private int Total => _totalLabs;
+    private List<RosterStudent> Filtered => _allStudents.Where(s =>
+        (_group == "Усі групи" || s.Group == _group) &&
+        (_query == "" || (s.Last + " " + s.First).Contains(_query, StringComparison.OrdinalIgnoreCase))).ToList();
+
+    private const string Avatar = "width:46px;height:46px;border-radius:13px;flex:none;display:grid;place-items:center;font-weight:700;font-size:15px;background:linear-gradient(150deg, rgba(118,199,173,0.3), rgba(118,199,173,0.12));border:1px solid var(--glass-border-hover);color:var(--acc-bright)";
+
+    private async Task AddStudent()
+    {
+        var dlg = await Dialog.ShowAsync<StudentDialog>("", new DialogOptions { BackdropClick = true, NoHeader = true });
+        if ((await dlg.Result)?.Data is true) await Reload();
+    }
+
+    private async Task EditStudent(int id)
+    {
+        var rec = await Db.Students.FindAsync(id);
+        if (rec is null) return;
+        var p = new DialogParameters { ["Existing"] = rec };
+        var dlg = await Dialog.ShowAsync<StudentDialog>("", p, new DialogOptions { BackdropClick = true, NoHeader = true });
+        if ((await dlg.Result)?.Data is true) await Reload();
+    }
+
+    private async Task DeleteStudent(int id)
+    {
+        var rec = await Db.Students.FindAsync(id);
+        if (rec is null) return;
+        Db.Students.Remove(rec);
+        await Db.SaveChangesAsync();
+        await Reload();
+    }
+}

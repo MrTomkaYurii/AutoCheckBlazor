@@ -1,0 +1,99 @@
+@inject NavigationManager Nav
+
+@{
+    var meta     = StatusMeta.Of(Lab.Status);
+    var unsent   = Lab.Status == LabStatus.Locked;
+    var overdue  = Lab.IsOverdue && Lab.Status != LabStatus.Done;
+    var dueSoon  = Lab.IsDueSoon && Lab.Status != LabStatus.Done;
+    var canSubmit = !overdue || Lab.Status == LabStatus.Done;
+    var tone     = Lab.Status switch { LabStatus.Review => "yellow", LabStatus.Rejected => "red", _ => "" };
+    var accent   = overdue ? "rgba(232,128,107,0.5)"
+        : Lab.Status switch {
+            LabStatus.Done     => "rgba(118,199,173,0.4)",
+            LabStatus.Review   => "rgba(231,193,75,0.4)",
+            LabStatus.Rejected => "rgba(232,128,107,0.4)",
+            _                  => "var(--glass-border)" };
+}
+
+<article class="glass lift labcard" data-screen-label="Lab@(Lab.Id.ToString("D2"))"
+         @onclick="@(() => Nav.NavigateTo($"/student/lab/{Lab.Id}"))"
+         style="padding:20px 20px 18px;cursor:pointer;border-color:@accent;opacity:@(unsent ? "0.75" : "1");animation:stagger .5s cubic-bezier(.22,1,.36,1) both;animation-delay:@(Index * 0.035)s;position:relative;overflow:hidden">
+
+    @if (!unsent)
+    {
+        <div style="position:absolute;top:0;right:0;width:90px;height:90px;pointer-events:none;background:radial-gradient(circle at top right, @(meta.Tone)22, transparent 70%)"></div>
+    }
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;position:relative">
+        <div style="display:flex;align-items:center;gap:11px">
+            <span class="mono" style="font-size:13px;font-weight:700;color:@(unsent ? "var(--tx-3)" : "var(--acc-bright)");background:@(unsent ? "var(--st-grey-bg)" : "var(--acc-dim)");padding:4px 9px;border-radius:8px;border:1px solid @(unsent ? "transparent" : "var(--glass-border)")">@Lab.Id.ToString("D2")</span>
+            <h4 style="margin:0;font-size:15.5px;font-weight:680;letter-spacing:-0.02em">@Lab.Title</h4>
+        </div>
+        <Badge Status="Lab.Status" />
+    </div>
+
+    @* Deadline badge *@
+    @if (Lab.DeadlineAt.HasValue)
+    {
+        var dl     = Lab.DeadlineAt.Value.ToLocalTime();
+        var dlText = dl.ToString("dd.MM.yyyy HH:mm");
+        var dlColor = overdue ? "var(--st-red)" : dueSoon ? "var(--st-yellow)" : "var(--tx-3)";
+        var dlBg    = overdue ? "rgba(232,128,107,0.1)" : dueSoon ? "rgba(231,193,75,0.08)" : "transparent";
+        <div style="display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:7px;background:@dlBg;margin-bottom:10px">
+            <Icon Name="calendar" Size="12" Style="@($"color:{dlColor}")" />
+            <span style="font-size:11.5px;font-weight:600;color:@dlColor">
+                @if (overdue) { <span>Дедлайн минув · @dlText</span> }
+                else if (dueSoon) { <span>Залишилось &lt; 24 год · @dlText</span> }
+                else { <span>Здати до @dlText</span> }
+            </span>
+        </div>
+    }
+
+    <div style="margin-bottom:16px">
+        @if (Lab.Auto is not null)
+        {
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px">
+                <span style="font-size:12px;color:var(--tx-3);font-weight:500">авто-перевірка</span>
+                <span class="mono tnum" style="font-size:13.5px;font-weight:700;color:@meta.Tone">@Lab.Auto<span style="opacity:0.5;font-size:11px"> /100</span></span>
+            </div>
+            <Progress Value="Lab.Auto.Value" Tone="@tone" />
+        }
+        else
+        {
+            <div style="display:flex;align-items:center;gap:8px;height:28px;color:var(--tx-faint);font-size:12.5px">
+                <Icon Name="upload" Size="15" />Ще не здавалась
+            </div>
+        }
+    </div>
+
+    <div style="display:flex;gap:10px;margin-bottom:16px">
+        <MiniGrade Label="Захист" Value="Lab.Defense" />
+        <MiniGrade Label="Фінал" Value="Lab.Final" Highlight="true" />
+    </div>
+
+    @if (Lab.Status == LabStatus.Done)
+    {
+        <button class="btn btn-ghost btn-block btn-sm" @onclick:stopPropagation @onclick="@(() => Nav.NavigateTo($"/student/lab/{Lab.Id}"))"><Icon Name="check" Size="15" />Переглянути</button>
+    }
+    else if (overdue)
+    {
+        <button class="btn btn-ghost btn-block btn-sm" disabled style="opacity:0.45;cursor:not-allowed;color:var(--st-red)"><Icon Name="lock" Size="15" />Дедлайн минув</button>
+    }
+    else if (Lab.Status == LabStatus.Rejected)
+    {
+        <button class="btn btn-outline btn-block btn-sm" @onclick:stopPropagation @onclick="@(() => Nav.NavigateTo($"/student/lab/{Lab.Id}"))"><Icon Name="refresh" Size="15" />Здати повторно</button>
+    }
+    else if (Lab.Status == LabStatus.Review)
+    {
+        <button class="btn btn-ghost btn-block btn-sm" @onclick:stopPropagation @onclick="@(() => Nav.NavigateTo($"/student/lab/{Lab.Id}"))"><Icon Name="clock" Size="15" />На перевірці</button>
+    }
+    else
+    {
+        <button class="btn btn-primary btn-block btn-sm" @onclick:stopPropagation @onclick="@(() => Nav.NavigateTo($"/student/lab/{Lab.Id}"))"><Icon Name="upload" Size="15" />Здати</button>
+    }
+</article>
+
+@code {
+    [Parameter] public Lab Lab { get; set; } = default!;
+    [Parameter] public int Index { get; set; }
+}

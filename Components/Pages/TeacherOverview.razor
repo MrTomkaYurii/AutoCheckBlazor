@@ -1,0 +1,132 @@
+@page "/teacher"
+@inject NavigationManager Nav
+@inject IDialogService Dialog
+@inject IDataService Data
+@implements IDisposable
+
+<TopBar Title="Огляд курсу" Sub="ООП на C# · Семестр 2">
+    <button class="btn btn-outline btn-sm" @onclick="@(() => Nav.NavigateTo("/teacher/journal"))" style="margin-right:4px">
+        <Icon Name="grades" Size="15" />Відкрити журнал
+    </button>
+</TopBar>
+
+<div class="screen-anim" style="padding:0 34px 40px;position:relative;z-index:1">
+
+    @* stat strip *@
+    <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:14px;margin-bottom:20px">
+        <TStat Icon="users" Tone="var(--acc)" Value="@Stats.Students.ToString()" Label="Студентів на курсі" Hint="2 групи" />
+        <TStat Icon="upload" Tone="var(--st-blue)" Value="@Stats.Submissions.ToString()" Label="Здач загалом" />
+        <TStat Icon="target" Tone="var(--st-green)" Value="@($"{Stats.PassRate}%")" Label="Успішність" />
+        <TStat Icon="clock" Tone="var(--st-yellow)" Value="@Stats.PendingReview.ToString()" Label="Очікують захисту" Hint="нові" />
+    </div>
+
+    <div style="display:grid;grid-template-columns:1.55fr 1fr;gap:18px;align-items:start">
+
+        @* review queue *@
+        <section class="glass" style="padding:0;overflow:hidden">
+            <div style="display:flex;align-items:center;gap:11px;padding:18px 22px;border-bottom:1px solid var(--line)">
+                <Icon Name="clock" Size="18" Style="color:var(--st-yellow)" />
+                <h3 style="margin:0;font-size:16px;font-weight:720;letter-spacing:-0.02em">Черга на перевірку</h3>
+                <span class="badge badge-yellow" style="margin-left:2px"><span class="dot pulse"></span>@Queue.Count</span>
+                <button class="btn btn-ghost btn-sm" style="margin-left:auto" @onclick="@(() => Nav.NavigateTo("/teacher/journal"))">Весь журнал<Icon Name="arrowR" Size="15" /></button>
+            </div>
+            <div>
+                @for (int i = 0; i < Queue.Count; i++)
+                {
+                    var q = Queue[i];
+                    var last = i == Queue.Count - 1;
+                    <div class="qrow" @onclick="@(() => OpenGrade(q.StudentId, q.LabId))"
+                         style="display:flex;align-items:center;gap:14px;padding:13px 22px;cursor:pointer;border-bottom:@(last ? "none" : "1px solid var(--line)")">
+                        <div style="@Avatar">@q.Initials</div>
+                        <div style="min-width:0;flex:1">
+                            <div style="font-size:14px;font-weight:640">@q.Name</div>
+                            <div style="font-size:12px;color:var(--tx-3);margin-top:2px;display:flex;gap:8px;align-items:center">
+                                <span>@q.Group</span><span style="opacity:0.4">·</span><span class="mono">@q.LabShort</span><span>@q.LabTitle</span>
+                            </div>
+                        </div>
+                        <div style="text-align:right;flex:none">
+                            <div style="font-size:11px;color:var(--tx-3);margin-bottom:3px">авто</div>
+                            <span class="mono tnum" style="font-size:15px;font-weight:750;color:@(q.Auto >= 85 ? "var(--st-green)" : q.Auto >= 60 ? "var(--st-yellow)" : "var(--st-red)")">@q.Auto</span>
+                        </div>
+                        <span style="font-size:11.5px;color:var(--tx-faint);flex:none;width:86px;text-align:right">@q.When</span>
+                        <button class="btn btn-outline btn-sm" style="flex:none" @onclick:stopPropagation @onclick="@(() => OpenGrade(q.StudentId, q.LabId))">Оцінити</button>
+                    </div>
+                }
+            </div>
+        </section>
+
+        @* lab activity *@
+        <section class="glass" style="padding:18px 22px">
+            <div style="display:flex;align-items:center;gap:11px;margin-bottom:18px">
+                <Icon Name="grades" Size="18" Style="color:var(--acc)" />
+                <h3 style="margin:0;font-size:16px;font-weight:720;letter-spacing:-0.02em">Активність по лабах</h3>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:13px">
+                @foreach (var l in LabStats.Take(7))
+                {
+                    var pct = (int)Math.Round(100.0 * l.Submitted / l.Total);
+                    var fill = pct >= 70 ? "linear-gradient(90deg,var(--acc),var(--acc-bright))" : pct >= 40 ? "linear-gradient(90deg,#c9a52f,var(--st-yellow))" : "linear-gradient(90deg,#cf6650,var(--st-red))";
+                    <div style="display:flex;align-items:center;gap:12px">
+                        <span class="mono" style="width:30px;font-size:12px;color:var(--tx-3);font-weight:600">@l.Short</span>
+                        <div style="flex:1;min-width:0">
+                            <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+                                <span style="font-size:12.5px;color:var(--tx-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px">@l.Title</span>
+                                <span class="mono tnum" style="font-size:12px;color:var(--tx-3)">@l.Submitted/@l.Total</span>
+                            </div>
+                            <div class="prog" style="height:6px"><span style="width:@pct%;background:@fill;box-shadow:none"></span></div>
+                        </div>
+                        @if (l.Avg is not null)
+                        {
+                            <span class="mono tnum" style="width:28px;text-align:right;font-size:12.5px;font-weight:700;color:var(--tx-2)">@l.Avg</span>
+                        }
+                    </div>
+                }
+            </div>
+            <button class="btn btn-ghost btn-block btn-sm" style="margin-top:18px" @onclick="@(() => Nav.NavigateTo("/teacher/labs"))">Керувати лабами<Icon Name="settings" Size="15" /></button>
+        </section>
+    </div>
+</div>
+
+@code {
+    private TeacherStats Stats = new();
+    private List<ReviewItem> Queue = [];
+    private List<LabStat> LabStats = [];
+    private PeriodicTimer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+        _timer = new PeriodicTimer(TimeSpan.FromSeconds(20));
+        _ = PollAsync();
+    }
+
+    private async Task LoadData()
+    {
+        Stats    = await Data.GetStatsAsync();
+        Queue    = await Data.GetReviewQueueAsync();
+        LabStats = await Data.GetLabStatsAsync();
+    }
+
+    private async Task PollAsync()
+    {
+        while (_timer is not null && await _timer.WaitForNextTickAsync())
+        {
+            await LoadData();
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    public void Dispose() { _timer?.Dispose(); _timer = null; }
+
+    private const string Avatar = "width:40px;height:40px;border-radius:11px;flex:none;display:grid;place-items:center;font-weight:700;font-size:13.5px;background:linear-gradient(150deg, rgba(118,199,173,0.3), rgba(118,199,173,0.12));border:1px solid var(--glass-border-hover);color:var(--acc-bright)";
+
+    private async Task OpenGrade(int studentId, int labId)
+    {
+        var p = new DialogParameters { ["StudentId"] = studentId, ["LabId"] = labId };
+        var opt = new DialogOptions { BackdropClick = true, NoHeader = true };
+        var dlg = await Dialog.ShowAsync<AutoCheck.Components.Dialogs.GradeDialog>("", p, opt);
+        await dlg.Result;
+        await LoadData();
+        StateHasChanged();
+    }
+}
