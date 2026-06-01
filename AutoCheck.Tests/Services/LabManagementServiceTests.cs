@@ -31,14 +31,15 @@ public class LabManagementServiceTests : IDisposable
     [Fact]
     public async Task CreateAsync_AddsLabToDatabase()
     {
-        var dto = new CreateLabDto(1, "Основи C#", "Мета лаби", "sandbox/intro", false, "5 червня");
+        var deadline = new DateTime(2025, 6, 5, 0, 0, 0, DateTimeKind.Utc);
+        var dto = new CreateLabDto(1, "Основи C#", "Мета лаби", "sandbox/intro", false, deadline);
         await _svc.CreateAsync(dto);
 
         var labs = await _db.Labs.ToListAsync();
         labs.Should().HaveCount(1);
         labs[0].Title.Should().Be("Основи C#");
         labs[0].Number.Should().Be(1);
-        labs[0].Deadline.Should().Be("5 червня");
+        labs[0].Deadline.Should().Be(deadline);
     }
 
     [Fact]

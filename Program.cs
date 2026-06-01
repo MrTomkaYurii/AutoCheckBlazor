@@ -112,6 +112,7 @@ builder.Services.AddScoped<DatabaseSeeder>();
 builder.Services.AddScoped<IDataService,           DbDataService>();
 builder.Services.AddScoped<IAuthService,           AuthService>();
 builder.Services.AddScoped<ILabManagementService,  LabManagementService>();
+builder.Services.AddScoped<IGitBranchService,      GitBranchService>();
 builder.Services.AddScoped<IGradingService,        GradingService>();
 builder.Services.AddScoped<INotificationService,   NotificationService>();
 builder.Services.AddScoped<ICommentService,        CommentService>();

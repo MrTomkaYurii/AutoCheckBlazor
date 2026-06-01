@@ -6,6 +6,7 @@
 @inject IDialogService Dialog
 @inject AppState App
 @inject AppDbContext Db
+@inject IGitBranchService GitBranch
 
 <TopBar Title="@($"Lab{LabInfo.Id:D2} · {LabInfo.Title}")" Crumbs="@(new[] { "Мої лаби", $"Lab{LabInfo.Id:D2}" })" />
 
@@ -167,57 +168,169 @@
 @* ---------- resubmit modal ---------- *@
 @if (_modalOpen)
 {
+    var widePhase = _phase is "branch" or "map";
     <div @onclick="CloseResubmit" style="position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:24px;background:rgba(6,12,10,0.72);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)">
-        <div @onclick:stopPropagation @onclick="NoOp" class="glass" style="width:100%;max-width:480px;padding:26px;animation:popIn .3s cubic-bezier(.22,1,.36,1) both;box-shadow:var(--shadow-pop)">
+        <div @onclick:stopPropagation @onclick="NoOp" class="glass"
+             style="width:100%;max-width:@(widePhase ? "640px" : "480px");padding:26px;animation:popIn .3s cubic-bezier(.22,1,.36,1) both;box-shadow:var(--shadow-pop)">
 
-            @if (_phase == "confirm")
+            @* ── PHASE: branch ── *@
+            @if (_phase == "branch")
             {
-                <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-                    <span style="width:40px;height:40px;border-radius:11px;display:grid;place-items:center;background:var(--acc-dim);color:var(--acc);border:1px solid var(--glass-border)"><Icon Name="refresh" Size="20" /></span>
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">
+                    <span style="width:40px;height:40px;border-radius:11px;display:grid;place-items:center;background:var(--acc-dim);color:var(--acc);border:1px solid var(--glass-border)"><Icon Name="braces" Size="20" /></span>
                     <div>
                         <h3 style="margin:0;font-size:18px;font-weight:720">Здати на перевірку</h3>
                         <p style="margin:3px 0 0;font-size:13px;color:var(--tx-3)">Lab@(Id.ToString("D2")) · @LabInfo.Title</p>
                     </div>
                 </div>
 
-                @* GitHub + branch info *@
                 @if (string.IsNullOrWhiteSpace(App.Student.Github))
                 {
-                    <div style="background:rgba(232,128,107,0.1);border:1px solid rgba(232,128,107,0.3);border-radius:12px;padding:13px 16px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-start">
+                    <div style="background:rgba(232,128,107,0.1);border:1px solid rgba(232,128,107,0.3);border-radius:12px;padding:13px 16px;margin-bottom:14px;display:flex;gap:10px;align-items:flex-start">
                         <Icon Name="warn" Size="16" Style="color:var(--st-red);flex:none;margin-top:1px" />
                         <div style="font-size:13px;line-height:1.6;color:var(--tx-2)">
                             <b style="color:var(--st-red)">GitHub репозиторій не вказано.</b><br/>
-                            Додайте URL у <a href="/student/profile" style="color:var(--acc)">профілі</a> перед здачею. Без репо перевірка запускається в режимі симуляції.
+                            Додайте URL у <a href="/student/profile" style="color:var(--acc)">профілі</a>. Без репо буде використано мок-коміти (режим симуляції).
                         </div>
                     </div>
                 }
                 else
                 {
-                    <div style="background:rgba(12,20,17,0.5);border:1px solid var(--line);border-radius:12px;padding:13px 16px;margin-bottom:16px;display:flex;flex-direction:column;gap:8px;font-size:13px">
-                        <div style="display:flex;align-items:center;gap:9px;color:var(--tx-2)">
-                            <Icon Name="github" Size="15" Style="color:var(--tx-3)" />
-                            <span class="mono" style="color:var(--acc)">@App.Student.Github</span>
-                        </div>
-                        @if (!string.IsNullOrEmpty(LabInfo.Branch))
-                        {
-                            <div style="display:flex;align-items:center;gap:9px;color:var(--tx-2)">
-                                <Icon Name="braces" Size="15" Style="color:var(--tx-3)" />
-                                <span>Гілка: <span class="mono" style="color:var(--acc-bright)">@LabInfo.Branch</span></span>
-                            </div>
-                        }
-                        <div style="font-size:12px;color:var(--tx-3)">Система клонує репо, запустить build та тести, потім проаналізує кожне завдання.</div>
+                    <div style="background:rgba(12,20,17,0.5);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:9px;font-size:13px">
+                        <Icon Name="github" Size="15" Style="color:var(--tx-3)" />
+                        <span class="mono" style="color:var(--acc)">@App.Student.Github</span>
                     </div>
                 }
 
-                <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;font-size:13px">
-                    <Icon Name="warn" Size="16" Style="color:var(--st-yellow)" />
-                    <span class="muted">Залишилось спроб: <b style="color:var(--tx-1)">@(LabInfo.AttemptsMax - LabInfo.AttemptsUsed)</b></span>
+                <div class="field" style="margin-bottom:14px">
+                    <label style="font-size:12.5px;font-weight:650;color:var(--tx-2);margin-bottom:6px;display:block">Гілка</label>
+                    <input class="input mono" @bind="_branchInput" @bind:event="oninput" placeholder="main" style="width:100%" />
                 </div>
+
+                <div style="margin-bottom:18px">
+                    <label style="font-size:12.5px;font-weight:650;color:var(--tx-2);margin-bottom:8px;display:block">Режим вибору комітів</label>
+                    <div style="display:flex;gap:8px">
+                        <button class="btn @(_mode=="list" ? "btn-primary" : "btn-ghost")" style="flex:1;justify-content:center"
+                                @onclick='() => _mode = "list"'>
+                            <Icon Name="braces" Size="15" />Список комітів
+                        </button>
+                        <button class="btn @(_mode=="graph" ? "btn-primary" : "btn-ghost")" style="flex:1;justify-content:center"
+                                @onclick='() => _mode = "graph"'>
+                            <Icon Name="spark" Size="15" />Граф гіта
+                        </button>
+                    </div>
+                </div>
+
+                @if (_loadError is not null)
+                {
+                    <div style="padding:9px 13px;background:rgba(232,128,107,0.1);border:1px solid rgba(232,128,107,0.3);border-radius:9px;color:var(--st-red);font-size:13px;margin-bottom:14px">@_loadError</div>
+                }
+
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;font-size:12.5px;color:var(--tx-3)">
+                    <Icon Name="warn" Size="14" Style="color:var(--st-yellow)" />
+                    Залишилось спроб: <b style="color:var(--tx-1)">@(LabInfo.AttemptsMax - LabInfo.AttemptsUsed)</b>
+                </div>
+
                 <div style="display:flex;gap:10px">
                     <button class="btn btn-ghost btn-block" @onclick="CloseResubmit">Скасувати</button>
-                    <button class="btn btn-primary btn-block" @onclick="RunCheck"><Icon Name="upload" Size="17" />Запустити перевірку</button>
+                    <button class="btn btn-primary btn-block" @onclick="LoadCommits" disabled="@(_loadingCommits || string.IsNullOrWhiteSpace(_branchInput))">
+                        @if (_loadingCommits)
+                        {
+                            <span style="width:16px;height:16px;border-radius:50%;border:2px solid var(--acc-dim-2);border-top-color:var(--acc);animation:spin .7s linear infinite;flex:none"></span>
+                        }
+                        Далі →
+                    </button>
                 </div>
             }
+
+            @* ── PHASE: map ── *@
+            else if (_phase == "map")
+            {
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+                    <button @onclick='() => _phase = "branch"' style="width:32px;height:32px;border-radius:9px;border:1px solid var(--line);background:transparent;color:var(--tx-2);cursor:pointer;display:grid;place-items:center;flex:none"><Icon Name="x" Size="14" /></button>
+                    <div>
+                        <h3 style="margin:0;font-size:17px;font-weight:720">Прив'яжіть коміти до завдань</h3>
+                        <p style="margin:2px 0 0;font-size:12.5px;color:var(--tx-3)">
+                            <span class="mono" style="color:var(--acc)">@_branchInput</span>
+                            · @_commits.Count комітів
+                            @if (string.IsNullOrWhiteSpace(App.Student.Github)) { <span style="color:var(--st-yellow)"> · симуляція</span> }
+                        </p>
+                    </div>
+                    <div style="margin-left:auto;font-size:12px;color:var(--tx-3)">
+                        @(_mapping.Count(kv => kv.Value > 0)) / @LabInfo.Tasks.Count завд.
+                    </div>
+                </div>
+
+                @* Commit list *@
+                <div style="max-height:360px;overflow-y:auto;border:1px solid var(--line);border-radius:10px;margin-bottom:14px">
+                    @for (int ci = 0; ci < _commits.Count; ci++)
+                    {
+                        var c       = _commits[ci];
+                        var isFirst = ci == 0;
+                        var isLast  = ci == _commits.Count - 1;
+                        var isMerge = c.Parents.Length > 1;
+                        var sha     = c.Sha;
+
+                        <div style="display:flex;align-items:stretch;border-bottom:@(isLast ? "none" : "1px solid var(--line)")">
+
+                            @* Graph column (both modes — just styled differently) *@
+                            <div style="width:32px;flex:none;display:flex;flex-direction:column;align-items:center;padding:0">
+                                @* top connector *@
+                                <div style="width:2px;height:@(isFirst ? "18px" : "18px");background:@(isFirst ? "transparent" : "var(--acc-dim-2)");flex:none"></div>
+                                @* dot *@
+                                <div style="width:@(isMerge ? "12px" : "10px");height:@(isMerge ? "12px" : "10px");border-radius:50%;background:@(isMerge ? "var(--st-yellow)" : (_mode=="graph" ? "var(--acc)" : "var(--tx-3)"));flex:none;border:@(isMerge ? "2px solid var(--st-yellow)" : (_mode=="graph" ? "2px solid var(--acc-bright)" : "2px solid var(--tx-3)"))"></div>
+                                @* bottom connector *@
+                                <div style="width:2px;flex:1;min-height:12px;background:@(isLast ? "transparent" : "var(--acc-dim-2)")"></div>
+                            </div>
+
+                            @* Commit info + task picker *@
+                            <div style="flex:1;padding:10px 12px 10px 4px;min-width:0;display:flex;align-items:center;gap:10px">
+                                <div style="flex:1;min-width:0">
+                                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+                                        <span class="mono" style="font-size:11.5px;color:var(--acc);flex:none">@c.Short</span>
+                                        @if (isMerge) { <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:var(--st-yellow-bg);color:var(--st-yellow)">merge</span> }
+                                        <span style="font-size:11px;color:var(--tx-3);margin-left:auto;flex:none">@c.Date.ToLocalTime().ToString("dd.MM HH:mm")</span>
+                                    </div>
+                                    <div style="font-size:13px;font-weight:580;color:var(--tx-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@c.Message</div>
+                                    <div style="font-size:11px;color:var(--tx-3);margin-top:2px">@c.Author</div>
+                                </div>
+                                <select style="flex:none;width:160px;background:var(--glass-bg);border:1px solid var(--line);border-radius:8px;padding:5px 8px;color:var(--tx-1);font-size:12.5px;cursor:pointer"
+                                        value="@_mapping.GetValueOrDefault(sha, 0)"
+                                        @onchange="@(e => SetMapping(sha, e.Value?.ToString()))">
+                                    <option value="0">— не вказано —</option>
+                                    @foreach (var t in LabInfo.Tasks)
+                                    {
+                                        <option value="@t.N">Task@(t.N): @t.Title</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                @* Summary chips *@
+                <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px">
+                    @foreach (var t in LabInfo.Tasks)
+                    {
+                        var assignedSha = _mapping.FirstOrDefault(kv => kv.Value == t.N).Key;
+                        var mapped = assignedSha is not null;
+                        <div style="display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:12px;border:1px solid;border-color:@(mapped ? "var(--st-green)" : "var(--line)");background:@(mapped ? "rgba(118,199,173,0.1)" : "transparent");color:@(mapped ? "var(--st-green)" : "var(--tx-3)")">
+                            <Icon Name="@(mapped ? "check" : "x")" Size="11" />
+                            Task@(t.N)
+                            @if (mapped) { <span class="mono" style="font-size:10.5px;opacity:0.7">@assignedSha[..7]</span> }
+                        </div>
+                    }
+                </div>
+
+                <div style="display:flex;gap:10px">
+                    <button class="btn btn-ghost btn-block" @onclick='() => _phase = "branch"'>← Назад</button>
+                    <button class="btn btn-primary btn-block" @onclick="RunCheck">
+                        <Icon Name="upload" Size="16" />Запустити перевірку
+                    </button>
+                </div>
+            }
+
+            @* ── PHASE: running ── *@
             else if (_phase == "running")
             {
                 <div style="padding:8px 0">
@@ -230,10 +343,12 @@
                     </div>
                 </div>
             }
+
+            @* ── PHASE: done ── *@
             else
             {
                 var newScore = _result?.AutoScore ?? LabInfo.Auto;
-                var delta = newScore - _oldScore;
+                var delta    = newScore - _oldScore;
                 <div style="text-align:center;padding:10px 0">
                     <div style="width:60px;height:60px;border-radius:50%;margin:0 auto 16px;display:grid;place-items:center;background:var(--st-green-bg);border:1px solid var(--glass-border-hover);color:var(--st-green)"><Icon Name="check" Size="30" Stroke="2.4" /></div>
                     <h3 style="margin:0;font-size:19px;font-weight:730">Перевірку завершено</h3>
@@ -275,32 +390,88 @@
 
     // ── Resubmit modal ────────────────────────────────────────────────────────
     private bool _modalOpen;
-    private string _phase = "confirm";
+    private string _phase = "branch";
     private string _currentStep = "";
     private GradingResultDto? _result;
     private int _oldScore;
 
-    private void OpenResubmit() { _modalOpen = true; _phase = "confirm"; _result = null; _oldScore = LabInfo.Auto; }
+    // Commit-mapping state
+    private string _mode = "list";
+    private string _branchInput = "";
+    private List<CommitInfo> _commits = [];
+    private Dictionary<string, int> _mapping = new();
+    private bool _loadingCommits;
+    private string? _loadError;
+
+    private void OpenResubmit()
+    {
+        _modalOpen    = true;
+        _phase        = "branch";
+        _result       = null;
+        _oldScore     = LabInfo.Auto;
+        _branchInput  = LabInfo.Branch.Length > 0 ? LabInfo.Branch : "main";
+        _commits      = [];
+        _mapping      = new();
+        _loadError    = null;
+    }
+
     private void CloseResubmit() => _modalOpen = false;
     private void NoOp() { }
 
+    private void SetMapping(string sha, string? value) =>
+        _mapping[sha] = int.TryParse(value, out var n) ? n : 0;
+
+    private async Task LoadCommits()
+    {
+        _loadingCommits = true;
+        _loadError      = null;
+        StateHasChanged();
+        try
+        {
+            _commits = await GitBranch.GetCommitsAsync(App.Student.Github, _branchInput);
+            _mapping = _commits.ToDictionary(c => c.Sha, _ => 0);
+            _phase   = "map";
+        }
+        catch (Exception ex)
+        {
+            _loadError = ex.Message;
+        }
+        finally
+        {
+            _loadingCommits = false;
+            StateHasChanged();
+        }
+    }
+
     private async Task RunCheck()
     {
-        _phase = "running"; StateHasChanged();
+        _phase = "running";
+        StateHasChanged();
 
         var sub = await Db.Submissions
             .Include(s => s.LabDef)
             .FirstOrDefaultAsync(s => s.StudentId == _studentId && s.LabDef.Number == Id);
         if (sub is null) return;
 
+        // Persist branch override + commit mapping before grading
+        sub.BranchOverride = _branchInput.Length > 0 ? _branchInput : null;
+        var mapEntries = _mapping
+            .Where(kv => kv.Value > 0)
+            .Select(kv => new CommitTaskMap(kv.Key, kv.Value))
+            .ToList();
+        sub.CommitMappingJson = mapEntries.Count > 0
+            ? System.Text.Json.JsonSerializer.Serialize(mapEntries)
+            : null;
+        await Db.SaveChangesAsync();
+
         var progress = new Progress<string>(step => { _currentStep = step; InvokeAsync(StateHasChanged); });
         _result = await Grader.RunAsync(sub.Id, _studentId, progress);
 
-        // Reload lab detail to show new task results
         var detail = await Data.GetLabDetailAsync(Id, _studentId);
         if (detail is not null) { LabInfo = detail; _activeId = "task" + (detail.Tasks.FirstOrDefault()?.N ?? 1); }
 
-        _phase = "done"; StateHasChanged();
+        _phase = "done";
+        StateHasChanged();
     }
 
     // ── Comments ──────────────────────────────────────────────────────────────
