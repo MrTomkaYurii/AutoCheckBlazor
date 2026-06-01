@@ -57,31 +57,48 @@ public class GitBranchService(IConfiguration cfg, ILogger<GitBranchService> log)
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
+    // Generates mock commits that simulate a realistic branching history:
+    //
+    //   M  ← merge feature/lab-03 → main        (parents: C, F)
+    //   |\
+    //   F  |  Клас Clinic + методи               (parent: E)  [feature]
+    //   | C   PatientManager: CRUD               (parent: B)  [main]
+    //   E  |  AppointmentManager                 (parent: D)  [feature]
+    //   D  |  Клас Appointment                   (parent: B)  [feature, branches from B]
+    //   |/
+    //   B     Клас Doctor, наслідування          (parent: A)  [main]
+    //   A     Клас Patient: поля, конструктор     (no parents) [initial]
+    //
+    // git log topological order (newest first): M, F, C, E, D, B, A
     private static List<CommitInfo> GenerateMockCommits(int max)
     {
-        var messages = new[]
+        var now = DateTime.UtcNow;
+
+        // Fixed SHAs so parent references are consistent
+        string Sha(string key) => key switch
         {
-            "Клас Patient: поля, конструктор, ToString",
-            "Клас Doctor, наслідування від Person",
-            "Інтерфейс IMedical, реалізація Hospital",
-            "Метод CalculateSalary у Employee",
-            "Додано enum Priority, рефакторинг",
-            "Initial commit",
+            "M" => "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
+            "F" => "fa1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d",
+            "C" => "ca1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d",
+            "E" => "ea1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d",
+            "D" => "da1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d",
+            "B" => "ba1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d",
+            "A" => "aa1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d",
+            _   => "0000000000000000",
         };
-        var now    = DateTime.UtcNow;
-        var result = new List<CommitInfo>();
-        for (int i = 0; i < Math.Min(messages.Length, max); i++)
+
+        var all = new List<CommitInfo>
         {
-            var sha    = $"a{i:D2}b{i:D2}c{i:D2}d{i:D2}e{i:D2}f{i:D2}aa{i:D2}b{i:D2}c{i:D2}";
-            var parent = i < messages.Length - 1
-                ? $"a{i+1:D2}b{i+1:D2}c{i+1:D2}d{i+1:D2}e{i+1:D2}f{i+1:D2}aa{i+1:D2}b{i+1:D2}c{i+1:D2}"
-                : "";
-            result.Add(new CommitInfo(
-                sha, sha[..7], messages[i], "student",
-                now.AddHours(-i * 3),
-                string.IsNullOrEmpty(parent) ? Array.Empty<string>() : [parent]));
-        }
-        return result;
+            new(Sha("M"), Sha("M")[..7], "Merge feature/lab-03 → main",       "student", now.AddHours(-1),  [Sha("C"), Sha("F")]),
+            new(Sha("F"), Sha("F")[..7], "Клас Clinic: поля та методи",        "student", now.AddHours(-3),  [Sha("E")]),
+            new(Sha("C"), Sha("C")[..7], "PatientManager: CRUD та пошук",       "student", now.AddHours(-5),  [Sha("B")]),
+            new(Sha("E"), Sha("E")[..7], "AppointmentManager, фільтрація",      "student", now.AddHours(-8),  [Sha("D")]),
+            new(Sha("D"), Sha("D")[..7], "Клас Appointment: поля і конструктор","student", now.AddHours(-11), [Sha("B")]),
+            new(Sha("B"), Sha("B")[..7], "Клас Doctor, наслідування від Person","student", now.AddHours(-14), [Sha("A")]),
+            new(Sha("A"), Sha("A")[..7], "Клас Patient: поля, конструктор",     "student", now.AddHours(-18), Array.Empty<string>()),
+        };
+
+        return all.Take(max).ToList();
     }
 
     private static string NormalizeGitUrl(string raw)

@@ -43,8 +43,8 @@
 
             @* Add comment *@
             <div style="border-top:1px solid var(--line);padding-top:14px">
-                <textarea class="input" rows="3" @bind="_newText" placeholder="Напишіть коментар…"
-                          style="width:100%;resize:none;font-size:13.5px;line-height:1.5;margin-bottom:10px"></textarea>
+                <textarea class="input" rows="5" @bind="_newText" placeholder="Напишіть коментар…"
+                          style="width:100%;resize:vertical;min-height:90px;font-size:13.5px;line-height:1.5;margin-bottom:10px"></textarea>
                 <div style="display:flex;justify-content:flex-end;gap:10px">
                     <button class="btn btn-ghost" @onclick="Close">Закрити</button>
                     <button class="btn btn-primary" @onclick="AddComment" disabled="@(string.IsNullOrWhiteSpace(_newText))">

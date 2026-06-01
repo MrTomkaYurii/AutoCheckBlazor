@@ -295,7 +295,9 @@
                                         var glow = isSelected && isNode
                                             ? $"box-shadow:0 0 7px {color};" : "";
                                         <div style="width:18px;flex:none;display:flex;flex-direction:column;align-items:center">
+                                            @* top connector *@
                                             <div style="width:2px;height:20px;background:@(hasTop ? color : "transparent");flex:none"></div>
+                                            @* node or spacer *@
                                             @if (isNode)
                                             {
                                                 <div style="width:@nodeSize;height:@nodeSize;border-radius:50%;background:@color;flex:none;border:@nodeBorder;@glow"></div>
@@ -304,7 +306,24 @@
                                             {
                                                 <div style="width:9px;height:9px;flex:none"></div>
                                             }
-                                            <div style="width:2px;flex:1;min-height:10px;background:@(hasBot ? color : "transparent")"></div>
+                                            @* bottom: straight line, or CSS arc when lane converges *@
+                                            @if (!hasBot && gr.Converges.TryGetValue(lane, out var convTo))
+                                            {
+                                                @if (convTo < lane)
+                                                {
+                                                    @* arc curving LEFT toward a lower lane *@
+                                                    <div style="width:9px;flex:1;min-height:10px;margin-right:auto;border-left:2px solid @color;border-bottom:2px solid @color;border-bottom-left-radius:8px"></div>
+                                                }
+                                                else
+                                                {
+                                                    @* arc curving RIGHT toward a higher lane *@
+                                                    <div style="width:9px;flex:1;min-height:10px;margin-left:auto;border-right:2px solid @color;border-bottom:2px solid @color;border-bottom-right-radius:8px"></div>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <div style="width:2px;flex:1;min-height:10px;background:@(hasBot ? color : "transparent")"></div>
+                                            }
                                         </div>
                                     }
                                 </div>
@@ -447,8 +466,9 @@
     // incoming lines from above, and which lanes continue below.
     private record GraphRow(
         CommitInfo Commit, int Lane,
-        int[] InLanes,              // lanes with line coming in from top
-        int[] OutLanes              // lanes with line going out to bottom
+        int[] InLanes,                          // lanes with line coming in from top
+        int[] OutLanes,                         // lanes with line going out to bottom
+        IReadOnlyDictionary<int, int> Converges // lane → target lane  (arc at bottom)
     );
     private List<GraphRow> _graph = [];
     private int _graphMaxLanes = 1;
@@ -486,6 +506,7 @@
             slots[myLane] = null;  // consume this slot
 
             var outLaneSet = new HashSet<int>();
+            var converges  = new Dictionary<int, int>(); // lane → target
 
             // Assign lanes to parents
             for (int pi = 0; pi < c.Parents.Length; pi++)
@@ -494,8 +515,9 @@
                 int ex = slots.IndexOf(pSha);
                 if (ex >= 0)
                 {
-                    // parent already has a lane → this commit merges into it
+                    // parent already tracked → myLane converges INTO ex
                     outLaneSet.Add(ex);
+                    converges[myLane] = ex;
                 }
                 else if (pi == 0)
                 {
@@ -521,7 +543,7 @@
             while (slots.Count > 0 && slots[^1] == null) slots.RemoveAt(slots.Count - 1);
 
             var outLanes = outLaneSet.ToArray();
-            _graph.Add(new GraphRow(c, myLane, inLanes, outLanes));
+            _graph.Add(new GraphRow(c, myLane, inLanes, outLanes, converges));
             prevOutLanes = outLanes;
         }
 
