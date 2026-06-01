@@ -7,19 +7,17 @@ docker compose up -d
 ```
 
 Keycloak доступний на http://localhost:8080
+Admin: `admin` / `admin`
 
 ## Realm autocheck
 
 Конфіг: `keycloak/realm-autocheck.json`
 
-Налаштування:
-- `registrationAllowed: true` — реєстрація дозволена
+Ключові налаштування:
 - `loginTheme: "autocheck"` — кастомна тема
+- `registrationAllowed: true`
 - `resetPasswordAllowed: true`
-
-Ролі:
-- `teacher` — викладач
-- `student` — студент
+- `resetCredentialsFlow: "reset credentials"` — flow скидання пароля
 
 ## Тестові акаунти
 
@@ -31,67 +29,82 @@ Keycloak доступний на http://localhost:8080
 
 ## User Profile attributes
 
-Визначені в `components.org.keycloak.userprofile.UserProfileProvider`:
 - `group` — академічна група (вибирається при реєстрації)
 - `github` — GitHub репозиторій
 - `requestedRole` — яку роль запитує (teacher/student)
 
 ## Client autocheck-blazor
 
-- ClientId: `autocheck-blazor`
-- ClientSecret: `autocheck-secret`
-- redirectUris: `https://localhost:7171/*`, `http://localhost:5186/*`
-- Mapper `realm-roles-mapper` — додає ролі в JWT як claim `roles`
+- `clientId: autocheck-blazor`
+- `secret: autocheck-secret`
+- `redirectUris: http://localhost:5186/*`
+- Mapper `realm-roles-mapper` → ролі в JWT як claim `roles`
 
 ## OIDC в Blazor (Program.cs)
 
 ```csharp
-.AddOpenIdConnect(opt => {
-    opt.Authority = "http://localhost:8080/realms/autocheck";
-    opt.ClientId = "autocheck-blazor";
-    opt.SaveTokens = true;
-    opt.GetClaimsFromUserInfoEndpoint = true;
-    // Keycloak 24 вимагає id_token_hint при logout
-    opt.Events.OnRedirectToIdentityProviderForSignOut = async ctx => {
-        var idToken = await ctx.HttpContext.GetTokenAsync("id_token");
-        if (!string.IsNullOrEmpty(idToken))
-            ctx.ProtocolMessage.IdTokenHint = idToken;
-    };
-})
+opt.Authority = "http://localhost:8080/realms/autocheck";
+opt.ClientId = "autocheck-blazor";
+opt.SaveTokens = true;
+opt.GetClaimsFromUserInfoEndpoint = true;
+// id_token_hint при logout (вимога Keycloak 24)
 ```
 
 ## Кастомна тема
 
 Тека: `keycloak/themes/autocheck/login/`
 
-Монтується в Docker як volume:
+Монтується як Docker volume:
 ```yaml
-volumes:
-  - ./keycloak/themes/autocheck:/opt/keycloak/themes/autocheck
+- ./keycloak/themes/autocheck:/opt/keycloak/themes/autocheck
 ```
 
-Файли:
-- `login.ftl` — сторінка входу (FreeMarker template)
-- `register.ftl` — сторінка реєстрації
-- `resources/css/login.css` — стилі (dark glassmorphism)
-- `theme.properties` — `parent=keycloak`
+### FTL файли
 
-## Важливо при змінах
+| Файл | Сторінка |
+|------|----------|
+| `login.ftl` | Вхід (вибір ролі, вкладки Вхід/Реєстрація) |
+| `register.ftl` | Реєстрація (поля групи, GitHub, ролі) |
+| `login-reset-password.ftl` | Скидання пароля — крок 1: введення email |
+| `login-update-password.ftl` | Скидання пароля — крок 2: новий пароль |
 
-Зміни в `.ftl` файлах застосовуються **одразу** (volume монтований).
-Зміни в `realm-autocheck.json` — треба видалити volume і перезапустити:
+**Назви шаблонів у Keycloak 24:**
+- `login-reset-password.ftl` (не `login-reset-credentials.ftl` як у старших версіях!)
+- `login-update-password.ftl`
+
+### theme.properties
+
+```properties
+parent=keycloak
+styles=css/login.css
+cacheTemplates=false
+cacheThemes=false
+```
+
+`cacheThemes=false` + `cacheTemplates=false` → зміни в FTL файлах підхоплюються одразу без перезапуску.
+
+### FreeMarker синтаксис (важливо)
+
+Правильно: `${kcSanitize(message.summary)?no_esc}`
+Неправильно: `${message.summary?html}` — `?html` не підтримується в Keycloak FreeMarker конфігурації
+
+## Зміни конфігу realm
+
+Зміни в `.ftl` файлах — підхоплюються одразу (volume).
+
+Зміни в `realm-autocheck.json` — треба перестворити volume:
 ```bash
-docker compose down
-docker volume rm autocheckblazor_keycloak_data
+docker compose down -v
 docker compose up -d
 ```
 
-## AuthService.EnsureLinkedAsync()
+## AuthService.EnsureLinkedAsync() — деталі
 
-При першому вході:
-1. Шукає UserLink по KeycloakSub
-2. Якщо не знайдено:
-   - Шукає StudentRecord по email (для pre-seeded студентів)
-   - Якщо не знайдено → створює новий StudentRecord
-   - Для нового студента → створює Submission (Locked) для всіх існуючих лаб
-   - Зберігає UserLink
+При першому вході або зміні Keycloak sub:
+1. Шукає `UserLink` по `KeycloakSub`
+2. Якщо знайдено → виходить
+3. Якщо ні → шукає студента по email
+4. Якщо студент знайдений і вже має `UserLink` (старий sub після скидання volume):
+   - **Оновлює** `KeycloakSub` на новий — не створює дублікат
+5. Якщо студента немає → `CreateStudentAsync()` + `Submission(Locked)` для всіх лаб
+6. Race condition → `catch DbUpdateException` → `ChangeTracker.Clear()`

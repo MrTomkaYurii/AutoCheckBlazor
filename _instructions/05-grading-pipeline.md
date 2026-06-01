@@ -2,33 +2,30 @@
 
 ## Концепція
 
-Важка робота (білд, тести) виконується на GitHub Actions — наш сервер тільки читає результат.
-Студент здає конкретний коміт, не "що зараз на гілці".
+Важка робота (білд, тести) виконується на **GitHub Actions** студента — наш сервер тільки читає результат через API. Студент здає конкретний коміт, не "що зараз на гілці".
 
-## Флоу здачі (як задумано)
+## Флоу здачі
 
 ```
 1. Студент пушить код на свою гілку
+   GitHub Actions запускається автоматично (dotnet build + test)
 
-2. GitHub Actions запускається автоматично:
-   - dotnet build
-   - dotnet test (якщо є тести)
+2. Студент відкриває лабу → натискає "Здати"
+   ├─ GitHub API тягне гілки репозиторію
+   ├─ Режим "Список комітів": вибір гілки + коміти через API
+   └─ Режим "Граф гіта": main гілка, граф з fork/merge арками
 
-3. Студент відкриває лабу в UI → натискає "Здати"
-   - Система тягне список гілок з GitHub API
-   - Якщо лаба має BranchName → гілка підставляється автоматично
-   - Студент бачить список комітів
-   - Обирає конкретний коміт
+3. Студент обирає коміт і маппінг коміт → завдання (кастомний dropdown)
 
-4. GradingPipeline запускається:
-   CloneStep    → git clone/fetch репо
-   CheckoutStep → git checkout {commitSha}
-   BuildStep    → dotnet build (локальна швидка перевірка)
-   GitHubActionsStep → читаємо результат GitHub API
+4. GradingPipeline (TODO: реалізувати):
+   CloneStep      → git clone/fetch репо
+   CheckoutStep   → git checkout {commitSha}
+   BuildStep      → dotnet build
+   TestStep       → checks.json I/O тести
+   GitHubActionsStep → читає check-runs через GitHub API
 
-5. Результат зберігається в БД → Submission.Status = Review
-   Студент отримує Notification
-   Викладач бачить в черзі на перевірку
+5. Submission.Status = Review → Notification студенту
+   Викладач бачить в черзі на перевірку → GradeDialog
 ```
 
 ## Структура Grading/
@@ -36,27 +33,28 @@
 ```
 Grading/
   Pipeline/
-    GradingPipeline.cs          ← оркестратор
+    GradingPipeline.cs       ← оркестратор (основна логіка)
     Steps/
-      IGradingStep.cs           ← інтерфейс
-      CloneStep.cs              ← TODO
-      CheckoutStep.cs           ← TODO
-      BuildStep.cs              ← TODO
-      GitHubActionsStep.cs      ← TODO
+      IGradingStep.cs        ← інтерфейс кроку
+      CloneStep.cs           ← TODO
+      CheckoutStep.cs        ← TODO
+      BuildStep.cs           ← TODO
+      GitHubActionsStep.cs   ← TODO
   Models/
-    GradingContext.cs           ← передається між кроками
-    GradingResult.cs            ← фінальний результат
+    GradingContext.cs        ← передається між кроками
+    GradingResult.cs         ← фінальний результат
 ```
 
 ## GradingContext — що передається між кроками
 
 ```csharp
 SubmissionId, StudentId
-RepoUrl      ← https://github.com/user/repo
-CommitSha    ← конкретний хеш коміту
-Branch       ← наприклад sandbox/intro
-SourceDir    ← де шукати .csproj (sandbox/intro або src)
+RepoUrl      // https://github.com/user/repo
+CommitSha    // конкретний хеш коміту
+Branch       // sandbox/intro
+SourceDir    // де шукати .csproj (sandbox/intro або src)
 LabNumber
+CommitMapping // Dictionary<string, int> sha → taskNumber
 
 // Заповнюється кроками:
 BuildPassed, BuildOutput
@@ -85,13 +83,13 @@ HasError, ErrorMessage
 }
 ```
 
-- `sourceDir` — де знаходиться .csproj студента
-- `commitPattern` — підрядок в повідомленні коміту для ідентифікації задачі
-- `cases` — вхідні дані і що шукаємо у виводі (не точний збіг, а Contains)
+- `input` — stdin (рядки розділені `\n`)
+- `expect` — що має бути у stdout (`Contains`, не `Equals`)
+- `commitPattern` — підрядок у commit message
 
 ## GitHub Actions у студента
 
-Студент додає файл `.github/workflows/check.yml` один раз:
+Студент додає `.github/workflows/check.yml` один раз:
 
 ```yaml
 name: AutoCheck
@@ -103,45 +101,26 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0'
+          dotnet-version: '10.0'
       - run: dotnet build sandbox/intro
 ```
 
-Далі GitHub сам запускає при кожному пуші.
-
-## Статуси
-
-| Статус | Опис |
-|--------|------|
-| Passed | Білд + GitHub Actions зелений |
-| Failed | Білд впав або Actions червоний |
-| Pending | Actions ще виконується |
-| Error | Репо недоступне, коміт не знайдено |
-
 ## Що НЕ перевіряємо
-
-- Назви класів і методів — у студентів варіації
-- Точний текст виводу — домен може відрізнятись (готель, ресторан...)
+- Назви класів і методів — у студентів різні домени
+- Точний текст виводу — `Contains`, не `Equals`
 - Внутрішню структуру коду
-
-## Що перевіряємо
-
-1. `dotnet build` — компілюється без помилок
-2. `dotnet run` з вхідними даними — не крашиться
-3. Вивід містить очікуване число (для лаб з консольним I/O)
-4. GitHub Actions результат (для всіх лаб)
 
 ## Поточний стан реалізації
 
-- [x] Структура папок Grading/
 - [x] GradingContext, GradingResult моделі
-- [x] GradingPipeline оркестратор (заглушки)
-- [x] GitHubService (GetBranches, GetCommits)
-- [x] UI вибору гілки і коміту в діалозі здачі
+- [x] GradingPipeline оркестратор (структура)
+- [x] GitHubService (GetBranches, GetBranchCommitInfos)
+- [x] UI вибору гілки і коміту з маппінгом
+- [x] CommitMappingJson зберігається в Submission.CommitMappingJson
+- [x] BranchOverride зберігається в Submission.BranchOverride
 - [x] checks.json для lab-01-intro
 - [ ] CloneStep реалізація
 - [ ] CheckoutStep реалізація
 - [ ] BuildStep реалізація
 - [ ] GitHubActionsStep реалізація
-- [ ] Черга здач (100+ студентів паралельно)
-- [ ] Зберігання CommitSha в Submission
+- [ ] Черга здач (BackgroundService або Channel<T>)
