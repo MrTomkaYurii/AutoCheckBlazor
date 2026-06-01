@@ -33,6 +33,9 @@ appsettings.Local.json
 /tmp/
 autocheck-repos/
 
+# ── Design prototypes (не потрібні в репо) ───────────────────────────────────
+_design/
+
 # ── OS ────────────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
