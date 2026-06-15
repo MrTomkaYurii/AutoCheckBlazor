@@ -85,24 +85,22 @@ public class GradingService(
             return (Task: taskDef, Code: code, Checks: checks);
         }));
 
-        // ── 3. Grade tasks via Gemini (max 2 concurrent to respect rate limits) ──
-        progress?.Report("Аналіз коду через Gemini…");
-
-        using var sem = new SemaphoreSlim(2, 2);
-        int done = 0;
-        var gradingTasks = taskInputs.Select(async input =>
+        // ── 3. Grade tasks sequentially with 7s gap (free tier = 10 RPM) ────────
+        // Sequential + minimum 7s between calls keeps us well under the 10 RPM cap.
+        // Parallel bursts hit the limit immediately even with a semaphore.
+        var graded = new (LabTask Task, string Code, GradeResult Result)[taskInputs.Length];
+        for (int i = 0; i < taskInputs.Length; i++)
         {
-            await sem.WaitAsync(ct);
-            try
+            if (i > 0)
             {
-                var result = await GradeWithGeminiAsync(lab, input.Task, input.Code, input.Checks, ct);
-                progress?.Report($"Аналіз коду через Gemini… {Interlocked.Increment(ref done)}/{taskInputs.Length}");
-                return (input.Task, input.Code, result);
+                progress?.Report($"Аналіз завдання {i}/{taskInputs.Length}… (пауза між запитами)");
+                await Task.Delay(TimeSpan.FromSeconds(7), ct);
             }
-            finally { sem.Release(); }
-        });
-
-        var graded = await Task.WhenAll(gradingTasks);
+            progress?.Report($"Аналіз завдання {i + 1}/{taskInputs.Length}…");
+            var input  = taskInputs[i];
+            var result = await GradeWithGeminiAsync(lab, input.Task, input.Code, input.Checks, ct);
+            graded[i]  = (input.Task, input.Code, result);
+        }
 
         // ── 4. Persist results ────────────────────────────────────────────────
         db.TaskResults.RemoveRange(sub.TaskResults);
@@ -131,7 +129,7 @@ public class GradingService(
 
         // ── 5. Finalise submission ────────────────────────────────────────────
         int autoScore = graded.Length > 0
-            ? (int)Math.Round(graded.Average(g => (double)g.result.Score))
+            ? (int)Math.Round(graded.Average(g => (double)g.Result.Score))
             : 0;
 
         sub.AutoScore    = autoScore;
@@ -218,18 +216,16 @@ public class GradingService(
 
             var url = $"https://generativelanguage.googleapis.com/v1beta/models/{Model}:generateContent?key={ApiKey}";
 
-            // Retry up to 3 times on 429 with exponential backoff
-            HttpResponseMessage resp = null!;
-            for (int attempt = 0; attempt <= 3; attempt++)
+            // Single retry on 429: wait 30s then try once more.
+            // Fast retries (2/4/8s) only make rate limiting worse.
+            var content = new StringContent(body, Encoding.UTF8, "application/json");
+            var resp    = await http.PostAsync(url, content, ct);
+            if ((int)resp.StatusCode == 429)
             {
-                if (attempt > 0)
-                {
-                    var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt)); // 2s, 4s, 8s
-                    log.LogInformation("Gemini 429 task {N}, retry {A} in {D}s", task.Number, attempt, delay.TotalSeconds);
-                    await Task.Delay(delay, ct);
-                }
-                resp = await http.PostAsync(url, new StringContent(body, Encoding.UTF8, "application/json"), ct);
-                if ((int)resp.StatusCode != 429) break;
+                log.LogInformation("Gemini 429 task {N}, waiting 30s before retry", task.Number);
+                await Task.Delay(TimeSpan.FromSeconds(30), ct);
+                content = new StringContent(body, Encoding.UTF8, "application/json");
+                resp    = await http.PostAsync(url, content, ct);
             }
 
             if (!resp.IsSuccessStatusCode)
