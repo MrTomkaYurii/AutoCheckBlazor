@@ -85,13 +85,21 @@ public class GradingService(
             return (Task: taskDef, Code: code, Checks: checks);
         }));
 
-        // ── 3. Grade all tasks in parallel via Gemini ─────────────────────────
+        // ── 3. Grade tasks via Gemini (max 2 concurrent to respect rate limits) ──
         progress?.Report("Аналіз коду через Gemini…");
 
+        using var sem = new SemaphoreSlim(2, 2);
+        int done = 0;
         var gradingTasks = taskInputs.Select(async input =>
         {
-            var result = await GradeWithGeminiAsync(lab, input.Task, input.Code, input.Checks, ct);
-            return (input.Task, input.Code, result);
+            await sem.WaitAsync(ct);
+            try
+            {
+                var result = await GradeWithGeminiAsync(lab, input.Task, input.Code, input.Checks, ct);
+                progress?.Report($"Аналіз коду через Gemini… {Interlocked.Increment(ref done)}/{taskInputs.Length}");
+                return (input.Task, input.Code, result);
+            }
+            finally { sem.Release(); }
         });
 
         var graded = await Task.WhenAll(gradingTasks);
@@ -193,7 +201,7 @@ public class GradingService(
 
         try
         {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(45) };
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
 
             var body = JsonSerializer.Serialize(new
             {
@@ -208,8 +216,21 @@ public class GradingService(
                 }
             });
 
-            var url  = $"https://generativelanguage.googleapis.com/v1beta/models/{Model}:generateContent?key={ApiKey}";
-            var resp = await http.PostAsync(url, new StringContent(body, Encoding.UTF8, "application/json"), ct);
+            var url = $"https://generativelanguage.googleapis.com/v1beta/models/{Model}:generateContent?key={ApiKey}";
+
+            // Retry up to 3 times on 429 with exponential backoff
+            HttpResponseMessage resp = null!;
+            for (int attempt = 0; attempt <= 3; attempt++)
+            {
+                if (attempt > 0)
+                {
+                    var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt)); // 2s, 4s, 8s
+                    log.LogInformation("Gemini 429 task {N}, retry {A} in {D}s", task.Number, attempt, delay.TotalSeconds);
+                    await Task.Delay(delay, ct);
+                }
+                resp = await http.PostAsync(url, new StringContent(body, Encoding.UTF8, "application/json"), ct);
+                if ((int)resp.StatusCode != 429) break;
+            }
 
             if (!resp.IsSuccessStatusCode)
             {
