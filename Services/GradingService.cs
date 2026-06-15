@@ -133,7 +133,7 @@ public class GradingService(
                 Score        = result.Score,
                 TestsPassed  = Math.Min(taskPassed, taskTotal),
                 TestsTotal   = taskTotal,
-                Feedback     = result.Feedback,
+                Feedback     = JsonSerializer.Serialize(new { done = result.Done, issues = result.Issues, analysis = result.Analysis }),
             });
         }
 
@@ -204,14 +204,17 @@ public class GradingService(
 {
   "state": "pass" або "warn" або "fail",
   "score": <ціле 0-100>,
-  "feedback": "<2-4 речення українською — конкретний аналіз, без загальних фраз>",
-  "issues": ["<конкретна проблема 1>", "<конкретна проблема 2>"]
+  "done": ["<конкретна вимога завдання — виконано правильно>", "..."],
+  "issues": ["<конкретна вимога завдання — НЕ виконано або має помилку: опис>", "..."],
+  "analysis": "<2-3 речення: загальна оцінка того наскільки реалізація відповідає вимогам завдання>"
 }
 """);
-        sb.AppendLine("Критерії:");
-        sb.AppendLine("• pass  80-100 — завдання виконано повністю, ООП-принципи дотримано");
-        sb.AppendLine("• warn  50-79  — основна логіка є, але є недоліки або необроблені випадки");
+        sb.AppendLine("Правила:");
+        sb.AppendLine("• pass  80-100 — завдання виконано повністю, всі вимоги дотримано");
+        sb.AppendLine("• warn  50-79  — основна логіка є, але частина вимог відсутня або помилкова");
         sb.AppendLine("• fail  0-49   — не реалізовано, не компілюється, або логіка принципово хибна");
+        sb.AppendLine("• У 'done' і 'issues' — лише конкретні вимоги з умови, не загальні фрази");
+        sb.AppendLine("• 'done' або 'issues' можуть бути порожніми масивами []");
 
         try
         {
@@ -238,7 +241,7 @@ public class GradingService(
                 var err = await resp.Content.ReadAsStringAsync(ct);
                 log.LogWarning("Gemini {Status} task {N}: {Err}", resp.StatusCode, task.Number,
                     err.Length > 300 ? err[..300] : err);
-                return new GradeResult("fail", 0, "Помилка відповіді системи перевірки. Зверніться до викладача.");
+                return new GradeResult("fail", 0, [], [], "Помилка відповіді системи перевірки. Зверніться до викладача.");
             }
 
             using var doc  = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
@@ -252,26 +255,24 @@ public class GradingService(
             using var parsed = JsonDocument.Parse(rawText);
             var root = parsed.RootElement;
 
-            var state    = root.GetProperty("state").GetString()    ?? "fail";
-            var score    = root.GetProperty("score").GetInt32();
-            var feedback = root.GetProperty("feedback").GetString() ?? "";
+            var state = root.GetProperty("state").GetString() ?? "fail";
+            var score = root.GetProperty("score").GetInt32();
 
-            if (root.TryGetProperty("issues", out var issuesEl) && issuesEl.ValueKind == JsonValueKind.Array)
-            {
-                var issues = issuesEl.EnumerateArray()
-                    .Select(x => x.GetString())
-                    .Where(s => !string.IsNullOrWhiteSpace(s))
-                    .ToList();
-                if (issues.Count > 0)
-                    feedback += "\n\n**Зауваження:**\n" + string.Join("\n", issues.Select(i => $"• {i}"));
-            }
+            static string[] ParseArr(JsonElement r, string key) =>
+                r.TryGetProperty(key, out var el) && el.ValueKind == JsonValueKind.Array
+                    ? el.EnumerateArray().Select(x => x.GetString() ?? "").Where(s => s.Length > 0).ToArray()
+                    : [];
 
-            return new GradeResult(state, Math.Clamp(score, 0, 100), feedback, testsPassed);
+            var done     = ParseArr(root, "done");
+            var issues   = ParseArr(root, "issues");
+            var analysis = root.TryGetProperty("analysis", out var an) ? an.GetString() ?? "" : "";
+
+            return new GradeResult(state, Math.Clamp(score, 0, 100), done, issues, analysis, testsPassed);
         }
         catch (Exception ex)
         {
             log.LogWarning(ex, "Gemini call failed for task {N}", task.Number);
-            return new GradeResult("fail", 0, "Зв'язок із системою перевірки перервано. Спробуйте пізніше.");
+            return new GradeResult("fail", 0, [], [], "Зв'язок із системою перевірки перервано. Спробуйте пізніше.");
         }
     }
 
@@ -315,7 +316,7 @@ public class GradingService(
 
     private record TaskCheckInfo(string[] ExpectedOutputs);
 
-    private record GradeResult(string State, int Score, string Feedback, int? TestCount = null);
+    private record GradeResult(string State, int Score, string[] Done, string[] Issues, string Analysis, int? TestCount = null);
 
     // ── Git ───────────────────────────────────────────────────────────────────
 

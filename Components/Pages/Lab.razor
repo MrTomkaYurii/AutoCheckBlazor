@@ -133,38 +133,59 @@
                 <div class="md" style="font-size:13.5px;line-height:1.7;color:var(--tx-2)"><MarkdownText Text="@task.Brief" /></div>
             </section>
 
+            var (fbDone, fbIssues, fbAnalysis) = ParseFeedback(task.Feedback);
             <section class="glass" style="padding:20px 24px;border-color:@(tv.Tone)33">
-                <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px">
+                <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">
                     <Icon Name="spark" Size="17" Style="@($"color:{tv.Tone}")" />
                     <h4 style="margin:0;font-size:14px;font-weight:700;letter-spacing:-0.01em">Фідбек перевірки</h4>
                     <span class="mono" style="margin-left:auto;font-size:12px;color:var(--tx-3)">@task.TestsPassed/@task.TestsTotal тестів</span>
                 </div>
-                <p style="margin:0;font-size:13.5px;line-height:1.7;color:var(--tx-1)">@task.Feedback</p>
+                @if (fbDone.Length > 0 || fbIssues.Length > 0)
+                {
+                    @if (fbDone.Length > 0)
+                    {
+                        <div style="display:flex;flex-direction:column;gap:6px;@(fbIssues.Length > 0 ? "margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--line)" : "")">
+                            @foreach (var d in fbDone)
+                            {
+                                <div style="display:flex;gap:10px;align-items:flex-start">
+                                    <span style="color:var(--st-green);flex:none;font-size:15px;line-height:1.4">✓</span>
+                                    <span style="font-size:13.5px;line-height:1.6;color:var(--tx-1)">@d</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                    @if (fbIssues.Length > 0)
+                    {
+                        <div style="display:flex;flex-direction:column;gap:6px">
+                            @foreach (var issue in fbIssues)
+                            {
+                                <div style="display:flex;gap:10px;align-items:flex-start">
+                                    <span style="color:var(--st-red);flex:none;font-size:15px;line-height:1.4">✗</span>
+                                    <span style="font-size:13.5px;line-height:1.6;color:var(--tx-1)">@issue</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+                else
+                {
+                    <p style="margin:0;font-size:13.5px;line-height:1.7;color:var(--tx-1)">@task.Feedback</p>
+                }
             </section>
 
             <section class="glass" style="padding:0;overflow:hidden">
                 <div style="display:flex;align-items:center;gap:10px;padding:14px 20px;border-bottom:1px solid var(--line)">
-                    <Icon Name="braces" Size="16" Style="color:var(--acc)" />
-                    <h4 style="margin:0;font-size:14px;font-weight:700">Запропоновані зміни</h4>
-                    <span class="mono" style="font-size:12px;color:var(--tx-3);margin-left:4px">Models/@(task.Title.Split(' ').Last()).cs</span>
-                    <div style="margin-left:auto;display:flex;gap:12px;font-size:12px">
-                        <span class="mono" style="color:var(--st-green)">+@(task.Diff.Count(d => d.Type == "add"))</span>
-                        <span class="mono" style="color:var(--st-red)">−@(task.Diff.Count(d => d.Type == "del"))</span>
-                    </div>
+                    <Icon Name="file-text" Size="16" Style="color:var(--acc)" />
+                    <h4 style="margin:0;font-size:14px;font-weight:700">Аналіз виконаного завдання</h4>
                 </div>
-                <div class="mono" style="font-size:12.8px;line-height:1.85;overflow-x:auto">
-                    @foreach (var ln in task.Diff)
+                <div style="padding:16px 20px">
+                    @if (!string.IsNullOrEmpty(fbAnalysis))
                     {
-                        var bg = ln.Type == "add" ? "rgba(118,199,173,0.10)" : ln.Type == "del" ? "rgba(232,128,107,0.10)" : "transparent";
-                        var gut = ln.Type != "ctx" ? bg : "rgba(255,255,255,0.015)";
-                        var mark = ln.Type == "add" ? "+" : ln.Type == "del" ? "−" : " ";
-                        var mc = ln.Type == "add" ? "var(--st-green)" : ln.Type == "del" ? "var(--st-red)" : "var(--tx-faint)";
-                        <div style="display:flex;background:@bg;min-width:max-content">
-                            <span style="width:42px;flex:none;text-align:right;padding:0 8px;color:var(--tx-faint);user-select:none;border-right:1px solid var(--line);background:@gut">@(ln.N1?.ToString() ?? "")</span>
-                            <span style="width:42px;flex:none;text-align:right;padding:0 8px;color:var(--tx-faint);user-select:none;border-right:1px solid var(--line);background:@gut">@(ln.N2?.ToString() ?? "")</span>
-                            <span style="width:20px;flex:none;text-align:center;color:@mc;font-weight:700;user-select:none">@mark</span>
-                            <span style="padding:0 12px 0 4px;white-space:pre;color:@(ln.Type == "ctx" ? "var(--tx-2)" : "var(--tx-1)")">@(string.IsNullOrEmpty(ln.Text) ? " " : ln.Text)</span>
-                        </div>
+                        <p style="margin:0;font-size:13.5px;line-height:1.7;color:var(--tx-1)">@fbAnalysis</p>
+                    }
+                    else
+                    {
+                        <p style="margin:0;font-size:13.5px;color:var(--tx-3)">Аналіз недоступний.</p>
                     }
                 </div>
             </section>
@@ -529,6 +550,23 @@
     private string _currentStep = "";
     private string _gradingError = "";
     private GradingResultDto? _result;
+
+    private static (string[] Done, string[] Issues, string Analysis) ParseFeedback(string? raw)
+    {
+        if (string.IsNullOrEmpty(raw)) return ([], [], "");
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(raw);
+            var r = doc.RootElement;
+            static string[] Arr(System.Text.Json.JsonElement root, string key) =>
+                root.TryGetProperty(key, out var el) && el.ValueKind == System.Text.Json.JsonValueKind.Array
+                    ? el.EnumerateArray().Select(x => x.GetString() ?? "").Where(s => s.Length > 0).ToArray()
+                    : [];
+            var analysis = r.TryGetProperty("analysis", out var a) ? a.GetString() ?? "" : "";
+            return (Arr(r, "done"), Arr(r, "issues"), analysis);
+        }
+        catch { return ([], [], raw); }
+    }
     private int _oldScore;
 
     // Commit-mapping state
