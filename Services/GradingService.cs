@@ -12,7 +12,7 @@ namespace AutoCheck.Services;
 ///   0. pre-flight: Gemini reachability check
 ///   1. git clone / pull student repo
 ///   2. extract code per task (commit diff or file heuristic)
-///   3. Gemini API   → per-task code review (parallel) → state / score / feedback
+///   3. Gemini API   → ONE batch request for all tasks → state / score / feedback
 /// </summary>
 public class GradingService(
     AppDbContext db,
@@ -85,22 +85,12 @@ public class GradingService(
             return (Task: taskDef, Code: code, Checks: checks);
         }));
 
-        // ── 3. Grade tasks sequentially with 7s gap (free tier = 10 RPM) ────────
-        // Sequential + minimum 7s between calls keeps us well under the 10 RPM cap.
-        // Parallel bursts hit the limit immediately even with a semaphore.
-        var graded = new (LabTask Task, string Code, GradeResult Result)[taskInputs.Length];
-        for (int i = 0; i < taskInputs.Length; i++)
-        {
-            if (i > 0)
-            {
-                progress?.Report($"Аналіз завдання {i}/{taskInputs.Length}… (пауза між запитами)");
-                await Task.Delay(TimeSpan.FromSeconds(7), ct);
-            }
-            progress?.Report($"Аналіз завдання {i + 1}/{taskInputs.Length}…");
-            var input  = taskInputs[i];
-            var result = await GradeWithGeminiAsync(lab, input.Task, input.Code, input.Checks, ct);
-            graded[i]  = (input.Task, input.Code, result);
-        }
+        // ── 3. Grade ALL tasks in ONE Gemini call ────────────────────────────────
+        progress?.Report("Аналіз коду через Gemini…");
+        var gradeResults = await GradeAllWithGeminiAsync(lab, taskInputs, ct);
+        var graded = taskInputs
+            .Zip(gradeResults, (inp, res) => (inp.Task, inp.Code, Result: res))
+            .ToArray();
 
         // ── 4. Persist results ────────────────────────────────────────────────
         db.TaskResults.RemoveRange(sub.TaskResults);
@@ -148,58 +138,72 @@ public class GradingService(
         return new GradingResultDto(sub.Id, autoScore, 0, 0);
     }
 
-    // ── Gemini API ────────────────────────────────────────────────────────────
+    // ── Gemini API — batch (all tasks in one request) ─────────────────────────
 
-    private async Task<GradeResult> GradeWithGeminiAsync(
-        LabDef lab, LabTask task, string code,
-        TaskCheckInfo? checks, CancellationToken ct)
+    private async Task<GradeResult[]> GradeAllWithGeminiAsync(
+        LabDef lab,
+        (LabTask Task, string Code, TaskCheckInfo? Checks)[] inputs,
+        CancellationToken ct)
     {
+        GradeResult Fail(string msg) => new("fail", 0, [], [], msg);
+        var failAll = inputs.Select(_ => Fail("Помилка відповіді системи перевірки.")).ToArray();
+        if (inputs.Length == 0) return failAll;
+
         var sb = new StringBuilder();
         sb.AppendLine("Ти — суворий, але справедливий перевірник коду C# для університетського курсу ООП.");
-        sb.AppendLine("Відповідай ТІЛЬКИ валідним JSON без markdown-огорток.");
+        sb.AppendLine("Відповідай ТІЛЬКИ валідним JSON-масивом без markdown-огорток і без тексту поза ним.");
         sb.AppendLine();
         sb.AppendLine($"## Лаба: {lab.Title}");
         if (!string.IsNullOrWhiteSpace(lab.Goal))
             sb.AppendLine($"**Мета:** {lab.Goal}");
         sb.AppendLine();
-        sb.AppendLine($"## Завдання {task.Number}: {task.Title}  [{new string('⭐', task.Difficulty)}]");
-        if (!string.IsNullOrWhiteSpace(task.Brief))
-            sb.AppendLine(task.Brief);
+        sb.AppendLine("Перевір кожне завдання нижче і поверни JSON-масив з оцінкою для кожного.");
         sb.AppendLine();
 
-        if (checks?.ExpectedOutputs.Length > 0)
+        foreach (var (task, code, checks) in inputs)
         {
-            sb.AppendLine("## Очікувані виводи (тест-кейси)");
-            foreach (var exp in checks.ExpectedOutputs.Take(6))
-                sb.AppendLine($"- `{exp}`");
+            sb.AppendLine("---");
+            sb.AppendLine($"### Завдання {task.Number}: {task.Title}  [{new string('⭐', task.Difficulty)}]");
+            if (!string.IsNullOrWhiteSpace(task.Brief))
+                sb.AppendLine(task.Brief);
+            sb.AppendLine();
+            if (checks?.ExpectedOutputs.Length > 0)
+            {
+                sb.AppendLine("Очікувані виводи:");
+                foreach (var exp in checks.ExpectedOutputs.Take(4))
+                    sb.AppendLine($"- `{exp}`");
+                sb.AppendLine();
+            }
+            sb.AppendLine("Код студента:");
+            sb.AppendLine("```csharp");
+            sb.AppendLine(code);
+            sb.AppendLine("```");
             sb.AppendLine();
         }
 
-        sb.AppendLine("## Код студента (diff коміту)");
-        sb.AppendLine("```csharp");
-        sb.AppendLine(code);
-        sb.AppendLine("```");
-        sb.AppendLine();
-        sb.AppendLine("## Відповідь — ТІЛЬКИ JSON, без пояснень поза ним:");
+        sb.AppendLine("---");
+        sb.AppendLine("## Відповідь — ТІЛЬКИ JSON-масив, без пояснень поза ним:");
         sb.AppendLine("""
-{
-  "state": "pass" або "warn" або "fail",
-  "score": <ціле 0-100>,
-  "done": ["<конкретна вимога завдання — виконано правильно>", "..."],
-  "issues": ["<конкретна вимога завдання — НЕ виконано або має помилку: опис>", "..."],
-  "analysis": "<2-3 речення: загальна оцінка того наскільки реалізація відповідає вимогам завдання>"
-}
+[
+  {
+    "n": <номер завдання>,
+    "state": "pass" або "warn" або "fail",
+    "score": <ціле 0-100>,
+    "done": ["<конкретна вимога — виконано>", "..."],
+    "issues": ["<конкретна вимога — НЕ виконано або з помилкою>", "..."],
+    "analysis": "<2-3 речення загальної оцінки>"
+  },
+  ...
+]
 """);
         sb.AppendLine("Правила:");
-        sb.AppendLine("• pass  80-100 — завдання виконано повністю, всі вимоги дотримано");
-        sb.AppendLine("• warn  50-79  — основна логіка є, але частина вимог відсутня або помилкова");
-        sb.AppendLine("• fail  0-49   — не реалізовано, не компілюється, або логіка принципово хибна");
-        sb.AppendLine("• У 'done' і 'issues' — лише конкретні вимоги з умови, не загальні фрази");
-        sb.AppendLine("• 'done' або 'issues' можуть бути порожніми масивами []");
+        sb.AppendLine("• pass 80-100, warn 50-79, fail 0-49");
+        sb.AppendLine("• done/issues — лише конкретні вимоги з умови, не загальні фрази");
+        sb.AppendLine($"• Поверни масив рівно з {inputs.Length} елементами (n=1..{inputs.Length})");
 
         try
         {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(120) };
 
             var body = JsonSerializer.Serialize(new
             {
@@ -207,22 +211,16 @@ public class GradingService(
                 {
                     new { role = "user", parts = new[] { new { text = sb.ToString() } } }
                 },
-                generationConfig = new
-                {
-                    responseMimeType = "application/json",
-                    temperature      = 0.1
-                }
+                generationConfig = new { responseMimeType = "application/json", temperature = 0.1 }
             });
 
             var url = $"https://generativelanguage.googleapis.com/v1beta/models/{Model}:generateContent?key={ApiKey}";
 
-            // Single retry on 429: wait 30s then try once more.
-            // Fast retries (2/4/8s) only make rate limiting worse.
             var content = new StringContent(body, Encoding.UTF8, "application/json");
             var resp    = await http.PostAsync(url, content, ct);
             if ((int)resp.StatusCode == 429)
             {
-                log.LogInformation("Gemini 429 task {N}, waiting 30s before retry", task.Number);
+                log.LogInformation("Gemini 429 on batch, waiting 30s");
                 await Task.Delay(TimeSpan.FromSeconds(30), ct);
                 content = new StringContent(body, Encoding.UTF8, "application/json");
                 resp    = await http.PostAsync(url, content, ct);
@@ -231,40 +229,50 @@ public class GradingService(
             if (!resp.IsSuccessStatusCode)
             {
                 var err = await resp.Content.ReadAsStringAsync(ct);
-                log.LogWarning("Gemini {Status} task {N}: {Err}", resp.StatusCode, task.Number,
-                    err.Length > 300 ? err[..300] : err);
-                return new GradeResult("fail", 0, [], [], "Помилка відповіді системи перевірки. Зверніться до викладача.");
+                log.LogWarning("Gemini batch {Status}: {Err}", resp.StatusCode, err.Length > 300 ? err[..300] : err);
+                return failAll;
             }
 
-            using var doc  = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
-            var rawText    = doc.RootElement
+            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+            var rawText   = doc.RootElement
                 .GetProperty("candidates")[0]
                 .GetProperty("content")
                 .GetProperty("parts")[0]
                 .GetProperty("text")
-                .GetString() ?? "{}";
+                .GetString() ?? "[]";
 
             using var parsed = JsonDocument.Parse(rawText);
-            var root = parsed.RootElement;
+            if (parsed.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                log.LogWarning("Gemini batch returned non-array");
+                return failAll;
+            }
 
-            var state = root.GetProperty("state").GetString() ?? "fail";
-            var score = root.GetProperty("score").GetInt32();
-
-            static string[] ParseArr(JsonElement r, string key) =>
+            static string[] Arr(JsonElement r, string key) =>
                 r.TryGetProperty(key, out var el) && el.ValueKind == JsonValueKind.Array
                     ? el.EnumerateArray().Select(x => x.GetString() ?? "").Where(s => s.Length > 0).ToArray()
                     : [];
 
-            var done     = ParseArr(root, "done");
-            var issues   = ParseArr(root, "issues");
-            var analysis = root.TryGetProperty("analysis", out var an) ? an.GetString() ?? "" : "";
+            var byN = new Dictionary<int, GradeResult>();
+            foreach (var item in parsed.RootElement.EnumerateArray())
+            {
+                if (!item.TryGetProperty("n", out var nEl)) continue;
+                var n        = nEl.GetInt32();
+                var state    = item.TryGetProperty("state",    out var st) ? st.GetString() ?? "fail" : "fail";
+                var score    = item.TryGetProperty("score",    out var sc) ? sc.GetInt32()             : 0;
+                var analysis = item.TryGetProperty("analysis", out var an) ? an.GetString() ?? ""      : "";
+                byN[n] = new GradeResult(state, Math.Clamp(score, 0, 100), Arr(item, "done"), Arr(item, "issues"), analysis);
+            }
 
-            return new GradeResult(state, Math.Clamp(score, 0, 100), done, issues, analysis);
+            return inputs
+                .Select(inp => byN.TryGetValue(inp.Task.Number, out var r) ? r
+                    : Fail("Gemini не повернув результат для цього завдання."))
+                .ToArray();
         }
         catch (Exception ex)
         {
-            log.LogWarning(ex, "Gemini call failed for task {N}", task.Number);
-            return new GradeResult("fail", 0, [], [], "Зв'язок із системою перевірки перервано. Спробуйте пізніше.");
+            log.LogWarning(ex, "Gemini batch call failed");
+            return failAll;
         }
     }
 
