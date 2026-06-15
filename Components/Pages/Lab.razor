@@ -468,6 +468,17 @@
                 </div>
             }
 
+            @* ── PHASE: error ── *@
+            else if (_phase == "error")
+            {
+                <div style="text-align:center;padding:10px 0">
+                    <div style="width:60px;height:60px;border-radius:50%;margin:0 auto 16px;display:grid;place-items:center;background:rgba(220,60,60,0.1);border:1px solid rgba(220,60,60,0.3);color:var(--st-red)"><Icon Name="alert-triangle" Size="28" Stroke="2" /></div>
+                    <h3 style="margin:0 0 10px;font-size:17px;font-weight:730;color:var(--tx-1)">Перевірка недоступна</h3>
+                    <p style="margin:0 0 22px;font-size:13.5px;color:var(--tx-2);line-height:1.5">@_gradingError</p>
+                    <button class="btn btn-outline btn-block" @onclick='() => _phase = "map"'>← Назад</button>
+                </div>
+            }
+
             @* ── PHASE: done ── *@
             else
             {
@@ -516,6 +527,7 @@
     private bool _modalOpen;
     private string _phase = "branch";
     private string _currentStep = "";
+    private string _gradingError = "";
     private GradingResultDto? _result;
     private int _oldScore;
 
@@ -726,12 +738,18 @@
         await Db.SaveChangesAsync();
 
         var progress = new Progress<string>(step => { _currentStep = step; InvokeAsync(StateHasChanged); });
-        _result = await Grader.RunAsync(sub.Id, _studentId, progress);
-
-        var detail = await Data.GetLabDetailAsync(Id, _studentId);
-        if (detail is not null) { LabInfo = detail; _activeId = "task" + (detail.Tasks.FirstOrDefault()?.N ?? 1); }
-
-        _phase = "done";
+        try
+        {
+            _result = await Grader.RunAsync(sub.Id, _studentId, progress);
+            var detail = await Data.GetLabDetailAsync(Id, _studentId);
+            if (detail is not null) { LabInfo = detail; _activeId = "task" + (detail.Tasks.FirstOrDefault()?.N ?? 1); }
+            _phase = "done";
+        }
+        catch (Exception ex)
+        {
+            _gradingError = ex.Message;
+            _phase = "error";
+        }
         StateHasChanged();
     }
 

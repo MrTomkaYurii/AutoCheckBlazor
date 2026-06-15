@@ -9,11 +9,11 @@ namespace AutoCheck.Services;
 
 /// <summary>
 /// Auto-grading engine:
+///   0. pre-flight: Gemini reachability check
 ///   1. git clone / pull student repo onto the branch defined in LabDef
 ///   2. dotnet build → compile check
 ///   3. dotnet test  → per-task test pass count (if test project exists)
 ///   4. Gemini API   → per-task code review (parallel) → state / score / feedback
-/// Falls back to simulation when GitHub URL is missing or Gemini API key is not set.
 /// </summary>
 public class GradingService(
     AppDbContext db,
@@ -42,9 +42,21 @@ public class GradingService(
             .FirstOrDefaultAsync(x => x.Id == submissionId && x.StudentId == studentId, ct)
             ?? throw new InvalidOperationException("Submission not found");
 
+        // ── 0. Pre-flight: Gemini availability ───────────────────────────────
+        if (string.IsNullOrEmpty(ApiKey))
+            throw new InvalidOperationException(
+                "Система перевірки наразі недоступна. Зверніться до викладача.");
+
+        progress?.Report("Перевірка системи аналізу…");
+        await CheckGeminiAsync(ct);
+
         var student = sub.Student;
         var lab     = sub.LabDef;
         var branch  = sub.BranchOverride ?? lab.BranchName ?? "main";
+
+        if (string.IsNullOrWhiteSpace(student.Github))
+            throw new InvalidOperationException(
+                "GitHub репозиторій не вказано у профілі. Оновіть профіль та спробуйте знову.");
 
         List<CommitTaskMap>? commitMap = null;
         if (!string.IsNullOrEmpty(sub.CommitMappingJson))
@@ -54,20 +66,10 @@ public class GradingService(
         }
 
         // ── 1. Prepare repo ──────────────────────────────────────────────────
-        string? workDir = null;
-        if (!string.IsNullOrWhiteSpace(student.Github))
-        {
-            progress?.Report("Клонування репозиторію…");
-            workDir = await PrepareRepoAsync(student.Github, branch, ct);
-        }
-
-        if (workDir is null)
-        {
-            progress?.Report(string.IsNullOrWhiteSpace(student.Github)
-                ? "GitHub URL не вказано — запускаємо симуляцію…"
-                : "Не вдалося клонувати репозиторій — запускаємо симуляцію…");
-            return await RunSimulatedAsync(sub, progress, ct);
-        }
+        progress?.Report("Клонування репозиторію…");
+        var workDir = await PrepareRepoAsync(student.Github, branch, ct)
+            ?? throw new InvalidOperationException(
+                "Не вдалося отримати репозиторій. Перевірте URL та права доступу.");
 
         // ── 2. Build ─────────────────────────────────────────────────────────
         progress?.Report("Компіляція проєкту…");
@@ -163,12 +165,6 @@ public class GradingService(
         int? testsPassed, int? testsTotal,
         TaskCheckInfo? checks, CancellationToken ct)
     {
-        if (string.IsNullOrEmpty(ApiKey))
-        {
-            log.LogDebug("No Gemini API key — simulation for task {N}", task.Number);
-            return Simulate(testsPassed);
-        }
-
         var sb = new StringBuilder();
         sb.AppendLine("Ти — суворий, але справедливий перевірник коду C# для університетського курсу ООП.");
         sb.AppendLine("Відповідай ТІЛЬКИ валідним JSON без markdown-огорток.");
@@ -242,7 +238,7 @@ public class GradingService(
                 var err = await resp.Content.ReadAsStringAsync(ct);
                 log.LogWarning("Gemini {Status} task {N}: {Err}", resp.StatusCode, task.Number,
                     err.Length > 300 ? err[..300] : err);
-                return Simulate(testsPassed);
+                return new GradeResult("fail", 0, "Помилка відповіді системи перевірки. Зверніться до викладача.");
             }
 
             using var doc  = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
@@ -275,7 +271,7 @@ public class GradingService(
         catch (Exception ex)
         {
             log.LogWarning(ex, "Gemini call failed for task {N}", task.Number);
-            return Simulate(testsPassed);
+            return new GradeResult("fail", 0, "Зв'язок із системою перевірки перервано. Спробуйте пізніше.");
         }
     }
 
@@ -483,71 +479,31 @@ public class GradingService(
     private static string NormalizeTaskTitle(string t) =>
         t.Split(' ').LastOrDefault(w => w.Length > 2) ?? t;
 
-    // ── Simulation fallback ───────────────────────────────────────────────────
+    // ── Gemini health check ───────────────────────────────────────────────────
 
-    private static readonly string[] PassFb = [
-        "Відмінно! Усі вимоги виконано, код відповідає принципам ООП.",
-        "Чудово. Логіка правильна, поля інкапсульовані.",
-        "Правильна реалізація. Конструктор та властивості оформлені коректно.",
-    ];
-    private static readonly string[] WarnFb = [
-        "Основний функціонал є, але є незначні відхилення від специфікації.",
-        "Логіка вірна, але метод не обробляє null. Рекомендується перевірка.",
-        "Більшість тестів пройдено, але є edge-case з порожнім списком.",
-    ];
-    private static readonly string[] FailFb = [
-        "Не вдалося скомпілювати. Перевірте синтаксис та відсутні поля.",
-        "Метод не реалізовано або має неправильну сигнатуру.",
-        "Компіляція пройшла, але тести не пройдено через неправильну логіку.",
-    ];
-
-    private static GradeResult Simulate(int? testsPassedHint = null)
+    private async Task CheckGeminiAsync(CancellationToken ct)
     {
-        var rng = new Random();
-        double r = rng.NextDouble();
-        if (r < 0.60) return new("pass", 85 + rng.Next(16), PassFb[rng.Next(PassFb.Length)], testsPassedHint);
-        if (r < 0.85) return new("warn", 55 + rng.Next(30), WarnFb[rng.Next(WarnFb.Length)], testsPassedHint);
-        return new("fail", rng.Next(30), FailFb[rng.Next(FailFb.Length)], testsPassedHint);
-    }
-
-    private async Task<GradingResultDto> RunSimulatedAsync(
-        Submission sub, IProgress<string>? progress, CancellationToken ct)
-    {
-        var steps = new[] { "Компіляція…", "Запуск тестів…", "Формування звіту…" };
-        foreach (var s in steps) { progress?.Report(s); await Task.Delay(600, ct); }
-
-        db.TaskResults.RemoveRange(sub.TaskResults);
-        await db.SaveChangesAsync(ct);
-
-        int total = 0, passed = 0;
-        foreach (var t in sub.LabDef.Tasks.OrderBy(x => x.Number))
+        try
         {
-            var result = Simulate();
-            int tt = t.Difficulty * 2 + 4;
-            int tp = result.State == "pass" ? tt
-                   : result.State == "warn" ? (int)(tt * 0.65)
-                   : new Random().Next(0, tt / 3 + 1);
-            total += tt; passed += tp;
-            db.TaskResults.Add(new TaskResult
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            var body = """{"contents":[{"role":"user","parts":[{"text":"ping"}]}],"generationConfig":{"maxOutputTokens":1}}""";
+            var url  = $"https://generativelanguage.googleapis.com/v1beta/models/{Model}:generateContent?key={ApiKey}";
+            var resp = await http.PostAsync(url, new StringContent(body, Encoding.UTF8, "application/json"), ct);
+            if (!resp.IsSuccessStatusCode)
             {
-                SubmissionId = sub.Id, LabTaskId = t.Id,
-                State = result.State, Score = result.Score,
-                TestsPassed = tp, TestsTotal = tt, Feedback = result.Feedback,
-            });
+                var err = await resp.Content.ReadAsStringAsync(ct);
+                log.LogWarning("Gemini health check failed {Status}: {Err}", resp.StatusCode, err.Length > 200 ? err[..200] : err);
+                throw new InvalidOperationException(
+                    "Система перевірки тимчасово недоступна. Спробуйте пізніше або зверніться до викладача.");
+            }
         }
-
-        int auto = sub.LabDef.Tasks.Count > 0
-            ? (int)Math.Round(100.0 * passed / Math.Max(total, 1)) : 0;
-        sub.AutoScore = auto; sub.AttemptsUsed++; sub.SubmittedAt = DateTime.UtcNow;
-        if (sub.Status == (int)LabStatus.Locked) sub.Status = (int)LabStatus.Review;
-        await db.SaveChangesAsync(ct);
-
-        await notif.SendAsync(sub.StudentId,
-            $"Авто-перевірку Lab{sub.LabDef.Number:D2} завершено (симуляція)",
-            $"Авто-оцінка: {auto}/100. Очікуйте захист.", "grading");
-
-        progress?.Report("Готово!");
-        return new GradingResultDto(sub.Id, auto, passed, total);
+        catch (InvalidOperationException) { throw; }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "Gemini health check exception");
+            throw new InvalidOperationException(
+                "Система перевірки тимчасово недоступна. Спробуйте пізніше або зверніться до викладача.");
+        }
     }
 
     // ── Process helpers ───────────────────────────────────────────────────────

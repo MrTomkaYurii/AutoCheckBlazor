@@ -120,8 +120,13 @@
                         .SetProperty(x => x.Github,      _github.Trim())
                         .SetProperty(x => x.GithubToken, _githubToken.Trim()));
             await App.PreloadAsync(state.User);
+            _msg = "Профіль оновлено";
         }
-        _saving = false; _editing = false; _msg = "Профіль оновлено"; StateHasChanged();
+        else
+        {
+            _msg = "Помилка: профіль не знайдено";
+        }
+        _saving = false; _editing = false; StateHasChanged();
         await Task.Delay(2000); _msg = ""; StateHasChanged();
     }
 }

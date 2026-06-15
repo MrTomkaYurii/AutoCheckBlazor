@@ -29,7 +29,7 @@ public class AuthService(AppDbContext db) : IAuthService
     {
         var sub = GetSub(user);
         if (string.IsNullOrEmpty(sub)) return null;
-        var link = await db.UserLinks.Include(l => l.Student)
+        var link = await db.UserLinks.AsNoTracking().Include(l => l.Student)
                                      .FirstOrDefaultAsync(l => l.KeycloakSub == sub);
         return link?.Student;
     }
@@ -38,7 +38,7 @@ public class AuthService(AppDbContext db) : IAuthService
     {
         var sub = GetSub(user);
         if (string.IsNullOrEmpty(sub)) return null;
-        var link = await db.UserLinks.Include(l => l.Teacher)
+        var link = await db.UserLinks.AsNoTracking().Include(l => l.Teacher)
                                      .FirstOrDefaultAsync(l => l.KeycloakSub == sub);
         return link?.Teacher;
     }
