@@ -8,21 +8,22 @@ using Microsoft.EntityFrameworkCore;
 namespace AutoCheck.Services;
 
 /// <summary>
-/// Real auto-grading engine:
-///   1. git clone / pull student's repo onto the branch defined in LabDef
+/// Auto-grading engine:
+///   1. git clone / pull student repo onto the branch defined in LabDef
 ///   2. dotnet build → compile check
 ///   3. dotnet test  → per-task test pass count (if test project exists)
-///   4. Claude API   → per-task code review → state / score / feedback
-/// Falls back to simulation when GitHub URL is missing or API key is not set.
+///   4. Gemini API   → per-task code review (parallel) → state / score / feedback
+/// Falls back to simulation when GitHub URL is missing or Gemini API key is not set.
 /// </summary>
 public class GradingService(
     AppDbContext db,
     INotificationService notif,
     IConfiguration cfg,
+    IWebHostEnvironment env,
     ILogger<GradingService> log) : IGradingService
 {
-    private string ApiKey   => cfg["Anthropic:ApiKey"] ?? "";
-    private string Model    => cfg["Anthropic:Model"]  ?? "claude-haiku-4-5-20251001";
+    private string ApiKey   => cfg["Gemini:ApiKey"]  ?? "";
+    private string Model    => cfg["Gemini:Model"]   ?? "gemini-2.5-flash";
     private string WorkRoot => string.IsNullOrEmpty(cfg["Grading:WorkRoot"])
         ? Path.Combine(Path.GetTempPath(), "autocheck-repos")
         : cfg["Grading:WorkRoot"]!;
@@ -49,7 +50,7 @@ public class GradingService(
         if (!string.IsNullOrEmpty(sub.CommitMappingJson))
         {
             try { commitMap = JsonSerializer.Deserialize<List<CommitTaskMap>>(sub.CommitMappingJson); }
-            catch { }
+            catch { /* ignore malformed map */ }
         }
 
         // ── 1. Prepare repo ──────────────────────────────────────────────────
@@ -80,26 +81,45 @@ public class GradingService(
             testResults = await DotnetTestAsync(workDir, ct);
         }
 
-        // ── 4. Grade each task with Claude ───────────────────────────────────
-        var codeFiles = GetCSharpFiles(workDir);
+        // ── 4. Fetch code/diff for each task (parallel git reads) ─────────────
+        progress?.Report("Підготовка даних для аналізу…");
+        var codeFiles    = GetCSharpFiles(workDir);
+        var orderedTasks = lab.Tasks.OrderBy(t => t.Number).ToList();
+
+        var taskInputs = await Task.WhenAll(orderedTasks.Select(async taskDef =>
+        {
+            var mappedSha = commitMap?.FirstOrDefault(m => m.TaskNumber == taskDef.Number)?.Sha;
+            var code = !string.IsNullOrEmpty(mappedSha)
+                ? await GetCommitCodeAsync(workDir, mappedSha, ct)
+                : FindRelevantCode(codeFiles, taskDef.Title);
+            var checks = LoadTaskChecks(lab.Number, taskDef.Number);
+            return (Task: taskDef, Code: code, Checks: checks);
+        }));
+
+        // ── 5. Grade all tasks in parallel via Gemini ─────────────────────────
+        progress?.Report("Аналіз коду через Gemini…");
+
+        var gradingTasks = taskInputs.Select(async input =>
+        {
+            var tests = testResults.TryGetValue(NormalizeTaskTitle(input.Task.Title), out var tr)
+                ? tr : ((int?)null, (int?)null);
+            var result = await GradeWithGeminiAsync(
+                lab, input.Task, input.Code, buildOk,
+                tests.Item1, tests.Item2, input.Checks, ct);
+            return (input.Task, result);
+        });
+
+        var graded = await Task.WhenAll(gradingTasks);
+
+        // ── 6. Persist results ────────────────────────────────────────────────
         db.TaskResults.RemoveRange(sub.TaskResults);
         await db.SaveChangesAsync(ct);
 
         int totalTests = 0, passedTests = 0;
-
-        foreach (var taskDef in lab.Tasks.OrderBy(t => t.Number))
+        foreach (var (taskDef, result) in graded)
         {
-            progress?.Report($"Аналіз завдання {taskDef.Number}: {taskDef.Title}…");
-
-            var mappedSha = commitMap?.FirstOrDefault(m => m.TaskNumber == taskDef.Number)?.Sha;
-            var code = !string.IsNullOrEmpty(mappedSha) && workDir is not null
-                ? await GetCommitCodeAsync(workDir, mappedSha, ct)
-                : FindRelevantCode(codeFiles, taskDef.Title);
-            var tests  = testResults.TryGetValue(NormalizeTaskTitle(taskDef.Title), out var tr) ? tr : ((int?)null, (int?)null);
-            var result = await GradeWithClaudeAsync(taskDef, code, buildOk, tests.Item1, tests.Item2, ct);
-
             int taskTotal  = taskDef.Difficulty * 2 + 4;
-            int taskPassed = tests.Item1 ?? (int)Math.Round(taskTotal * result.Score / 100.0);
+            int taskPassed = result.TestCount ?? (int)Math.Round(taskTotal * result.Score / 100.0);
             totalTests  += taskTotal;
             passedTests += Math.Min(taskPassed, taskTotal);
 
@@ -115,7 +135,7 @@ public class GradingService(
             });
         }
 
-        // ── 5. Finalise submission ────────────────────────────────────────────
+        // ── 7. Finalise submission ────────────────────────────────────────────
         int autoScore = lab.Tasks.Count > 0
             ? (int)Math.Round(100.0 * passedTests / Math.Max(totalTests, 1))
             : 0;
@@ -136,6 +156,171 @@ public class GradingService(
         return new GradingResultDto(sub.Id, autoScore, passedTests, totalTests);
     }
 
+    // ── Gemini API ────────────────────────────────────────────────────────────
+
+    private async Task<GradeResult> GradeWithGeminiAsync(
+        LabDef lab, LabTask task, string code, bool buildOk,
+        int? testsPassed, int? testsTotal,
+        TaskCheckInfo? checks, CancellationToken ct)
+    {
+        if (string.IsNullOrEmpty(ApiKey))
+        {
+            log.LogDebug("No Gemini API key — simulation for task {N}", task.Number);
+            return Simulate(testsPassed);
+        }
+
+        var sb = new StringBuilder();
+        sb.AppendLine("Ти — суворий, але справедливий перевірник коду C# для університетського курсу ООП.");
+        sb.AppendLine("Відповідай ТІЛЬКИ валідним JSON без markdown-огорток.");
+        sb.AppendLine();
+        sb.AppendLine($"## Лаба: {lab.Title}");
+        if (!string.IsNullOrWhiteSpace(lab.Goal))
+            sb.AppendLine($"**Мета:** {lab.Goal}");
+        sb.AppendLine();
+        sb.AppendLine($"## Завдання {task.Number}: {task.Title}  [{new string('⭐', task.Difficulty)}]");
+        if (!string.IsNullOrWhiteSpace(task.Brief))
+            sb.AppendLine(task.Brief);
+        sb.AppendLine();
+
+        if (checks?.ExpectedOutputs.Length > 0)
+        {
+            sb.AppendLine("## Очікувані виводи (тест-кейси)");
+            foreach (var exp in checks.ExpectedOutputs.Take(6))
+                sb.AppendLine($"- `{exp}`");
+            sb.AppendLine();
+        }
+
+        var buildInfo = buildOk ? "✅ Компіляція успішна." : "❌ ПОМИЛКА КОМПІЛЯЦІЇ.";
+        var testInfo  = testsPassed.HasValue
+            ? $"Тести: {testsPassed}/{testsTotal} {(testsPassed == testsTotal ? "✅ всі пройшли" : "⚠️ не всі пройшли")}"
+            : "Автотести не запускалися.";
+        sb.AppendLine($"## Збірка і тести");
+        sb.AppendLine(buildInfo);
+        sb.AppendLine(testInfo);
+        sb.AppendLine();
+        sb.AppendLine("## Код студента (diff коміту)");
+        sb.AppendLine("```csharp");
+        sb.AppendLine(code);
+        sb.AppendLine("```");
+        sb.AppendLine();
+        sb.AppendLine("## Відповідь — ТІЛЬКИ JSON, без пояснень поза ним:");
+        sb.AppendLine("""
+{
+  "state": "pass" або "warn" або "fail",
+  "score": <ціле 0-100>,
+  "feedback": "<2-4 речення українською — конкретний аналіз, без загальних фраз>",
+  "issues": ["<конкретна проблема 1>", "<конкретна проблема 2>"]
+}
+""");
+        sb.AppendLine("Критерії:");
+        sb.AppendLine("• pass  80-100 — завдання виконано повністю, ООП-принципи дотримано");
+        sb.AppendLine("• warn  50-79  — основна логіка є, але є недоліки або необроблені випадки");
+        sb.AppendLine("• fail  0-49   — не реалізовано, не компілюється, або логіка принципово хибна");
+
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(45) };
+
+            var body = JsonSerializer.Serialize(new
+            {
+                contents = new[]
+                {
+                    new { role = "user", parts = new[] { new { text = sb.ToString() } } }
+                },
+                generationConfig = new
+                {
+                    responseMimeType = "application/json",
+                    temperature      = 0.1
+                }
+            });
+
+            var url  = $"https://generativelanguage.googleapis.com/v1beta/models/{Model}:generateContent?key={ApiKey}";
+            var resp = await http.PostAsync(url, new StringContent(body, Encoding.UTF8, "application/json"), ct);
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                var err = await resp.Content.ReadAsStringAsync(ct);
+                log.LogWarning("Gemini {Status} task {N}: {Err}", resp.StatusCode, task.Number,
+                    err.Length > 300 ? err[..300] : err);
+                return Simulate(testsPassed);
+            }
+
+            using var doc  = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+            var rawText    = doc.RootElement
+                .GetProperty("candidates")[0]
+                .GetProperty("content")
+                .GetProperty("parts")[0]
+                .GetProperty("text")
+                .GetString() ?? "{}";
+
+            using var parsed = JsonDocument.Parse(rawText);
+            var root = parsed.RootElement;
+
+            var state    = root.GetProperty("state").GetString()    ?? "fail";
+            var score    = root.GetProperty("score").GetInt32();
+            var feedback = root.GetProperty("feedback").GetString() ?? "";
+
+            if (root.TryGetProperty("issues", out var issuesEl) && issuesEl.ValueKind == JsonValueKind.Array)
+            {
+                var issues = issuesEl.EnumerateArray()
+                    .Select(x => x.GetString())
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .ToList();
+                if (issues.Count > 0)
+                    feedback += "\n\n**Зауваження:**\n" + string.Join("\n", issues.Select(i => $"• {i}"));
+            }
+
+            return new GradeResult(state, Math.Clamp(score, 0, 100), feedback, testsPassed);
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "Gemini call failed for task {N}", task.Number);
+            return Simulate(testsPassed);
+        }
+    }
+
+    // ── Checks.json loader ────────────────────────────────────────────────────
+
+    private TaskCheckInfo? LoadTaskChecks(int labNumber, int taskNumber)
+    {
+        try
+        {
+            var labsDir = Path.Combine(env.ContentRootPath, "content", "labs");
+            var labDir  = Directory.GetDirectories(labsDir, $"lab-{labNumber:D2}-*").FirstOrDefault();
+            if (labDir is null) return null;
+
+            var checksPath = Path.Combine(labDir, "checks.json");
+            if (!File.Exists(checksPath)) return null;
+
+            using var doc  = JsonDocument.Parse(File.ReadAllText(checksPath));
+            if (!doc.RootElement.TryGetProperty("tasks", out var tasksEl)) return null;
+
+            foreach (var taskEl in tasksEl.EnumerateArray())
+            {
+                if (!taskEl.TryGetProperty("n", out var nEl) || nEl.GetInt32() != taskNumber)
+                    continue;
+                if (!taskEl.TryGetProperty("cases", out var casesEl)) return null;
+
+                var expects = casesEl.EnumerateArray()
+                    .Select(c => c.TryGetProperty("expect", out var e) ? e.GetString() : null)
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .Distinct()
+                    .ToArray();
+
+                return new TaskCheckInfo(expects!);
+            }
+        }
+        catch (Exception ex)
+        {
+            log.LogDebug("checks.json load failed lab {L} task {T}: {M}", labNumber, taskNumber, ex.Message);
+        }
+        return null;
+    }
+
+    private record TaskCheckInfo(string[] ExpectedOutputs);
+
+    private record GradeResult(string State, int Score, string Feedback, int? TestCount = null);
+
     // ── Git ───────────────────────────────────────────────────────────────────
 
     private async Task<string?> PrepareRepoAsync(string rawUrl, string branch, CancellationToken ct)
@@ -150,23 +335,17 @@ public class GradingService(
             Directory.CreateDirectory(WorkRoot);
 
             if (!Directory.Exists(dir))
-            {
                 await Git(".", $"clone --depth=1 --no-single-branch {repoUrl} {dir}", ct);
-            }
             else
-            {
                 await Git(dir, "fetch --all --prune", ct);
-            }
 
-            // checkout + reset hard so stale local changes never block
             await Git(dir, $"checkout {branch}", ct);
             await Git(dir, $"reset --hard origin/{branch}", ct);
-
             return dir;
         }
         catch (Exception ex)
         {
-            log.LogWarning("Git prepare failed for {Url} / {Branch}: {Msg}", repoUrl, branch, ex.Message);
+            log.LogWarning("Git prepare failed {Url}/{Branch}: {Msg}", repoUrl, branch, ex.Message);
             return null;
         }
     }
@@ -207,7 +386,7 @@ public class GradingService(
         if (testProj is null) return [];
 
         var resultFile = Path.Combine(Path.GetTempPath(), $"ac-test-{Guid.NewGuid():N}.trx");
-        var (_, stdout, _) = await RunProcessAsync("dotnet",
+        await RunProcessAsync("dotnet",
             $"test \"{testProj}\" --logger \"trx;LogFileName={resultFile}\" --nologo --no-build", workDir, ct);
 
         return ParseTrx(resultFile);
@@ -224,8 +403,7 @@ public class GradingService(
             foreach (var unit in xml.Descendants(ns + "UnitTestResult"))
             {
                 var name    = unit.Attribute("testName")?.Value ?? "";
-                var outcome = unit.Attribute("outcome")?.Value ?? "";
-                // test name expected to contain task keyword e.g. "Patient", "Doctor"
+                var outcome = unit.Attribute("outcome")?.Value  ?? "";
                 foreach (var key in result.Keys.ToList())
                     if (name.Contains(key, StringComparison.OrdinalIgnoreCase))
                     {
@@ -259,18 +437,16 @@ public class GradingService(
     {
         if (files.Count == 0) return "(репозиторій не містить .cs файлів)";
 
-        // Extract candidate class name from task title: "Клас Patient" → "Patient"
         var words = taskTitle
             .Split(' ', StringSplitOptions.RemoveEmptyEntries)
             .Select(w => w.Trim('`'))
             .Where(w => w.Length > 2 && !IsUkrainianStopWord(w))
             .ToArray();
 
-        // Score each file by keyword matches in path
         var scored = files
             .Select(kv => (
-                Path: kv.Key,
-                Code: kv.Value,
+                Path:  kv.Key,
+                Code:  kv.Value,
                 Score: words.Sum(w => kv.Key.Contains(w, StringComparison.OrdinalIgnoreCase) ? 2 : 0)
                      + words.Sum(w => kv.Value.Contains($"class {w}", StringComparison.OrdinalIgnoreCase) ? 3 : 0)
             ))
@@ -279,7 +455,6 @@ public class GradingService(
 
         if (scored.Score == 0 && files.Count > 0)
         {
-            // No good match – return all files concatenated (truncated)
             var all = string.Join("\n\n", files
                 .OrderBy(kv => kv.Key)
                 .Select(kv => $"// {kv.Key}\n{kv.Value}")
@@ -308,78 +483,6 @@ public class GradingService(
     private static string NormalizeTaskTitle(string t) =>
         t.Split(' ').LastOrDefault(w => w.Length > 2) ?? t;
 
-    // ── Claude API ────────────────────────────────────────────────────────────
-
-    private async Task<(string State, int Score, string Feedback)> GradeWithClaudeAsync(
-        LabTask task, string code, bool buildOk,
-        int? testsPassed, int? testsTotal, CancellationToken ct)
-    {
-        if (string.IsNullOrEmpty(ApiKey))
-        {
-            log.LogDebug("No Anthropic API key — using simulation for task {N}", task.Number);
-            return Simulate();
-        }
-
-        var buildInfo = buildOk ? "Проєкт компілюється." : "ПОМИЛКА КОМПІЛЯЦІЇ: проєкт не збирається.";
-        var testInfo  = testsPassed.HasValue
-            ? $"Тести: {testsPassed}/{testsTotal} пройдено."
-            : "Тести не запускалися або тестовий проєкт відсутній.";
-
-        var prompt =
-            "Ти — автоматизований перевірник коду C# для університетського курсу ООП.\n" +
-            "Проаналізуй код студента і відповідай ТІЛЬКИ валідним JSON без markdown.\n\n" +
-            $"## Завдання {task.Number}: {task.Title}\n" +
-            $"{task.Brief ?? ""}\n\n" +
-            $"## Стан збірки\n{buildInfo}\n{testInfo}\n\n" +
-            $"## Код студента\n```csharp\n{code}\n```\n\n" +
-            "## Відповідь (JSON, без коментарів)\n" +
-            "{ \"state\": \"pass\"|\"warn\"|\"fail\", \"score\": <0-100>, \"feedback\": \"<до 3 речень українською>\" }\n\n" +
-            "Критерії:\n" +
-            "• pass  90-100 — завдання виконано повністю, принципи ООП дотримано\n" +
-            "• warn  50-89  — основна логіка є, але є недоліки або edge-case\n" +
-            "• fail  0-49   — не реалізовано, не компілюється, або логіка неправильна";
-
-        try
-        {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-            http.DefaultRequestHeaders.Add("x-api-key", ApiKey);
-            http.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
-
-            var body = JsonSerializer.Serialize(new
-            {
-                model      = Model,
-                max_tokens = 350,
-                messages   = new[] { new { role = "user", content = prompt } }
-            });
-
-            var resp = await http.PostAsync(
-                "https://api.anthropic.com/v1/messages",
-                new StringContent(body, Encoding.UTF8, "application/json"), ct);
-
-            if (!resp.IsSuccessStatusCode)
-            {
-                log.LogWarning("Claude API {Status} for task {N}", resp.StatusCode, task.Number);
-                return Simulate();
-            }
-
-            using var doc     = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
-            var rawText       = doc.RootElement.GetProperty("content")[0].GetProperty("text").GetString() ?? "{}";
-            using var parsed  = JsonDocument.Parse(rawText);
-            var root          = parsed.RootElement;
-
-            var state    = root.GetProperty("state").GetString()    ?? "fail";
-            var score    = root.GetProperty("score").GetInt32();
-            var feedback = root.GetProperty("feedback").GetString() ?? "";
-
-            return (state, Math.Clamp(score, 0, 100), feedback);
-        }
-        catch (Exception ex)
-        {
-            log.LogWarning(ex, "Claude call failed for task {N}", task.Number);
-            return Simulate();
-        }
-    }
-
     // ── Simulation fallback ───────────────────────────────────────────────────
 
     private static readonly string[] PassFb = [
@@ -398,13 +501,13 @@ public class GradingService(
         "Компіляція пройшла, але тести не пройдено через неправильну логіку.",
     ];
 
-    private static (string State, int Score, string Feedback) Simulate()
+    private static GradeResult Simulate(int? testsPassedHint = null)
     {
         var rng = new Random();
         double r = rng.NextDouble();
-        if (r < 0.60) return ("pass", 85 + rng.Next(16), PassFb[rng.Next(PassFb.Length)]);
-        if (r < 0.85) return ("warn", 55 + rng.Next(30), WarnFb[rng.Next(WarnFb.Length)]);
-        return ("fail", rng.Next(30), FailFb[rng.Next(FailFb.Length)]);
+        if (r < 0.60) return new("pass", 85 + rng.Next(16), PassFb[rng.Next(PassFb.Length)], testsPassedHint);
+        if (r < 0.85) return new("warn", 55 + rng.Next(30), WarnFb[rng.Next(WarnFb.Length)], testsPassedHint);
+        return new("fail", rng.Next(30), FailFb[rng.Next(FailFb.Length)], testsPassedHint);
     }
 
     private async Task<GradingResultDto> RunSimulatedAsync(
@@ -419,14 +522,17 @@ public class GradingService(
         int total = 0, passed = 0;
         foreach (var t in sub.LabDef.Tasks.OrderBy(x => x.Number))
         {
-            var (state, score, fb) = Simulate();
+            var result = Simulate();
             int tt = t.Difficulty * 2 + 4;
-            int tp = state == "pass" ? tt : state == "warn" ? (int)(tt * 0.65) : new Random().Next(0, tt / 3 + 1);
+            int tp = result.State == "pass" ? tt
+                   : result.State == "warn" ? (int)(tt * 0.65)
+                   : new Random().Next(0, tt / 3 + 1);
             total += tt; passed += tp;
             db.TaskResults.Add(new TaskResult
             {
                 SubmissionId = sub.Id, LabTaskId = t.Id,
-                State = state, Score = score, TestsPassed = tp, TestsTotal = tt, Feedback = fb,
+                State = result.State, Score = result.Score,
+                TestsPassed = tp, TestsTotal = tt, Feedback = result.Feedback,
             });
         }
 
@@ -471,19 +577,11 @@ public class GradingService(
 
     // ── Project file finders ──────────────────────────────────────────────────
 
-    private static string? FindProjectFile(string workDir)
-    {
-        // Prefer src/ subfolder, then root
-        foreach (var pattern in new[] { "src/**/*.csproj", "**/*.csproj" })
-        {
-            var files = Directory.GetFiles(workDir, "*.csproj", SearchOption.AllDirectories)
-                .Where(f => !f.Contains("Test") && !f.Contains("test"))
-                .OrderBy(f => f.Split(Path.DirectorySeparatorChar).Length)
-                .ToArray();
-            if (files.Length > 0) return files[0];
-        }
-        return null;
-    }
+    private static string? FindProjectFile(string workDir) =>
+        Directory.GetFiles(workDir, "*.csproj", SearchOption.AllDirectories)
+            .Where(f => !f.Contains("Test") && !f.Contains("test"))
+            .OrderBy(f => f.Split(Path.DirectorySeparatorChar).Length)
+            .FirstOrDefault();
 
     private static string? FindTestProject(string workDir) =>
         Directory.GetFiles(workDir, "*.csproj", SearchOption.AllDirectories)

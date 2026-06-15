@@ -6,7 +6,6 @@
 @inject IDialogService Dialog
 @inject AppState App
 @inject AppDbContext Db
-@inject IGitBranchService GitBranch
 @inject GitHubService GitHub
 
 <TopBar Title="@($"Lab{LabInfo.Id:D2} · {LabInfo.Title}")" Crumbs="@(new[] { "Мої лаби", $"Lab{LabInfo.Id:D2}" })" />
