@@ -1,6 +1,7 @@
 @page "/teacher/journal"
 @inject IDialogService Dialog
 @inject IDataService Data
+@inject IJSRuntime JS
 
 <TopBar Title="Журнал оцінок" Sub="Матриця оцінок по всіх лабах" />
 
@@ -42,6 +43,9 @@
             <Icon Name="grades" Size="18" Style="color:var(--acc)" />
             <h3 style="margin:0;font-size:16px;font-weight:720;letter-spacing:-0.02em">Журнал оцінок</h3>
             <span class="badge badge-grey"><span class="dot"></span>@Filtered.Count студентів</span>
+            <button class="btn btn-ghost btn-sm" style="margin-left:8px" @onclick="GeneratePdfAsync" title="Сформувати PDF поточного журналу">
+                <Icon Name="file-text" Size="15" />PDF
+            </button>
             <div style="margin-left:auto;display:flex;gap:14px;font-size:12px;color:var(--tx-3);align-items:center">
                 <span style="display:flex;align-items:center;gap:6px"><span style="width:11px;height:11px;border-radius:4px;background:rgba(118,199,173,0.2);border:1px solid rgba(118,199,173,0.4)"></span>зараховано</span>
                 <span style="display:flex;align-items:center;gap:6px"><span style="width:11px;height:11px;border-radius:4px;background:rgba(231,193,75,0.2);border:1px solid rgba(231,193,75,0.4);display:grid;place-items:center;color:var(--st-yellow)"><Icon Name="clock" Size="8" Stroke="2.4" /></span>на перевірці</span>
@@ -130,6 +134,60 @@
     private List<RosterStudent> Filtered => _allStudents.Where(s =>
         (_group == "Усі групи" || s.Group == _group) &&
         (_query == "" || (s.Last + " " + s.First).Contains(_query, StringComparison.OrdinalIgnoreCase))).ToList();
+
+    private async Task GeneratePdfAsync()
+    {
+        var rows    = Filtered;
+        var cols    = _labCols;
+
+        var filters = new List<string>();
+        if (_group != "Усі групи") filters.Add($"Група: {_group}");
+        if (!string.IsNullOrEmpty(_query)) filters.Add($"Пошук: «{_query}»");
+        if (_focusLab != 0)
+        {
+            var fl = cols.FirstOrDefault(c => c.Id == _focusLab);
+            if (fl != default) filters.Add($"Фокус: Lab{fl.Id:D2} · {fl.Title}");
+        }
+        var filterLine = filters.Count > 0 ? string.Join(" · ", filters) : "усі студенти";
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"<h1>Журнал оцінок</h1>");
+        sb.AppendLine($"<div class=\"sub\">{DateTime.Now:dd.MM.yyyy HH:mm} · {filterLine} · {rows.Count} студентів</div>");
+        sb.AppendLine("<table><thead><tr>");
+        sb.AppendLine("<th class=\"nc\">Студент</th>");
+        foreach (var c in cols)
+            sb.AppendLine($"<th title=\"{c.Title}\">L{c.Id:D2}</th>");
+        sb.AppendLine("<th>Серед.</th>");
+        sb.AppendLine("</tr></thead><tbody>");
+
+        foreach (var s in rows)
+        {
+            sb.AppendLine("<tr>");
+            sb.AppendLine($"<td class=\"nc\">{s.Last} {(s.First.Length > 0 ? s.First[0] + "." : "")} <span style=\"color:#888;font-size:9.5px\">{s.Group}</span></td>");
+            foreach (var cell in s.Labs)
+            {
+                var (text, css) = cell.Kind switch
+                {
+                    "done"     => (cell.Final?.ToString() ?? cell.Auto?.ToString() ?? "✓", "d"),
+                    "review"   => (cell.Auto?.ToString() ?? "…", "r"),
+                    "rejected" => (cell.Auto?.ToString() ?? "×", "rej"),
+                    _          => ("—", "lo"),
+                };
+                sb.AppendLine($"<td class=\"{css}\">{text}</td>");
+            }
+            sb.AppendLine($"<td class=\"av\">{s.Avg?.ToString() ?? "—"}</td>");
+            sb.AppendLine("</tr>");
+        }
+
+        sb.AppendLine("</tbody></table>");
+        sb.AppendLine("<div class=\"leg\">" +
+            "<b>Легенда:</b> жирний = зараховано (фінальна оцінка) &nbsp;·&nbsp; " +
+            "курсив = на перевірці (авто-оцінка) &nbsp;·&nbsp; " +
+            "закреслений = відхилено &nbsp;·&nbsp; — = не здано" +
+            "</div>");
+
+        await JS.InvokeVoidAsync("printJournal", sb.ToString());
+    }
 
     private async Task OpenGrade(int studentId, int labId)
     {
