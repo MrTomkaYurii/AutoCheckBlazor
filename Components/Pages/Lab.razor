@@ -87,19 +87,6 @@
                 </button>
             }
 
-            @* summary mini-card *@
-            <div class="glass" style="padding:14px 15px;margin-top:4px">
-                <div style="font-size:12px;color:var(--tx-3);margin-bottom:10px;font-weight:600">Підсумок тестів</div>
-                @foreach (var t in LabInfo.Tasks)
-                {
-                    var v = t.View();
-                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12.5px">
-                        <span class="mono faint" style="width:42px">task@(t.N)</span>
-                        <div class="prog" style="flex:1;height:6px"><span style="width:@(100.0 * t.TestsPassed / t.TestsTotal)%;background:@v.Tone;box-shadow:none"></span></div>
-                        <span class="mono tnum" style="color:var(--tx-2);width:34px;text-align:right">@t.TestsPassed/@t.TestsTotal</span>
-                    </div>
-                }
-            </div>
         </div>
 
         @* RIGHT — results *@
@@ -138,7 +125,6 @@
                 <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">
                     <Icon Name="spark" Size="17" Style="@($"color:{tv.Tone}")" />
                     <h4 style="margin:0;font-size:14px;font-weight:700;letter-spacing:-0.01em">Фідбек перевірки</h4>
-                    <span class="mono" style="margin-left:auto;font-size:12px;color:var(--tx-3)">@task.TestsPassed/@task.TestsTotal тестів</span>
                 </div>
                 @if (fbDone.Length > 0 || fbIssues.Length > 0)
                 {
@@ -513,7 +499,6 @@
                         @if (delta > 0) { <span style="color:var(--st-green)">▲ +@delta</span> }
                         else if (delta < 0) { <span style="color:var(--st-red)">▼ @delta</span> }
                     </p>
-                    <p style="margin:0 0 18px;font-size:12.5px;color:var(--tx-3)">Тестів пройдено: @(_result?.TasksPassed ?? 0) / @(_result?.TasksTotal ?? 0)</p>
                     <button class="btn btn-primary btn-block" @onclick="CloseResubmit">Переглянути результати</button>
                 </div>
             }

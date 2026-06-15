@@ -10,10 +10,9 @@ namespace AutoCheck.Services;
 /// <summary>
 /// Auto-grading engine:
 ///   0. pre-flight: Gemini reachability check
-///   1. git clone / pull student repo onto the branch defined in LabDef
-///   2. dotnet build → compile check
-///   3. dotnet test  → per-task test pass count (if test project exists)
-///   4. Gemini API   → per-task code review (parallel) → state / score / feedback
+///   1. git clone / pull student repo
+///   2. extract code per task (commit diff or file heuristic)
+///   3. Gemini API   → per-task code review (parallel) → state / score / feedback
 /// </summary>
 public class GradingService(
     AppDbContext db,
@@ -71,20 +70,8 @@ public class GradingService(
             ?? throw new InvalidOperationException(
                 "Не вдалося отримати репозиторій. Перевірте URL та права доступу.");
 
-        // ── 2. Build ─────────────────────────────────────────────────────────
-        progress?.Report("Компіляція проєкту…");
-        var buildOk = await DotnetBuildAsync(workDir, ct);
-
-        // ── 3. Test ──────────────────────────────────────────────────────────
-        Dictionary<string, (int Passed, int Total)> testResults = [];
-        if (buildOk)
-        {
-            progress?.Report("Запуск тестів…");
-            testResults = await DotnetTestAsync(workDir, ct);
-        }
-
-        // ── 4. Fetch code/diff for each task (parallel git reads) ─────────────
-        progress?.Report("Підготовка даних для аналізу…");
+        // ── 2. Fetch code/diff for each task (parallel git reads) ────────────
+        progress?.Report("Отримання коду завдань…");
         var codeFiles    = GetCSharpFiles(workDir);
         var orderedTasks = lab.Tasks.OrderBy(t => t.Number).ToList();
 
@@ -98,48 +85,38 @@ public class GradingService(
             return (Task: taskDef, Code: code, Checks: checks);
         }));
 
-        // ── 5. Grade all tasks in parallel via Gemini ─────────────────────────
+        // ── 3. Grade all tasks in parallel via Gemini ─────────────────────────
         progress?.Report("Аналіз коду через Gemini…");
 
         var gradingTasks = taskInputs.Select(async input =>
         {
-            var tests = testResults.TryGetValue(NormalizeTaskTitle(input.Task.Title), out var tr)
-                ? tr : ((int?)null, (int?)null);
-            var result = await GradeWithGeminiAsync(
-                lab, input.Task, input.Code, buildOk,
-                tests.Item1, tests.Item2, input.Checks, ct);
+            var result = await GradeWithGeminiAsync(lab, input.Task, input.Code, input.Checks, ct);
             return (input.Task, result);
         });
 
         var graded = await Task.WhenAll(gradingTasks);
 
-        // ── 6. Persist results ────────────────────────────────────────────────
+        // ── 4. Persist results ────────────────────────────────────────────────
         db.TaskResults.RemoveRange(sub.TaskResults);
         await db.SaveChangesAsync(ct);
 
-        int totalTests = 0, passedTests = 0;
         foreach (var (taskDef, result) in graded)
         {
-            int taskTotal  = taskDef.Difficulty * 2 + 4;
-            int taskPassed = result.TestCount ?? (int)Math.Round(taskTotal * result.Score / 100.0);
-            totalTests  += taskTotal;
-            passedTests += Math.Min(taskPassed, taskTotal);
-
             db.TaskResults.Add(new TaskResult
             {
                 SubmissionId = sub.Id,
                 LabTaskId    = taskDef.Id,
                 State        = result.State,
                 Score        = result.Score,
-                TestsPassed  = Math.Min(taskPassed, taskTotal),
-                TestsTotal   = taskTotal,
+                TestsPassed  = 0,
+                TestsTotal   = 0,
                 Feedback     = JsonSerializer.Serialize(new { done = result.Done, issues = result.Issues, analysis = result.Analysis }),
             });
         }
 
-        // ── 7. Finalise submission ────────────────────────────────────────────
-        int autoScore = lab.Tasks.Count > 0
-            ? (int)Math.Round(100.0 * passedTests / Math.Max(totalTests, 1))
+        // ── 5. Finalise submission ────────────────────────────────────────────
+        int autoScore = graded.Length > 0
+            ? (int)Math.Round(graded.Average(g => (double)g.result.Score))
             : 0;
 
         sub.AutoScore    = autoScore;
@@ -155,14 +132,13 @@ public class GradingService(
             $"Ваша авто-оцінка: {autoScore}/100. Очікуйте захист.", "grading");
 
         progress?.Report("Готово!");
-        return new GradingResultDto(sub.Id, autoScore, passedTests, totalTests);
+        return new GradingResultDto(sub.Id, autoScore, 0, 0);
     }
 
     // ── Gemini API ────────────────────────────────────────────────────────────
 
     private async Task<GradeResult> GradeWithGeminiAsync(
-        LabDef lab, LabTask task, string code, bool buildOk,
-        int? testsPassed, int? testsTotal,
+        LabDef lab, LabTask task, string code,
         TaskCheckInfo? checks, CancellationToken ct)
     {
         var sb = new StringBuilder();
@@ -186,14 +162,6 @@ public class GradingService(
             sb.AppendLine();
         }
 
-        var buildInfo = buildOk ? "✅ Компіляція успішна." : "❌ ПОМИЛКА КОМПІЛЯЦІЇ.";
-        var testInfo  = testsPassed.HasValue
-            ? $"Тести: {testsPassed}/{testsTotal} {(testsPassed == testsTotal ? "✅ всі пройшли" : "⚠️ не всі пройшли")}"
-            : "Автотести не запускалися.";
-        sb.AppendLine($"## Збірка і тести");
-        sb.AppendLine(buildInfo);
-        sb.AppendLine(testInfo);
-        sb.AppendLine();
         sb.AppendLine("## Код студента (diff коміту)");
         sb.AppendLine("```csharp");
         sb.AppendLine(code);
@@ -267,7 +235,7 @@ public class GradingService(
             var issues   = ParseArr(root, "issues");
             var analysis = root.TryGetProperty("analysis", out var an) ? an.GetString() ?? "" : "";
 
-            return new GradeResult(state, Math.Clamp(score, 0, 100), done, issues, analysis, testsPassed);
+            return new GradeResult(state, Math.Clamp(score, 0, 100), done, issues, analysis);
         }
         catch (Exception ex)
         {
@@ -316,7 +284,7 @@ public class GradingService(
 
     private record TaskCheckInfo(string[] ExpectedOutputs);
 
-    private record GradeResult(string State, int Score, string[] Done, string[] Issues, string Analysis, int? TestCount = null);
+    private record GradeResult(string State, int Score, string[] Done, string[] Issues, string Analysis);
 
     // ── Git ───────────────────────────────────────────────────────────────────
 
@@ -360,57 +328,6 @@ public class GradingService(
         var (exit, _, stderr) = await RunProcessAsync("git", args, workDir, ct);
         if (exit != 0)
             throw new Exception($"git {args.Split(' ')[0]} failed: {stderr}");
-    }
-
-    // ── dotnet build ──────────────────────────────────────────────────────────
-
-    private async Task<bool> DotnetBuildAsync(string workDir, CancellationToken ct)
-    {
-        var csproj = FindProjectFile(workDir);
-        if (csproj is null) return false;
-
-        var (exit, _, _) = await RunProcessAsync("dotnet",
-            $"build \"{csproj}\" -c Debug --nologo -clp:ErrorsOnly", workDir, ct);
-        return exit == 0;
-    }
-
-    // ── dotnet test ───────────────────────────────────────────────────────────
-
-    private async Task<Dictionary<string, (int Passed, int Total)>> DotnetTestAsync(
-        string workDir, CancellationToken ct)
-    {
-        var testProj = FindTestProject(workDir);
-        if (testProj is null) return [];
-
-        var resultFile = Path.Combine(Path.GetTempPath(), $"ac-test-{Guid.NewGuid():N}.trx");
-        await RunProcessAsync("dotnet",
-            $"test \"{testProj}\" --logger \"trx;LogFileName={resultFile}\" --nologo --no-build", workDir, ct);
-
-        return ParseTrx(resultFile);
-    }
-
-    private static Dictionary<string, (int Passed, int Total)> ParseTrx(string path)
-    {
-        var result = new Dictionary<string, (int Passed, int Total)>(StringComparer.OrdinalIgnoreCase);
-        if (!File.Exists(path)) return result;
-        try
-        {
-            var xml = System.Xml.Linq.XDocument.Load(path);
-            var ns  = xml.Root?.Name.Namespace ?? "";
-            foreach (var unit in xml.Descendants(ns + "UnitTestResult"))
-            {
-                var name    = unit.Attribute("testName")?.Value ?? "";
-                var outcome = unit.Attribute("outcome")?.Value  ?? "";
-                foreach (var key in result.Keys.ToList())
-                    if (name.Contains(key, StringComparison.OrdinalIgnoreCase))
-                    {
-                        var (p, t) = result[key];
-                        result[key] = (p + (outcome == "Passed" ? 1 : 0), t + 1);
-                    }
-            }
-        }
-        catch { /* non-critical */ }
-        return result;
     }
 
     // ── Code discovery ────────────────────────────────────────────────────────
@@ -477,9 +394,6 @@ public class GradingService(
     private static bool IsUkrainianStopWord(string w) =>
         w is "Клас" or "Метод" or "Клас:" or "Реалізуй" or "Визнач" or "Додай" or "Зростаючий";
 
-    private static string NormalizeTaskTitle(string t) =>
-        t.Split(' ').LastOrDefault(w => w.Length > 2) ?? t;
-
     // ── Gemini health check ───────────────────────────────────────────────────
 
     private async Task CheckGeminiAsync(CancellationToken ct)
@@ -532,15 +446,4 @@ public class GradingService(
         return (proc.ExitCode, stdout, stderr);
     }
 
-    // ── Project file finders ──────────────────────────────────────────────────
-
-    private static string? FindProjectFile(string workDir) =>
-        Directory.GetFiles(workDir, "*.csproj", SearchOption.AllDirectories)
-            .Where(f => !f.Contains("Test") && !f.Contains("test"))
-            .OrderBy(f => f.Split(Path.DirectorySeparatorChar).Length)
-            .FirstOrDefault();
-
-    private static string? FindTestProject(string workDir) =>
-        Directory.GetFiles(workDir, "*.csproj", SearchOption.AllDirectories)
-            .FirstOrDefault(f => f.Contains("Test", StringComparison.OrdinalIgnoreCase));
 }

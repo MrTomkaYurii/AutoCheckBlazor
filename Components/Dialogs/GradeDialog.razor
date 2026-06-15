@@ -42,7 +42,6 @@
                                 </div>
                                 <div style="text-align:right;flex:none">
                                     <span class="mono tnum" style="font-size:14px;font-weight:700;color:@tone">@tr.Score</span>
-                                    <div class="mono" style="font-size:10.5px;color:var(--tx-faint)">@tr.TestsPassed/@tr.TestsTotal тестів</div>
                                 </div>
                             </div>
                         }
@@ -131,7 +130,7 @@
     [Parameter] public int StudentId { get; set; }
     [Parameter] public int LabId { get; set; }
 
-    private record TaskResultView(string TaskTitle, string State, int Score, int TestsPassed, int TestsTotal, string? Feedback);
+    private record TaskResultView(string TaskTitle, string State, int Score, string? Feedback);
 
     private string _name = "", _initials = "", _group = "", _labTitle = "";
     private int _auto;
@@ -172,8 +171,7 @@
         _taskResults = sub.TaskResults
             .OrderBy(tr => tr.LabTask.Number)
             .Select(tr => new TaskResultView(
-                tr.LabTask.Title, tr.State, tr.Score,
-                tr.TestsPassed, tr.TestsTotal, tr.Feedback))
+                tr.LabTask.Title, tr.State, tr.Score, tr.Feedback))
             .ToList();
     }
 
