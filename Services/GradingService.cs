@@ -91,7 +91,7 @@ public class GradingService(
         var gradingTasks = taskInputs.Select(async input =>
         {
             var result = await GradeWithGeminiAsync(lab, input.Task, input.Code, input.Checks, ct);
-            return (input.Task, result);
+            return (input.Task, input.Code, result);
         });
 
         var graded = await Task.WhenAll(gradingTasks);
@@ -100,9 +100,9 @@ public class GradingService(
         db.TaskResults.RemoveRange(sub.TaskResults);
         await db.SaveChangesAsync(ct);
 
-        foreach (var (taskDef, result) in graded)
+        foreach (var (taskDef, code, result) in graded)
         {
-            db.TaskResults.Add(new TaskResult
+            var tr = new TaskResult
             {
                 SubmissionId = sub.Id,
                 LabTaskId    = taskDef.Id,
@@ -111,7 +111,14 @@ public class GradingService(
                 TestsPassed  = 0,
                 TestsTotal   = 0,
                 Feedback     = JsonSerializer.Serialize(new { done = result.Done, issues = result.Issues, analysis = result.Analysis }),
-            });
+            };
+            var diffLines = ParseDiff(code);
+            for (int i = 0; i < diffLines.Count; i++)
+            {
+                var (dtype, n1, n2, text) = diffLines[i];
+                tr.DiffLines.Add(new DiffEntry { OrderIndex = i, Type = dtype, N1 = n1, N2 = n2, Text = text });
+            }
+            db.TaskResults.Add(tr);
         }
 
         // ── 5. Finalise submission ────────────────────────────────────────────
@@ -393,6 +400,83 @@ public class GradingService(
 
     private static bool IsUkrainianStopWord(string w) =>
         w is "Клас" or "Метод" or "Клас:" or "Реалізуй" or "Визнач" or "Додай" or "Зростаючий";
+
+    // ── Diff parser ───────────────────────────────────────────────────────────
+
+    private static List<(string Type, int? N1, int? N2, string Text)> ParseDiff(string raw)
+    {
+        var result = new List<(string, int?, int?, string)>();
+        if (string.IsNullOrWhiteSpace(raw)) return result;
+
+        bool isDiff = raw.TrimStart().StartsWith("commit ") ||
+                      raw.TrimStart().StartsWith("diff --git");
+
+        if (!isDiff)
+        {
+            int n = 1;
+            foreach (var line in raw.Split('\n').Take(600))
+                result.Add(("ctx", n, n++, line.TrimEnd('\r')));
+            return result;
+        }
+
+        int oldLine = 0, newLine = 0;
+        bool inHunk = false;
+
+        foreach (var rawLine in raw.Split('\n').Take(1200))
+        {
+            var line = rawLine.TrimEnd('\r');
+
+            if (line.StartsWith("diff --git") || line.StartsWith("index ") ||
+                line.StartsWith("--- ") || line.StartsWith("+++ ") ||
+                line.StartsWith("Binary "))
+            {
+                result.Add(("hdr", null, null, line));
+                inHunk = false;
+                continue;
+            }
+            if (line.StartsWith("commit ") || line.StartsWith("Author:") ||
+                line.StartsWith("Date:") || line.StartsWith("Merge:") ||
+                (line.StartsWith("    ") && !inHunk))
+            {
+                result.Add(("hdr", null, null, line));
+                continue;
+            }
+            if (line.StartsWith("@@"))
+            {
+                var parts = line.Split(' ');
+                foreach (var p in parts)
+                {
+                    if (p.StartsWith("-") && p.Length > 1 && !p.StartsWith("---"))
+                    { int.TryParse(p[1..].Split(',')[0], out oldLine); }
+                    else if (p.StartsWith("+") && p.Length > 1 && !p.StartsWith("+++"))
+                    { int.TryParse(p[1..].Split(',')[0], out newLine); }
+                }
+                inHunk = true;
+                result.Add(("hdr", null, null, line));
+                continue;
+            }
+            if (!inHunk) continue;
+
+            if (line.StartsWith("+"))
+            {
+                result.Add(("add", null, newLine, line[1..]));
+                newLine++;
+            }
+            else if (line.StartsWith("-"))
+            {
+                result.Add(("del", oldLine, null, line[1..]));
+                oldLine++;
+            }
+            else if (line.StartsWith(" ") || line.Length == 0)
+            {
+                result.Add(("ctx", oldLine, newLine, line.Length > 0 ? line[1..] : ""));
+                oldLine++;
+                newLine++;
+            }
+        }
+
+        return result;
+    }
 
     // ── Gemini health check ───────────────────────────────────────────────────
 
