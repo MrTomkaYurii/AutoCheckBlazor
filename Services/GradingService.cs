@@ -493,17 +493,17 @@ public class GradingService(
             if (!resp.IsSuccessStatusCode)
             {
                 var err = await resp.Content.ReadAsStringAsync(ct);
-                log.LogWarning("Gemini health check failed {Status}: {Err}", resp.StatusCode, err.Length > 200 ? err[..200] : err);
+                var snippet = err.Length > 300 ? err[..300] : err;
+                log.LogWarning("Gemini health check failed {Status}: {Err}", resp.StatusCode, snippet);
                 throw new InvalidOperationException(
-                    "Система перевірки тимчасово недоступна. Спробуйте пізніше або зверніться до викладача.");
+                    $"Gemini API: {(int)resp.StatusCode} {resp.StatusCode}. {snippet}");
             }
         }
         catch (InvalidOperationException) { throw; }
         catch (Exception ex)
         {
             log.LogWarning(ex, "Gemini health check exception");
-            throw new InvalidOperationException(
-                "Система перевірки тимчасово недоступна. Спробуйте пізніше або зверніться до викладача.");
+            throw new InvalidOperationException($"Не вдалося підключитись до Gemini: {ex.Message}");
         }
     }
 
