@@ -115,9 +115,9 @@
                 Db.Students.Add(s);
                 await Db.SaveChangesAsync();
                 // create locked submissions for all labs
-                var labs = await Db.Labs.Select(l => l.Id).ToListAsync();
-                foreach (var lid in labs)
-                    Db.Submissions.Add(new Submission { StudentId = s.Id, LabDefId = lid, Status = (int)LabStatus.Locked, AttemptsMax = 3 });
+                var labs = await Db.Labs.Select(l => new { l.Id, l.AttemptsMax }).ToListAsync();
+                foreach (var lab in labs)
+                    Db.Submissions.Add(new Submission { StudentId = s.Id, LabDefId = lab.Id, Status = (int)LabStatus.Locked, AttemptsMax = lab.AttemptsMax });
                 await Db.SaveChangesAsync();
             }
             else

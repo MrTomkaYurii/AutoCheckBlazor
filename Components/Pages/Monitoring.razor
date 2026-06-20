@@ -1,18 +1,51 @@
 @page "/teacher/monitoring"
 @inject AppDbContext Db
 @inject IDataService DataSvc
+@inject ICommentService CommentSvc
+@inject IDialogService Dialog
+@inject NavigationManager Nav
 
 <TopBar Title="Моніторинг" Sub="Детальна аналітика курсу" />
 
 <div class="screen-anim" style="padding:0 34px 40px;position:relative;z-index:1">
 
     @* Stat strip *@
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px">
         <TStat Icon="users"   Tone="var(--acc)"       Value="@_stats.Students.ToString()"     Label="Студентів" />
         <TStat Icon="upload"  Tone="var(--st-blue)"   Value="@_stats.Submissions.ToString()"  Label="Здач всього" />
         <TStat Icon="target"  Tone="var(--st-green)"  Value="@($"{_stats.PassRate}%")"         Label="Успішність" />
         <TStat Icon="clock"   Tone="var(--st-yellow)" Value="@_stats.PendingReview.ToString()" Label="Очікують захисту" />
     </div>
+
+    @* Lab activity *@
+    <section class="glass" style="padding:20px 24px;margin-bottom:18px">
+        <div style="display:flex;align-items:center;gap:11px;margin-bottom:18px">
+            <Icon Name="grades" Size="18" Style="color:var(--acc)" />
+            <h3 style="margin:0;font-size:16px;font-weight:720;letter-spacing:-0.02em">Активність по лабах</h3>
+            <button class="btn btn-ghost btn-sm" style="margin-left:auto" @onclick="@(() => Nav.NavigateTo("/teacher/labs"))">Керувати лабами<Icon Name="settings" Size="15" /></button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:13px 48px">
+            @foreach (var l in _labStats)
+            {
+                var pct = l.Total > 0 ? (int)Math.Round(100.0 * l.Submitted / l.Total) : 0;
+                var fill = pct >= 70 ? "linear-gradient(90deg,var(--acc),var(--acc-bright))" : pct >= 40 ? "linear-gradient(90deg,#c9a52f,var(--st-yellow))" : "linear-gradient(90deg,#cf6650,var(--st-red))";
+                <div style="display:flex;align-items:center;gap:12px">
+                    <span class="mono" style="width:30px;font-size:12px;color:var(--tx-3);font-weight:600">@l.Short</span>
+                    <div style="flex:1;min-width:0">
+                        <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+                            <span style="font-size:12.5px;color:var(--tx-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">@l.Title</span>
+                            <span class="mono tnum" style="font-size:12px;color:var(--tx-3)">@l.Submitted/@l.Total</span>
+                        </div>
+                        <div class="prog" style="height:6px"><span style="width:@pct%;background:@fill;box-shadow:none"></span></div>
+                    </div>
+                    @if (l.Avg is not null)
+                    {
+                        <span class="mono tnum" style="width:28px;text-align:right;font-size:12.5px;font-weight:700;color:var(--tx-2)">@l.Avg</span>
+                    }
+                </div>
+            }
+        </div>
+    </section>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start;margin-bottom:18px">
 
@@ -109,13 +142,85 @@
             }
         </section>
     </div>
+
+    @* ── Журнал переписки ────────────────────────────────────────────────────── *@
+    <section class="glass" style="padding:0;overflow:hidden;margin-top:18px">
+        <div style="display:flex;align-items:center;gap:11px;padding:18px 22px;border-bottom:1px solid var(--line)">
+            <Icon Name="spark" Size="18" Style="color:var(--acc)" />
+            <h3 style="margin:0;font-size:16px;font-weight:720;letter-spacing:-0.02em">Журнал переписки</h3>
+            @{
+                var needReply = _threads.Count(t => t.NeedsReply);
+                var totalThreads = _threads.Count;
+            }
+            @if (needReply > 0)
+            {
+                <span class="badge badge-yellow"><span class="dot pulse"></span>@needReply потребують відповіді</span>
+            }
+            <span class="badge badge-grey" style="margin-left:@(needReply > 0 ? "2px" : "auto")">@totalThreads діалогів</span>
+            @if (needReply > 0) { <span style="margin-left:auto"></span> }
+        </div>
+
+        @if (_threads.Count == 0)
+        {
+            <div style="padding:40px;text-align:center;color:var(--tx-faint);font-size:13.5px">
+                Переписок поки немає
+            </div>
+        }
+        else
+        {
+            @for (int i = 0; i < _threads.Count; i++)
+            {
+                var t    = _threads[i];
+                var last = i == _threads.Count - 1;
+                var roleIcon  = t.LastAuthorRole == "teacher" ? "var(--acc)" : "var(--st-yellow)";
+                var roleLabel = t.LastAuthorRole == "teacher" ? "Викладач" : "Студент";
+                <div class="grow" @onclick="@(() => OpenThread(t))"
+                     style="display:flex;align-items:center;gap:14px;padding:14px 22px;cursor:pointer;border-bottom:@(last ? "none" : "1px solid var(--line)");background:@(t.NeedsReply ? "rgba(231,193,75,0.03)" : "transparent")">
+
+                    @* Avatar with unread dot *@
+                    <div style="position:relative;flex:none">
+                        <div style="@SmAvatar">@t.Initials</div>
+                        @if (t.NeedsReply)
+                        {
+                            <span style="position:absolute;top:-3px;right:-3px;width:9px;height:9px;border-radius:50%;background:var(--st-yellow);border:2px solid var(--bg-2);box-shadow:0 0 6px var(--st-yellow)"></span>
+                        }
+                    </div>
+
+                    @* Info *@
+                    <div style="min-width:0;flex:1">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                            <span style="font-size:14px;font-weight:@(t.NeedsReply ? "680" : "600");color:var(--tx-1)">@t.StudentName</span>
+                            <span style="font-size:11px;color:var(--tx-faint)">@t.Group</span>
+                            <span class="mono" style="font-size:11.5px;color:var(--acc);background:var(--acc-dim);padding:2px 7px;border-radius:5px;border:1px solid var(--glass-border)">@t.LabShort</span>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:6px">
+                            <span style="font-size:11.5px;font-weight:600;color:@roleIcon">@roleLabel:</span>
+                            <span style="font-size:12.5px;color:var(--tx-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:460px">@t.LastPreview</span>
+                        </div>
+                    </div>
+
+                    @* Meta *@
+                    <div style="flex:none;text-align:right;min-width:80px">
+                        <div style="font-size:11.5px;color:var(--tx-faint);margin-bottom:4px">@FormatWhen(t.LastAt)</div>
+                        <span class="badge badge-grey" style="font-size:10.5px">@t.TotalComments повід.</span>
+                    </div>
+
+                    <button class="btn btn-outline btn-sm" style="flex:none" @onclick:stopPropagation @onclick="@(() => OpenThread(t))">
+                        @(t.NeedsReply ? "Відповісти" : "Переглянути")
+                    </button>
+                </div>
+            }
+        }
+    </section>
 </div>
 
 @code {
     private TeacherStats _stats = new();
     private List<RosterStudent> _topStudents = [];
     private List<RosterStudent> _problematic = [];
-    private List<ReviewItem> _recent = [];
+    private List<ReviewItem>    _recent = [];
+    private List<LabStat>       _labStats = [];
+    private List<CommentThread> _threads = [];
     private int _totalFinals;
     private List<int> _finals = [];
 
@@ -127,10 +232,37 @@
         var roster = await DataSvc.GetRosterAsync();
         _topStudents = roster.Where(s => s.Avg.HasValue).OrderByDescending(s => s.Avg).Take(5).ToList();
         _problematic = roster.Where(s => s.Labs.Any(c => c.Kind == "rejected")).OrderByDescending(s => s.Labs.Count(c => c.Kind == "rejected")).Take(5).ToList();
-        _recent = await DataSvc.GetReviewQueueAsync();
+        _recent   = await DataSvc.GetReviewQueueAsync();
+        _labStats = await DataSvc.GetLabStatsAsync();
+        _threads  = await CommentSvc.GetAllThreadsAsync();
 
-        _finals = await Db.Submissions.Where(s => s.FinalScore.HasValue).Select(s => s.FinalScore!.Value).ToListAsync();
+        _finals      = await Db.Submissions.Where(s => s.FinalScore.HasValue).Select(s => s.FinalScore!.Value).ToListAsync();
         _totalFinals = _finals.Count;
+    }
+
+    private async Task OpenThread(CommentThread t)
+    {
+        var p = new DialogParameters
+        {
+            ["SubmissionId"] = t.SubmissionId,
+            ["LabTitle"]     = t.LabTitle,
+            ["StudentName"]  = t.StudentName,
+            ["CanDelete"]    = true,
+        };
+        var opt = new DialogOptions { BackdropClick = true, NoHeader = true };
+        var dlg = await Dialog.ShowAsync<AutoCheck.Components.Dialogs.CommentDialog>("", p, opt);
+        await dlg.Result;
+        _threads = await CommentSvc.GetAllThreadsAsync();
+        StateHasChanged();
+    }
+
+    private static string FormatWhen(DateTime dt)
+    {
+        var diff = DateTime.UtcNow - dt;
+        if (diff.TotalMinutes < 2)  return "щойно";
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes} хв тому";
+        if (diff.TotalHours   < 24) return $"{(int)diff.TotalHours} год тому";
+        return dt.ToLocalTime().ToString("dd.MM HH:mm");
     }
 
     private List<(string Label, int Count, string Color)> GetBands() =>

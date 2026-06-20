@@ -30,7 +30,7 @@ public class LabManagementService(AppDbContext db, IWebHostEnvironment env) : IL
         // Create locked submissions for all existing students
         var studentIds = await db.Students.Select(s => s.Id).ToListAsync();
         foreach (var sid in studentIds)
-            db.Submissions.Add(new Submission { StudentId = sid, LabDefId = lab.Id, Status = (int)LabStatus.Locked, AttemptsMax = 3 });
+            db.Submissions.Add(new Submission { StudentId = sid, LabDefId = lab.Id, Status = (int)LabStatus.Locked, AttemptsMax = lab.AttemptsMax });
         await db.SaveChangesAsync();
         return lab;
     }
@@ -157,7 +157,7 @@ public class LabManagementService(AppDbContext db, IWebHostEnvironment env) : IL
                 await db.SaveChangesAsync();
 
                 foreach (var sid in studentIds)
-                    db.Submissions.Add(new Submission { StudentId = sid, LabDefId = existing.Id, Status = (int)LabStatus.Locked, AttemptsMax = 3 });
+                    db.Submissions.Add(new Submission { StudentId = sid, LabDefId = existing.Id, Status = (int)LabStatus.Locked, AttemptsMax = existing.AttemptsMax });
             }
 
             await db.SaveChangesAsync();

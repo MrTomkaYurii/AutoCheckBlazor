@@ -9,6 +9,13 @@
     [Parameter] public string Style { get; set; } = "";
 
     private double _w = 0;
+    private bool _ready;
+
+    protected override void OnParametersSet()
+    {
+        if (_ready)
+            _w = Value;
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -16,6 +23,7 @@
         {
             await Task.Delay(60);
             _w = Value;
+            _ready = true;
             StateHasChanged();
         }
     }

@@ -115,8 +115,11 @@ builder.Services.AddScoped<ILabManagementService,  LabManagementService>();
 builder.Services.AddScoped<IGradingService,        GradingService>();
 builder.Services.AddScoped<INotificationService,   NotificationService>();
 builder.Services.AddScoped<ICommentService,        CommentService>();
+builder.Services.AddSingleton<GeminiQuotaService>();
+builder.Services.AddSingleton<TeacherNotificationService>();
 builder.Services.AddScoped<AppState>();
 builder.Services.AddScoped<GitHubService>();
+builder.Services.AddScoped<KeycloakAdminService>();
 builder.Services.AddHttpClient("github");
 
 // ── Build ─────────────────────────────────────────────────────────────────────

@@ -7,6 +7,7 @@
 @inject AppState App
 @inject AppDbContext Db
 @inject GitHubService GitHub
+@inject GeminiQuotaService Quota
 
 <TopBar Title="@($"Lab{LabInfo.Id:D2} · {LabInfo.Title}")" Crumbs="@(new[] { "Мої лаби", $"Lab{LabInfo.Id:D2}" })" />
 
@@ -31,11 +32,25 @@
                             @(LabInfo.IsOverdue ? "Дедлайн минув · " : "Здати до ")@dl.ToString("dd.MM.yyyy HH:mm")
                         </span>
                     }
-                    <span style="display:flex;align-items:center;gap:6px"><Icon Name="refresh" Size="14" />Спроба @LabInfo.AttemptsUsed з @LabInfo.AttemptsMax</span>
+                    @{ var _attLeft = LabInfo.AttemptsMax - LabInfo.AttemptsUsed; }
+                    <span style="display:flex;align-items:center;gap:6px;color:@(_attLeft <= 0 ? "var(--st-red)" : _attLeft == 1 ? "var(--st-yellow)" : "inherit")">
+                        <Icon Name="refresh" Size="14" />
+                        Спроба @LabInfo.AttemptsUsed з @LabInfo.AttemptsMax
+                        @if (_attLeft <= 0) { <span style="font-weight:700">(вичерпано)</span> }
+                    </span>
                     @if (!string.IsNullOrEmpty(App.Student.Github))
                     {
                         <span style="display:flex;align-items:center;gap:6px"><Icon Name="github" Size="14" />@App.Student.Github</span>
                     }
+                    @{
+                        var _qOk    = Quota.Remaining > 0;
+                        var _qClr   = _qOk ? "var(--st-green)" : "var(--st-red)";
+                        var _qLabel = _qOk ? "Перевірка доступна" : "Перевірка недоступна";
+                    }
+                    <span style="display:flex;align-items:center;gap:6px;color:@_qClr">
+                        <span style="width:7px;height:7px;border-radius:50%;background:@_qClr;flex:none;@(_qOk ? "box-shadow:0 0 5px var(--st-green)44" : "")"></span>
+                        @_qLabel
+                    </span>
                 </div>
             </div>
         </div>
@@ -49,6 +64,10 @@
                 @if (LabInfo.IsOverdue)
                 {
                     <button class="btn btn-ghost btn-sm" disabled style="opacity:0.45;color:var(--st-red)"><Icon Name="lock" Size="15" />Дедлайн минув</button>
+                }
+                else if (LabInfo.AttemptsUsed >= LabInfo.AttemptsMax)
+                {
+                    <button class="btn btn-ghost btn-sm" disabled style="opacity:0.45;color:var(--st-red)"><Icon Name="lock" Size="15" />Спроби вичерпано</button>
                 }
                 else
                 {
@@ -122,9 +141,19 @@
 
             var (fbDone, fbIssues, fbAnalysis) = ParseFeedback(task.Feedback);
             <section class="glass" style="padding:20px 24px;border-color:@(tv.Tone)33">
-                <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">
-                    <Icon Name="spark" Size="17" Style="@($"color:{tv.Tone}")" />
-                    <h4 style="margin:0;font-size:14px;font-weight:700;letter-spacing:-0.01em">Фідбек перевірки</h4>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:9px">
+                        <Icon Name="spark" Size="17" Style="@($"color:{tv.Tone}")" />
+                        <h4 style="margin:0;font-size:14px;font-weight:700;letter-spacing:-0.01em">Фідбек перевірки</h4>
+                    </div>
+                    @if (fbDone.Length + fbIssues.Length > 0)
+                    {
+                        <span style="font-size:12px;color:var(--tx-3)">
+                            <span style="color:var(--st-green)">@fbDone.Length виконано</span>
+                            @if (fbIssues.Length > 0) { <span> · <span style="color:var(--st-red)">@fbIssues.Length з помилкою</span></span> }
+                            <span> · оцінка = @fbDone.Length/@(fbDone.Length + fbIssues.Length) × 100 = <b style="color:@tv.Tone">@task.Score</b></span>
+                        </span>
+                    }
                 </div>
                 @if (fbDone.Length > 0 || fbIssues.Length > 0)
                 {
@@ -176,8 +205,8 @@
                 </div>
             </section>
 
-            @* diff viewer *@
-            @if (task.Diff.Count > 0)
+            @* diff viewer — shown only when commit was mapped (actual add/del lines present) *@
+            @if (task.Diff.Any(d => d.Type is "add" or "del"))
             {
                 var adds = task.Diff.Count(d => d.Type == "add");
                 var dels = task.Diff.Count(d => d.Type == "del");

@@ -151,6 +151,9 @@ public class GitHubService
     }
 
     // ── Коміти гілки як CommitInfo (для Lab.razor) ───────────────────────────
+    // Знаходить гілку від якої `branch` відгалузилась (мінімальна кількість
+    // унікальних комітів в `branch` відносно будь-якої іншої гілки) і повертає
+    // лише коміти з моменту відгалуження.
     public async Task<List<CommitInfo>> GetBranchCommitInfosAsync(
         string repoUrl, string branch, string? token = null, int count = 50)
     {
@@ -158,13 +161,84 @@ public class GitHubService
         if (parsed is null) return [];
 
         var (owner, repo) = parsed.Value;
+        var defaultBranch = await GetDefaultBranchAsync(owner, repo, token);
+
+        if (branch == defaultBranch)
+            return await GetCommitInfosOnBranchAsync(owner, repo, branch, token, count);
+
+        // Порівнюємо `branch` з усіма іншими гілками.
+        // Батьківська гілка — та, де branch є "ahead" з мінімальною кількістю комітів
+        // (тобто відгалузилась найпізніше від неї).
+        var allBranches = await GetBranchNamesAsync(owner, repo, token);
+        var bestBase = defaultBranch;
+        var fewestAhead = int.MaxValue;
+
+        foreach (var other in allBranches.Where(b => b != branch))
+        {
+            var r = new HttpRequestMessage(HttpMethod.Get,
+                $"https://api.github.com/repos/{owner}/{repo}/compare/{Uri.EscapeDataString(other)}...{Uri.EscapeDataString(branch)}");
+            AddHeaders(r, token);
+            var rs = await _http.SendAsync(r);
+            if (!rs.IsSuccessStatusCode) continue;
+
+            using var d = JsonDocument.Parse(await rs.Content.ReadAsStringAsync());
+            var root = d.RootElement;
+            var status = root.TryGetProperty("status", out var sv) ? sv.GetString() : null;
+            if (status is not ("ahead" or "diverged")) continue;
+
+            var ahead = root.TryGetProperty("ahead_by", out var av) ? av.GetInt32() : int.MaxValue;
+            if (ahead < fewestAhead) { fewestAhead = ahead; bestBase = other; }
+        }
+
+        // Беремо лише коміти унікальні для `branch` відносно батьківської гілки
+        var req = new HttpRequestMessage(HttpMethod.Get,
+            $"https://api.github.com/repos/{owner}/{repo}/compare/{Uri.EscapeDataString(bestBase)}...{Uri.EscapeDataString(branch)}");
+        AddHeaders(req, token);
+        var resp = await _http.SendAsync(req);
+
+        if (resp.IsSuccessStatusCode)
+        {
+            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+            if (doc.RootElement.TryGetProperty("commits", out var commits))
+            {
+                var list = commits.EnumerateArray().Reverse().Select(MapCommitInfo).ToList();
+                if (list.Count > 0) return list;
+            }
+        }
+
+        return await GetCommitInfosOnBranchAsync(owner, repo, branch, token, count);
+    }
+
+    private async Task<List<string>> GetBranchNamesAsync(string owner, string repo, string? token)
+    {
+        var all = new List<string>();
+        var page = 1;
+        while (true)
+        {
+            var req = new HttpRequestMessage(HttpMethod.Get,
+                $"https://api.github.com/repos/{owner}/{repo}/branches?per_page=100&page={page}");
+            AddHeaders(req, token);
+            var resp = await _http.SendAsync(req);
+            if (!resp.IsSuccessStatusCode) break;
+            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+            var batch = doc.RootElement.EnumerateArray()
+                .Select(b => b.GetProperty("name").GetString() ?? "")
+                .Where(s => s.Length > 0).ToList();
+            all.AddRange(batch);
+            if (batch.Count < 100) break;
+            page++;
+        }
+        return all;
+    }
+
+    private async Task<List<CommitInfo>> GetCommitInfosOnBranchAsync(
+        string owner, string repo, string branch, string? token, int count = 50)
+    {
         var req = new HttpRequestMessage(HttpMethod.Get,
             $"https://api.github.com/repos/{owner}/{repo}/commits?sha={Uri.EscapeDataString(branch)}&per_page={count}");
         AddHeaders(req, token);
-
         var resp = await _http.SendAsync(req);
         if (!resp.IsSuccessStatusCode) return [];
-
         var json = await resp.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
         return doc.RootElement.EnumerateArray().Select(MapCommitInfo).ToList();

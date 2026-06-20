@@ -2,6 +2,7 @@
 @inject NavigationManager Nav
 @inject IDialogService Dialog
 @inject IDataService Data
+@inject GeminiQuotaService Quota
 @implements IDisposable
 
 <TopBar Title="Огляд курсу" Sub="ООП на C# · Семестр 2">
@@ -13,28 +14,99 @@
 <div class="screen-anim" style="padding:0 34px 40px;position:relative;z-index:1">
 
     @* stat strip *@
-    <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:14px;margin-bottom:20px">
-        <TStat Icon="users" Tone="var(--acc)" Value="@Stats.Students.ToString()" Label="Студентів на курсі" Hint="2 групи" />
-        <TStat Icon="upload" Tone="var(--st-blue)" Value="@Stats.Submissions.ToString()" Label="Здач загалом" />
-        <TStat Icon="target" Tone="var(--st-green)" Value="@($"{Stats.PassRate}%")" Label="Успішність" />
-        <TStat Icon="clock" Tone="var(--st-yellow)" Value="@Stats.PendingReview.ToString()" Label="Очікують захисту" Hint="нові" />
+    @{
+        var _qRem   = Quota.Remaining;
+        var _qLim   = Quota.DailyLimit;
+        var _qUsed  = Quota.TodayCount;
+        var _qPct   = _qLim > 0 ? (int)Math.Round(100.0 * _qUsed / _qLim) : 0;
+        var _qTone  = _qRem == 0 ? "var(--st-red)" : _qRem <= 5 ? "var(--st-yellow)" : "var(--st-green)";
+    }
+    <div style="display:grid;grid-template-columns:repeat(5, 1fr);gap:14px;margin-bottom:20px">
+        <TStat Icon="users"   Tone="var(--acc)"       Value="@Stats.Students.ToString()"      Label="Студентів на курсі"  Hint="2 групи" />
+        <TStat Icon="upload"  Tone="var(--st-blue)"   Value="@Stats.Submissions.ToString()"   Label="Здач загалом" />
+        <TStat Icon="target"  Tone="var(--st-green)"  Value="@($"{Stats.PassRate}%")"         Label="Успішність" />
+        <TStat Icon="clock"   Tone="var(--st-yellow)" Value="@Stats.PendingReview.ToString()" Label="Очікують захисту"    Hint="нові" />
+        <div class="glass lift" style="padding:18px 20px;position:relative;overflow:hidden">
+            <div style="position:absolute;right:-20px;top:-30px;width:120px;height:120px;border-radius:50%;background:radial-gradient(circle,@(_qTone)1c,transparent 65%);pointer-events:none"></div>
+            <div style="display:flex;align-items:center;gap:11px;margin-bottom:14px;position:relative">
+                <span style="width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:@(_qTone)1e;color:@_qTone;border:1px solid @(_qTone)33">
+                    <Icon Name="spark" Size="19" />
+                </span>
+                <span class="badge" style="margin-left:auto;height:22px;color:@_qTone;background:@(_qTone)18;border:1px solid @(_qTone)44">
+                    @(_qRem == 0 ? "вичерп." : $"{_qPct}%")
+                </span>
+            </div>
+            <div class="mono tnum" style="font-size:26px;font-weight:790;letter-spacing:-0.03em;line-height:1;color:var(--tx-1)">
+                @_qRem<span style="font-size:14px;font-weight:500;color:var(--tx-3)"> / @_qLim</span>
+            </div>
+            <div style="font-size:12.5px;color:var(--tx-3);margin-top:7px;font-weight:500">Gemini сьогодні</div>
+            <div style="margin-top:10px;height:4px;border-radius:2px;background:var(--line);overflow:hidden">
+                <div style="height:100%;width:@_qPct%;background:@_qTone;border-radius:2px;transition:width .4s"></div>
+            </div>
+        </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:1.55fr 1fr;gap:18px;align-items:start">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start">
 
-        @* review queue *@
+        @* ── Черга на перевірку ──────────────────────────────────────────────── *@
         <section class="glass" style="padding:0;overflow:hidden">
-            <div style="display:flex;align-items:center;gap:11px;padding:18px 22px;border-bottom:1px solid var(--line)">
+            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:18px 22px;border-bottom:1px solid var(--line)">
                 <Icon Name="clock" Size="18" Style="color:var(--st-yellow)" />
                 <h3 style="margin:0;font-size:16px;font-weight:720;letter-spacing:-0.02em">Черга на перевірку</h3>
-                <span class="badge badge-yellow" style="margin-left:2px"><span class="dot pulse"></span>@Queue.Count</span>
-                <button class="btn btn-ghost btn-sm" style="margin-left:auto" @onclick="@(() => Nav.NavigateTo("/teacher/journal"))">Весь журнал<Icon Name="arrowR" Size="15" /></button>
+                <span class="badge badge-yellow"><span class="dot pulse"></span>@Queue.Count</span>
+                <div style="display:flex;gap:6px;align-items:center;margin-left:auto">
+                    <button @onclick='() => SetQueueSort("date")'
+                            style="@SortChip(_queueSort == "date")">За датою</button>
+                    <button @onclick='() => SetQueueSort("group")'
+                            style="@SortChip(_queueSort == "group")">За групою</button>
+                    <button class="btn btn-ghost btn-sm" @onclick="@(() => Nav.NavigateTo("/teacher/journal"))">
+                        Журнал<Icon Name="arrowR" Size="15" />
+                    </button>
+                </div>
             </div>
-            <div>
-                @for (int i = 0; i < Queue.Count; i++)
+
+            @if (Queue.Count == 0)
+            {
+                <div style="padding:32px;text-align:center;color:var(--tx-faint);font-size:13.5px">
+                    Черга порожня — усі роботи перевірені 🎉
+                </div>
+            }
+            else if (_queueSort == "group")
+            {
+                var byGroup = SortedQueue.GroupBy(r => r.Group).OrderBy(g => g.Key);
+                @foreach (var grp in byGroup)
                 {
-                    var q = Queue[i];
-                    var last = i == Queue.Count - 1;
+                    <div style="padding:8px 22px;background:rgba(255,255,255,0.025);border-bottom:1px solid var(--line)">
+                        <span style="font-size:11.5px;font-weight:700;color:var(--tx-3);text-transform:uppercase;letter-spacing:0.06em">@grp.Key</span>
+                        <span class="mono" style="font-size:11px;color:var(--tx-faint);margin-left:6px">@grp.Count() робіт</span>
+                    </div>
+                    @foreach (var (q, last) in grp.Select((x, i) => (x, i == grp.Count() - 1)))
+                    {
+                        <div class="qrow" @onclick="@(() => OpenGrade(q.StudentId, q.LabId))"
+                             style="display:flex;align-items:center;gap:14px;padding:13px 22px;cursor:pointer;border-bottom:@(last ? "none" : "1px solid var(--line)")">
+                            <div style="@Avatar">@q.Initials</div>
+                            <div style="min-width:0;flex:1">
+                                <div style="font-size:14px;font-weight:640">@q.Name</div>
+                                <div style="font-size:12px;color:var(--tx-3);margin-top:2px;display:flex;gap:8px;align-items:center">
+                                    <span>@q.Group</span><span style="opacity:0.4">·</span><span class="mono">@q.LabShort</span><span>@q.LabTitle</span>
+                                </div>
+                            </div>
+                            <div style="text-align:right;flex:none">
+                                <div style="font-size:11px;color:var(--tx-3);margin-bottom:3px">авто</div>
+                                <span class="mono tnum" style="font-size:15px;font-weight:750;color:@ScoreColor(q.Auto)">@q.Auto</span>
+                            </div>
+                            <span style="font-size:11.5px;color:var(--tx-faint);flex:none;width:72px;text-align:right">@q.When</span>
+                            <button class="btn btn-outline btn-sm" style="flex:none" @onclick:stopPropagation @onclick="@(() => OpenGrade(q.StudentId, q.LabId))">Оцінити</button>
+                        </div>
+                    }
+                }
+            }
+            else
+            {
+                @for (int i = 0; i < SortedQueue.Count; i++)
+                {
+                    var q    = SortedQueue[i];
+                    var last = i == SortedQueue.Count - 1;
                     <div class="qrow" @onclick="@(() => OpenGrade(q.StudentId, q.LabId))"
                          style="display:flex;align-items:center;gap:14px;padding:13px 22px;cursor:pointer;border-bottom:@(last ? "none" : "1px solid var(--line)")">
                         <div style="@Avatar">@q.Initials</div>
@@ -46,52 +118,111 @@
                         </div>
                         <div style="text-align:right;flex:none">
                             <div style="font-size:11px;color:var(--tx-3);margin-bottom:3px">авто</div>
-                            <span class="mono tnum" style="font-size:15px;font-weight:750;color:@(q.Auto >= 85 ? "var(--st-green)" : q.Auto >= 60 ? "var(--st-yellow)" : "var(--st-red)")">@q.Auto</span>
+                            <span class="mono tnum" style="font-size:15px;font-weight:750;color:@ScoreColor(q.Auto)">@q.Auto</span>
                         </div>
-                        <span style="font-size:11.5px;color:var(--tx-faint);flex:none;width:86px;text-align:right">@q.When</span>
+                        <span style="font-size:11.5px;color:var(--tx-faint);flex:none;width:72px;text-align:right">@q.When</span>
                         <button class="btn btn-outline btn-sm" style="flex:none" @onclick:stopPropagation @onclick="@(() => OpenGrade(q.StudentId, q.LabId))">Оцінити</button>
                     </div>
                 }
-            </div>
+            }
         </section>
 
-        @* lab activity *@
-        <section class="glass" style="padding:18px 22px">
-            <div style="display:flex;align-items:center;gap:11px;margin-bottom:18px">
-                <Icon Name="grades" Size="18" Style="color:var(--acc)" />
-                <h3 style="margin:0;font-size:16px;font-weight:720;letter-spacing:-0.02em">Активність по лабах</h3>
+        @* ── Відхилені до захисту ────────────────────────────────────────────── *@
+        <section class="glass" style="padding:0;overflow:hidden">
+            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:18px 22px;border-bottom:1px solid var(--line)">
+                <Icon Name="x" Size="18" Style="color:var(--st-red)" />
+                <h3 style="margin:0;font-size:16px;font-weight:720;letter-spacing:-0.02em">Відхилені до захисту</h3>
+                <span class="badge badge-red"><span class="dot"></span>@Rejected.Count</span>
+                <div style="display:flex;gap:6px;align-items:center;margin-left:auto">
+                    <button @onclick='() => SetRejSort("date")'
+                            style="@SortChip(_rejSort == "date")">За датою</button>
+                    <button @onclick='() => SetRejSort("group")'
+                            style="@SortChip(_rejSort == "group")">За групою</button>
+                </div>
             </div>
-            <div style="display:flex;flex-direction:column;gap:13px">
-                @foreach (var l in LabStats.Take(7))
+
+            @if (Rejected.Count == 0)
+            {
+                <div style="padding:32px;text-align:center;color:var(--tx-faint);font-size:13.5px">
+                    Відхилених робіт немає 🎉
+                </div>
+            }
+            else if (_rejSort == "group")
+            {
+                var byGroup = SortedRejected.GroupBy(r => r.Group).OrderBy(g => g.Key);
+                @foreach (var grp in byGroup)
                 {
-                    var pct = (int)Math.Round(100.0 * l.Submitted / l.Total);
-                    var fill = pct >= 70 ? "linear-gradient(90deg,var(--acc),var(--acc-bright))" : pct >= 40 ? "linear-gradient(90deg,#c9a52f,var(--st-yellow))" : "linear-gradient(90deg,#cf6650,var(--st-red))";
-                    <div style="display:flex;align-items:center;gap:12px">
-                        <span class="mono" style="width:30px;font-size:12px;color:var(--tx-3);font-weight:600">@l.Short</span>
-                        <div style="flex:1;min-width:0">
-                            <div style="display:flex;justify-content:space-between;margin-bottom:5px">
-                                <span style="font-size:12.5px;color:var(--tx-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px">@l.Title</span>
-                                <span class="mono tnum" style="font-size:12px;color:var(--tx-3)">@l.Submitted/@l.Total</span>
+                    <div style="padding:8px 22px;background:rgba(255,255,255,0.025);border-bottom:1px solid var(--line)">
+                        <span style="font-size:11.5px;font-weight:700;color:var(--tx-3);text-transform:uppercase;letter-spacing:0.06em">@grp.Key</span>
+                        <span class="mono" style="font-size:11px;color:var(--tx-faint);margin-left:6px">@grp.Count() робіт</span>
+                    </div>
+                    @foreach (var (q, last) in grp.Select((x, i) => (x, i == grp.Count() - 1)))
+                    {
+                        <div style="display:flex;align-items:center;gap:14px;padding:13px 22px;border-bottom:@(last ? "none" : "1px solid var(--line)")">
+                            <div style="@AvatarRed">@q.Initials</div>
+                            <div style="min-width:0;flex:1">
+                                <div style="font-size:14px;font-weight:640">@q.Name</div>
+                                <div style="font-size:12px;color:var(--tx-3);margin-top:2px;display:flex;gap:8px;align-items:center">
+                                    <span>@q.Group</span><span style="opacity:0.4">·</span>
+                                    <span class="mono">@q.LabShort</span><span>@q.LabTitle</span>
+                                </div>
                             </div>
-                            <div class="prog" style="height:6px"><span style="width:@pct%;background:@fill;box-shadow:none"></span></div>
+                            <div style="text-align:right;flex:none">
+                                <div style="font-size:11px;color:var(--tx-3);margin-bottom:3px">найкраща спроба</div>
+                                <span class="mono tnum" style="font-size:15px;font-weight:750;color:var(--st-red)">@q.Auto</span>
+                            </div>
+                            <span style="font-size:11.5px;color:var(--tx-faint);flex:none;width:72px;text-align:right">@q.When</span>
                         </div>
-                        @if (l.Avg is not null)
-                        {
-                            <span class="mono tnum" style="width:28px;text-align:right;font-size:12.5px;font-weight:700;color:var(--tx-2)">@l.Avg</span>
-                        }
+                    }
+                }
+            }
+            else
+            {
+                @for (int i = 0; i < SortedRejected.Count; i++)
+                {
+                    var q    = SortedRejected[i];
+                    var last = i == SortedRejected.Count - 1;
+                    <div style="display:flex;align-items:center;gap:14px;padding:13px 22px;border-bottom:@(last ? "none" : "1px solid var(--line)")">
+                        <div style="@AvatarRed">@q.Initials</div>
+                        <div style="min-width:0;flex:1">
+                            <div style="font-size:14px;font-weight:640">@q.Name</div>
+                            <div style="font-size:12px;color:var(--tx-3);margin-top:2px;display:flex;gap:8px;align-items:center">
+                                <span>@q.Group</span><span style="opacity:0.4">·</span>
+                                <span class="mono">@q.LabShort</span><span>@q.LabTitle</span>
+                            </div>
+                        </div>
+                        <div style="text-align:right;flex:none">
+                            <div style="font-size:11px;color:var(--tx-3);margin-bottom:3px">найкраща спроба</div>
+                            <span class="mono tnum" style="font-size:15px;font-weight:750;color:var(--st-red)">@q.Auto</span>
+                        </div>
+                        <span style="font-size:11.5px;color:var(--tx-faint);flex:none;width:72px;text-align:right">@q.When</span>
                     </div>
                 }
-            </div>
-            <button class="btn btn-ghost btn-block btn-sm" style="margin-top:18px" @onclick="@(() => Nav.NavigateTo("/teacher/labs"))">Керувати лабами<Icon Name="settings" Size="15" /></button>
+            }
         </section>
     </div>
 </div>
 
+
 @code {
     private TeacherStats Stats = new();
-    private List<ReviewItem> Queue = [];
-    private List<LabStat> LabStats = [];
+    private List<ReviewItem> Queue    = [];
+    private List<ReviewItem> Rejected = [];
     private PeriodicTimer? _timer;
+
+    private string _queueSort = "date";
+    private string _rejSort   = "date";
+
+    private List<ReviewItem> SortedQueue => _queueSort == "group"
+        ? Queue.OrderBy(r => r.Group).ThenByDescending(r => r.SubmittedAt).ToList()
+        : Queue.OrderByDescending(r => r.SubmittedAt).ToList();
+
+    private List<ReviewItem> SortedRejected => _rejSort == "group"
+        ? Rejected.OrderBy(r => r.Group).ThenByDescending(r => r.SubmittedAt).ToList()
+        : Rejected.OrderByDescending(r => r.SubmittedAt).ToList();
+
+    private void SetQueueSort(string s) { _queueSort = s; StateHasChanged(); }
+    private void SetRejSort(string s)   { _rejSort   = s; StateHasChanged(); }
 
     protected override async Task OnInitializedAsync()
     {
@@ -104,7 +235,7 @@
     {
         Stats    = await Data.GetStatsAsync();
         Queue    = await Data.GetReviewQueueAsync();
-        LabStats = await Data.GetLabStatsAsync();
+        Rejected = await Data.GetRejectedQueueAsync();
     }
 
     private async Task PollAsync()
@@ -118,7 +249,15 @@
 
     public void Dispose() { _timer?.Dispose(); _timer = null; }
 
-    private const string Avatar = "width:40px;height:40px;border-radius:11px;flex:none;display:grid;place-items:center;font-weight:700;font-size:13.5px;background:linear-gradient(150deg, rgba(118,199,173,0.3), rgba(118,199,173,0.12));border:1px solid var(--glass-border-hover);color:var(--acc-bright)";
+    private static string ScoreColor(int auto) =>
+        auto >= 85 ? "var(--st-green)" : auto >= 60 ? "var(--st-yellow)" : "var(--st-red)";
+
+    private static string SortChip(bool active) =>
+        $"padding:4px 12px;border-radius:20px;border:1px solid;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;" +
+        $"border-color:{(active ? "var(--acc)" : "var(--line)")};background:{(active ? "var(--acc-dim)" : "transparent")};color:{(active ? "var(--acc-bright)" : "var(--tx-3)")}";
+
+    private const string Avatar    = "width:40px;height:40px;border-radius:11px;flex:none;display:grid;place-items:center;font-weight:700;font-size:13.5px;background:linear-gradient(150deg, rgba(118,199,173,0.3), rgba(118,199,173,0.12));border:1px solid var(--glass-border-hover);color:var(--acc-bright)";
+    private const string AvatarRed = "width:40px;height:40px;border-radius:11px;flex:none;display:grid;place-items:center;font-weight:700;font-size:13.5px;background:rgba(232,128,107,0.12);border:1px solid rgba(232,128,107,0.25);color:var(--st-red)";
 
     private async Task OpenGrade(int studentId, int labId)
     {

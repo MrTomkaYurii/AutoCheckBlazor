@@ -1,0 +1,471 @@
+@page "/teacher/profile"
+@inject AppState App
+@inject IAuthService Auth
+@inject AppDbContext Db
+@inject IConfiguration Cfg
+@inject IWebHostEnvironment Env
+@inject GeminiQuotaService Quota
+@inject KeycloakAdminService KcAdmin
+
+<TopBar Title="Кабінет" Sub="Профіль викладача та параметри практикуму" />
+
+<div class="screen-anim" style="padding:0 34px 40px;position:relative;z-index:1">
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
+
+    @* ── Профіль викладача ─────────────────────────────────────────────────── *@
+    <section class="glass" style="padding:0;overflow:hidden">
+        <div style="padding:28px 26px;display:flex;align-items:center;gap:18px;background:radial-gradient(500px 200px at 0% 0%, rgba(118,199,173,0.12), transparent 60%);border-bottom:1px solid var(--line)">
+            <div style="width:66px;height:66px;border-radius:18px;display:grid;place-items:center;font-weight:750;font-size:24px;background:linear-gradient(150deg, rgba(118,199,173,0.32), rgba(118,199,173,0.12));border:1px solid var(--glass-border-hover);color:var(--acc-bright);flex:none">@App.Teacher.Initials</div>
+            <div style="flex:1;min-width:0">
+                <h2 style="margin:0;font-size:20px;font-weight:740">@App.Teacher.FirstName @App.Teacher.LastName</h2>
+                <div style="display:flex;gap:8px;margin-top:7px;flex-wrap:wrap">
+                    <span class="badge badge-green"><span class="dot"></span>Викладач</span>
+                    @if (!string.IsNullOrEmpty(App.Teacher.Title))
+                    {
+                        <span class="badge badge-grey"><span class="dot"></span>@App.Teacher.Title</span>
+                    }
+                </div>
+            </div>
+            <button class="btn btn-ghost btn-sm" @onclick="ToggleProfile">
+                <Icon Name="@(_profileEdit ? "x" : "settings")" Size="14" />
+                @(_profileEdit ? "Скасувати" : "Редагувати")
+            </button>
+        </div>
+
+        @if (!_profileEdit && !_pwEdit)
+        {
+            <div style="padding:8px 26px 4px">
+                @foreach (var (lbl, val) in new[] {
+                    ("Ім'я",              App.Teacher.FirstName),
+                    ("Прізвище",          App.Teacher.LastName),
+                    ("Email",             _emailDisplay),
+                    ("Посада",            App.Teacher.Title),
+                    ("Курс / практикум",  App.Teacher.Course),
+                })
+                {
+                    <div style="display:flex;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)">
+                        <span style="width:150px;font-size:12.5px;color:var(--tx-3);font-weight:600">@lbl</span>
+                        <span style="font-size:13.5px;color:@(string.IsNullOrEmpty(val) ? "var(--tx-faint)" : "var(--tx-1)")">@(string.IsNullOrEmpty(val) ? "—" : val)</span>
+                    </div>
+                }
+                @* Password row *@
+                <div style="display:flex;align-items:center;padding:12px 0">
+                    <span style="width:150px;font-size:12.5px;color:var(--tx-3);font-weight:600">Пароль</span>
+                    <span style="font-size:13.5px;color:var(--tx-2);flex:1;letter-spacing:0.12em">••••••••••</span>
+                    <button class="btn btn-ghost btn-sm" @onclick="@(() => { _pwEdit = true; _profileEdit = false; })">
+                        <Icon Name="settings" Size="13" />Змінити
+                    </button>
+                </div>
+            </div>
+        }
+        else if (_profileEdit)
+        {
+            <div style="padding:20px 26px;display:flex;flex-direction:column;gap:14px">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                    <div class="field"><label>Ім'я</label><input class="input" @bind="_firstName" /></div>
+                    <div class="field"><label>Прізвище</label><input class="input" @bind="_lastName" /></div>
+                </div>
+                <div class="field">
+                    <label>Email</label>
+                    <input class="input" type="email" @bind="_email" placeholder="teacher@example.com" />
+                </div>
+                <div class="field"><label>Посада</label><input class="input" @bind="_posada" placeholder="Асистент, Доцент, к.т.н.…" /></div>
+                <div class="field"><label>Назва курсу / практикуму</label><input class="input" @bind="_course" placeholder="ООП та патерни C#" /></div>
+                @Feedback(_profileMsg)
+                <div style="display:flex;justify-content:flex-end">
+                    <button class="btn btn-primary btn-sm" @onclick="SaveProfile" disabled="@_savingProfile">
+                        <Icon Name="check" Size="15" />@(_savingProfile ? "Збереження…" : "Зберегти")
+                    </button>
+                </div>
+            </div>
+        }
+        else if (_pwEdit)
+        {
+            <div style="padding:20px 26px;display:flex;flex-direction:column;gap:14px">
+                <div style="font-size:12px;color:var(--tx-3);padding:10px 14px;background:rgba(255,255,255,0.03);border-radius:9px;border:1px solid var(--line)">
+                    Зміна паролю виконується через Keycloak. Потрібен admin-пароль у <span class="mono" style="font-size:11px">appsettings.json → Keycloak:AdminPassword</span>.
+                </div>
+                <div class="field">
+                    <label>Поточний пароль</label>
+                    <input class="input" type="password" @bind="_pwOld" autocomplete="current-password" />
+                </div>
+                <div class="field">
+                    <label>Новий пароль</label>
+                    <input class="input" type="password" @bind="_pwNew" autocomplete="new-password" />
+                </div>
+                <div class="field">
+                    <label>Підтвердження</label>
+                    <input class="input" type="password" @bind="_pwConfirm" autocomplete="new-password" />
+                </div>
+                @Feedback(_pwMsg)
+                <div style="display:flex;justify-content:flex-end;gap:8px">
+                    <button class="btn btn-ghost btn-sm" @onclick="@(() => { _pwEdit = false; _pwOld = _pwNew = _pwConfirm = _pwMsg = ""; })">
+                        Скасувати
+                    </button>
+                    <button class="btn btn-primary btn-sm" @onclick="ChangePassword" disabled="@_savingPw">
+                        <Icon Name="check" Size="15" />@(_savingPw ? "Збереження…" : "Змінити пароль")
+                    </button>
+                </div>
+            </div>
+        }
+    </section>
+
+    @* ── Налаштування системи ─────────────────────────────────────────────── *@
+    <section class="glass" style="padding:0;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:11px;padding:18px 26px;border-bottom:1px solid var(--line)">
+            <Icon Name="settings" Size="18" Style="color:var(--acc)" />
+            <h3 style="margin:0;font-size:15px;font-weight:720">Налаштування системи</h3>
+            <button class="btn btn-ghost btn-sm" style="margin-left:auto" @onclick="ToggleSettings">
+                <Icon Name="@(_settingsEdit ? "x" : "settings")" Size="14" />
+                @(_settingsEdit ? "Скасувати" : "Редагувати")
+            </button>
+        </div>
+
+        @if (!_settingsEdit)
+        {
+            @* Gemini subsection *@
+            <div style="padding:16px 26px 4px">
+                <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--tx-3);margin-bottom:10px">Gemini AI</div>
+                @foreach (var (lbl, val, mono, secret) in new[] {
+                    ("API ключ",    Cfg["Gemini:ApiKey"]    ?? "",                               true,  true),
+                    ("Модель",      Cfg["Gemini:Model"]     ?? "gemini-2.5-flash",               true,  false),
+                    ("Денний ліміт", Cfg["Gemini:DailyLimit"] ?? "50",                           false, false),
+                })
+                {
+                    <div style="display:flex;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)">
+                        <span style="width:140px;font-size:12.5px;color:var(--tx-3);font-weight:600">@lbl</span>
+                        <span class="@(mono ? "mono" : "")" style="font-size:13px;color:@(string.IsNullOrEmpty(val) ? "var(--tx-faint)" : "var(--tx-1)")">
+                            @if (secret && !string.IsNullOrEmpty(val))
+                            {
+                                @($"{val[..Math.Min(6, val.Length)]}••••••••")
+                            }
+                            else if (string.IsNullOrEmpty(val)) { <span>—</span> }
+                            else { @val }
+                        </span>
+                    </div>
+                }
+                @* Quota status *@
+                <div style="display:flex;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)">
+                    <span style="width:140px;font-size:12.5px;color:var(--tx-3);font-weight:600">Сьогодні</span>
+                    <div style="display:flex;align-items:center;gap:10px;flex:1">
+                        <div style="flex:1;height:5px;border-radius:3px;background:rgba(255,255,255,0.07);overflow:hidden">
+                            <div style="height:100%;border-radius:3px;width:@(Quota.DailyLimit > 0 ? (int)((double)Quota.TodayCount / Quota.DailyLimit * 100) : 0)%;background:@(Quota.IsExhausted ? "var(--st-red)" : "var(--acc)");transition:width .3s"></div>
+                        </div>
+                        <span class="mono" style="font-size:12px;color:@(Quota.IsExhausted ? "var(--st-red)" : "var(--tx-2)");white-space:nowrap">@Quota.TodayCount / @Quota.DailyLimit</span>
+                    </div>
+                </div>
+            </div>
+            @* Grading subsection *@
+            <div style="padding:16px 26px 20px">
+                <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--tx-3);margin-bottom:10px">Перевірка</div>
+                <div style="display:flex;align-items:center;padding:10px 0">
+                    <span style="width:140px;font-size:12.5px;color:var(--tx-3);font-weight:600">WorkRoot</span>
+                    <span class="mono" style="font-size:12px;color:@(string.IsNullOrEmpty(Cfg["Grading:WorkRoot"]) ? "var(--tx-faint)" : "var(--tx-1)")">
+                        @(string.IsNullOrEmpty(Cfg["Grading:WorkRoot"]) ? "тимчасова папка" : Cfg["Grading:WorkRoot"])
+                    </span>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div style="padding:20px 26px;display:flex;flex-direction:column;gap:14px">
+                <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--tx-3)">Gemini AI</div>
+                <div class="field">
+                    <label>API ключ</label>
+                    <input class="input mono" type="password" @bind="_geminiKey" placeholder="AIza…" autocomplete="off" />
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                    <div class="field">
+                        <label>Модель</label>
+                        <input class="input mono" @bind="_geminiModel" placeholder="gemini-2.5-flash" />
+                    </div>
+                    <div class="field">
+                        <label>Денний ліміт запитів</label>
+                        <input class="input" type="number" min="1" max="1000" @bind="_geminiLimit" />
+                    </div>
+                </div>
+                <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--tx-3);margin-top:4px">Перевірка</div>
+                <div class="field">
+                    <label>WorkRoot <span style="color:var(--tx-faint);font-weight:400">(порожньо = тимчасова папка ОС)</span></label>
+                    <input class="input mono" @bind="_workRoot" placeholder="C:\autocheck-repos або /tmp/repos" />
+                </div>
+                @Feedback(_settingsMsg)
+                <div style="display:flex;justify-content:flex-end">
+                    <button class="btn btn-primary btn-sm" @onclick="SaveSettings" disabled="@_savingSettings">
+                        <Icon Name="check" Size="15" />@(_savingSettings ? "Збереження…" : "Зберегти")
+                    </button>
+                </div>
+            </div>
+        }
+    </section>
+
+    @* ── Ліміти авто-перевірок ────────────────────────────────────────────── *@
+    <section class="glass" style="padding:0;overflow:hidden;margin-top:20px">
+        <div style="display:flex;align-items:center;gap:11px;padding:18px 26px;border-bottom:1px solid var(--line)">
+            <Icon Name="refresh" Size="18" Style="color:var(--acc)" />
+            <h3 style="margin:0;font-size:15px;font-weight:720">Ліміти авто-перевірок</h3>
+            <span style="font-size:12px;color:var(--tx-3);margin-left:4px">— кількість спроб здачі на auto-grading для кожної лаби</span>
+            @if (_attemptsChanged)
+            {
+                <button class="btn btn-primary btn-sm" style="margin-left:auto" @onclick="SaveAttempts" disabled="@_savingAttempts">
+                    <Icon Name="check" Size="14" />@(_savingAttempts ? "Збереження…" : "Зберегти зміни")
+                </button>
+            }
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:0">
+            @foreach (var row in _labAttempts)
+            {
+                <div style="display:flex;align-items:center;gap:12px;padding:12px 22px;border-bottom:1px solid var(--line);border-right:1px solid var(--line)">
+                    <span class="mono" style="width:30px;font-size:12px;font-weight:750;color:var(--acc-bright);background:var(--acc-dim);padding:3px 0;border-radius:6px;text-align:center;border:1px solid var(--glass-border);flex:none">@row.Number.ToString("D2")</span>
+                    <span style="flex:1;font-size:13px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="@row.Title">@row.Title</span>
+                    <div style="display:flex;align-items:center;gap:6px;flex:none">
+                        <button @onclick="@(() => ChangeAttempts(row, -1))"
+                                style="width:26px;height:26px;border-radius:7px;border:1px solid var(--line);background:rgba(255,255,255,0.04);color:var(--tx-2);cursor:pointer;display:grid;place-items:center;font-size:16px;line-height:1"
+                                disabled="@(row.Value <= 1)">−</button>
+                        <span class="mono" style="width:24px;text-align:center;font-size:14px;font-weight:700;color:@(row.Changed ? "var(--acc-bright)" : "var(--tx-1)")">@row.Value</span>
+                        <button @onclick="@(() => ChangeAttempts(row, +1))"
+                                style="width:26px;height:26px;border-radius:7px;border:1px solid var(--line);background:rgba(255,255,255,0.04);color:var(--tx-2);cursor:pointer;display:grid;place-items:center;font-size:16px;line-height:1"
+                                disabled="@(row.Value >= 10)">+</button>
+                    </div>
+                </div>
+            }
+        </div>
+
+        @if (!string.IsNullOrEmpty(_attemptsMsg))
+        {
+            <div style="padding:10px 26px;border-top:1px solid var(--line)">
+                @Feedback(_attemptsMsg)
+            </div>
+        }
+    </section>
+
+</div>
+</div>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> AuthStateTask { get; set; } = default!;
+
+    // ── Profile ──────────────────────────────────────────────────────────────
+    private bool   _profileEdit, _savingProfile;
+    private string _firstName = "", _lastName = "", _email = "", _posada = "", _course = "", _profileMsg = "";
+    private string _emailDisplay = "";   // loaded from DB on init
+
+    // ── Password ──────────────────────────────────────────────────────────────
+    private bool   _pwEdit, _savingPw;
+    private string _pwOld = "", _pwNew = "", _pwConfirm = "", _pwMsg = "";
+
+    // ── Settings ─────────────────────────────────────────────────────────────
+    private bool   _settingsEdit, _savingSettings;
+    private string _geminiKey = "", _geminiModel = "", _workRoot = "", _settingsMsg = "";
+    private int    _geminiLimit;
+
+    // ── Lab attempts ──────────────────────────────────────────────────────────
+    private sealed class LabAttemptsRow
+    {
+        public int LabId;
+        public int Number;
+        public string Title = "";
+        public int Original;
+        public int Value;
+        public bool Changed => Value != Original;
+    }
+    private List<LabAttemptsRow> _labAttempts = [];
+    private bool   _attemptsChanged => _labAttempts.Any(r => r.Changed);
+    private bool   _savingAttempts;
+    private string _attemptsMsg = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _firstName = App.Teacher.FirstName;
+        _lastName  = App.Teacher.LastName;
+        _posada    = App.Teacher.Title;
+        _course    = App.Teacher.Course;
+        // load email from DB (TeacherRecord.Email)
+        var state = await AuthStateTask;
+        var sub   = Auth.GetSub(state.User);
+        var link  = await Db.UserLinks.AsNoTracking().FirstOrDefaultAsync(l => l.KeycloakSub == sub);
+        if (link?.TeacherId is int tid)
+        {
+            var rec = await Db.Teachers.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tid);
+            _emailDisplay = _email = rec?.Email ?? Auth.GetEmail(state.User);
+        }
+        else
+        {
+            _emailDisplay = _email = Auth.GetEmail(state.User);
+        }
+        LoadSettingsFields();
+        await LoadLabAttemptsAsync();
+    }
+
+    private async Task LoadLabAttemptsAsync()
+    {
+        var labs = await Db.Labs.OrderBy(l => l.Number).Select(l => new { l.Id, l.Number, l.Title, l.AttemptsMax }).ToListAsync();
+        _labAttempts = labs.Select(l => new LabAttemptsRow
+        {
+            LabId = l.Id, Number = l.Number, Title = l.Title,
+            Original = l.AttemptsMax, Value = l.AttemptsMax,
+        }).ToList();
+    }
+
+    private void LoadSettingsFields()
+    {
+        _geminiKey   = Cfg["Gemini:ApiKey"]  ?? "";
+        _geminiModel = Cfg["Gemini:Model"]   ?? "gemini-2.5-flash";
+        _geminiLimit = int.TryParse(Cfg["Gemini:DailyLimit"], out var v) ? v : 50;
+        _workRoot    = Cfg["Grading:WorkRoot"] ?? "";
+    }
+
+    // ── Toggle helpers ────────────────────────────────────────────────────────
+    private void ChangeAttempts(LabAttemptsRow row, int delta)
+    {
+        row.Value = Math.Clamp(row.Value + delta, 1, 10);
+    }
+
+    private async Task SaveAttempts()
+    {
+        _savingAttempts = true; StateHasChanged();
+        try
+        {
+            foreach (var row in _labAttempts.Where(r => r.Changed))
+            {
+                await Db.Labs.Where(l => l.Id == row.LabId)
+                    .ExecuteUpdateAsync(l => l.SetProperty(x => x.AttemptsMax, row.Value));
+                // propagate to Locked submissions only (active grading not affected)
+                await Db.Submissions
+                    .Where(s => s.LabDefId == row.LabId && s.Status == (int)LabStatus.Locked)
+                    .ExecuteUpdateAsync(s => s.SetProperty(x => x.AttemptsMax, row.Value));
+                row.Original = row.Value;
+            }
+            _attemptsMsg = "ok:Ліміти оновлено";
+        }
+        catch (Exception ex)
+        {
+            _attemptsMsg = $"err:{ex.Message}";
+        }
+        _savingAttempts = false; StateHasChanged();
+        await Task.Delay(2000); _attemptsMsg = ""; StateHasChanged();
+    }
+
+    private void ToggleProfile()
+    {
+        _profileEdit = !_profileEdit; _profileMsg = ""; _pwEdit = false;
+        if (_profileEdit)
+        {
+            _firstName = App.Teacher.FirstName;
+            _lastName  = App.Teacher.LastName;
+            _email     = _emailDisplay;
+            _posada    = App.Teacher.Title;
+            _course    = App.Teacher.Course;
+        }
+    }
+
+    private async Task ChangePassword()
+    {
+        if (string.IsNullOrWhiteSpace(_pwNew))    { _pwMsg = "err:Новий пароль не може бути порожнім."; return; }
+        if (_pwNew != _pwConfirm)                  { _pwMsg = "err:Паролі не збігаються."; return; }
+        if (_pwNew.Length < 6)                     { _pwMsg = "err:Пароль має бути не менше 6 символів."; return; }
+        if (string.IsNullOrWhiteSpace(_pwOld))     { _pwMsg = "err:Введіть поточний пароль."; return; }
+
+        _savingPw = true; StateHasChanged();
+        try
+        {
+            var state = await AuthStateTask;
+            var email = Auth.GetEmail(state.User);
+            var sub   = Auth.GetSub(state.User);
+
+            await KcAdmin.VerifyPasswordAsync(email, _pwOld);
+            await KcAdmin.ChangePasswordAsync(sub, _pwNew);
+
+            _pwMsg = "ok:Пароль успішно змінено";
+            _pwOld = _pwNew = _pwConfirm = "";
+        }
+        catch (Exception ex)
+        {
+            _pwMsg = $"err:{ex.Message}";
+        }
+        _savingPw = false; StateHasChanged();
+        if (_pwMsg.StartsWith("ok:"))
+        {
+            await Task.Delay(1500);
+            _pwEdit = false; _pwMsg = ""; StateHasChanged();
+        }
+    }
+
+    private void ToggleSettings()
+    {
+        _settingsEdit = !_settingsEdit; _settingsMsg = "";
+        if (_settingsEdit) LoadSettingsFields();
+    }
+
+    // ── Save profile ─────────────────────────────────────────────────────────
+    private async Task SaveProfile()
+    {
+        _savingProfile = true; StateHasChanged();
+        var state = await AuthStateTask;
+        var sub   = Auth.GetSub(state.User);
+        var link  = await Db.UserLinks.AsNoTracking().FirstOrDefaultAsync(l => l.KeycloakSub == sub);
+        if (link?.TeacherId is int teacherId)
+        {
+            var initials = (_firstName.Length > 0 ? _firstName[0].ToString() : "")
+                         + (_lastName.Length  > 0 ? _lastName[0].ToString()  : "");
+            await Db.Teachers.Where(t => t.Id == teacherId).ExecuteUpdateAsync(t => t
+                .SetProperty(x => x.FirstName, _firstName.Trim())
+                .SetProperty(x => x.LastName,  _lastName.Trim())
+                .SetProperty(x => x.Initials,  initials)
+                .SetProperty(x => x.Email,     _email.Trim())
+                .SetProperty(x => x.Title,     _posada.Trim())
+                .SetProperty(x => x.Course,    _course.Trim()));
+            _emailDisplay = _email.Trim();
+            await App.PreloadAsync(state.User);
+            _profileMsg = "ok:Профіль оновлено";
+        }
+        else
+        {
+            _profileMsg = "err:Профіль викладача не знайдено";
+        }
+        _savingProfile = false; _profileEdit = false; StateHasChanged();
+        await Task.Delay(2000); _profileMsg = ""; StateHasChanged();
+    }
+
+    // ── Save settings (writes appsettings.json + reloads config) ─────────────
+    private async Task SaveSettings()
+    {
+        _savingSettings = true; StateHasChanged();
+        try
+        {
+            var path = Path.Combine(Env.ContentRootPath, "appsettings.json");
+            var json = await File.ReadAllTextAsync(path);
+            var node = System.Text.Json.Nodes.JsonNode.Parse(json)!;
+
+            node["Gemini"]!["ApiKey"]     = _geminiKey.Trim();
+            node["Gemini"]!["Model"]      = string.IsNullOrWhiteSpace(_geminiModel) ? "gemini-2.5-flash" : _geminiModel.Trim();
+            node["Gemini"]!["DailyLimit"] = _geminiLimit > 0 ? _geminiLimit : 50;
+            node["Grading"]!["WorkRoot"]  = _workRoot.Trim();
+
+            var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+            await File.WriteAllTextAsync(path, node.ToJsonString(opts));
+
+            if (Cfg is IConfigurationRoot root) root.Reload();
+            _settingsMsg = "ok:Налаштування збережено та застосовано";
+        }
+        catch (Exception ex)
+        {
+            _settingsMsg = $"err:{ex.Message}";
+        }
+        _savingSettings = false; _settingsEdit = false; StateHasChanged();
+        await Task.Delay(2000); _settingsMsg = ""; StateHasChanged();
+    }
+
+    private static RenderFragment Feedback(string msg) => __builder =>
+    {
+        if (string.IsNullOrEmpty(msg)) return;
+        var isErr = msg.StartsWith("err:");
+        var text  = msg.StartsWith("ok:") || msg.StartsWith("err:") ? msg[3..] : msg;
+        __builder.OpenElement(0, "div");
+        __builder.AddAttribute(1, "style",
+            $"padding:9px 13px;background:{(isErr ? "rgba(255,80,80,0.08)" : "rgba(118,199,173,0.1)")};border:1px solid {(isErr ? "rgba(255,80,80,0.25)" : "rgba(118,199,173,0.25)")};border-radius:9px;color:{(isErr ? "var(--st-red)" : "var(--st-green)")};font-size:13px");
+        __builder.AddContent(2, text);
+        __builder.CloseElement();
+    };
+}

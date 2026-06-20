@@ -15,15 +15,17 @@ public class DatabaseSeeder(
     public async Task SeedAsync()
     {
         // In development: if the schema is stale (missing tables), drop and recreate.
+        // NOTE: new columns are added via soft migration below — do NOT add them here
+        // or existing data will be wiped on every upgrade.
         if (env.IsDevelopment())
         {
             try
             {
-                // Quick schema check — query columns added recently
                 await db.UserLinks.AnyAsync();
                 await db.Notifications.AnyAsync();
                 await db.Comments.AnyAsync();
                 _ = await db.Submissions.Select(s => s.BranchOverride).FirstOrDefaultAsync();
+                _ = await db.Submissions.Select(s => s.SubmittedAt).FirstOrDefaultAsync();
             }
             catch (Exception)
             {
@@ -34,10 +36,42 @@ public class DatabaseSeeder(
 
         await db.Database.EnsureCreatedAsync();
 
+        // Soft migration: add new columns without dropping data.
+        // SQLite ALTER TABLE ADD COLUMN is idempotent via try/catch.
+        await AddColumnIfMissingAsync("Submissions", "Attempt1Score", "INTEGER");
+        await AddColumnIfMissingAsync("Submissions", "Attempt2Score", "INTEGER");
+        await AddColumnIfMissingAsync("Submissions", "Attempt3Score", "INTEGER");
+        await AddColumnIfMissingAsync("Labs",    "AttemptsMax", "INTEGER NOT NULL DEFAULT 3");
+        await AddColumnIfMissingAsync("Teachers", "Email",       "TEXT NOT NULL DEFAULT ''");
+
         if (!await db.Labs.AnyAsync())     await SeedLabsAsync();
         if (!await db.Groups.AnyAsync())   await SeedGroupsAsync();
         if (!await db.Teachers.AnyAsync()) await SeedTeachersAsync();
         if (!await db.Students.AnyAsync()) await SeedStudentsAsync();
+
+        // Backfill: ensure every submission has AttemptsMax = 3
+        await db.Database.ExecuteSqlRawAsync(
+            "UPDATE Submissions SET AttemptsMax = 3 WHERE AttemptsMax != 3");
+
+        // Backfill: treat existing AutoScore as the first attempt for all submissions
+        // that already have a score but no attempt slots filled yet.
+        await db.Database.ExecuteSqlRawAsync(
+            "UPDATE Submissions SET Attempt1Score = AutoScore WHERE AutoScore IS NOT NULL AND Attempt1Score IS NULL");
+
+        // Backfill: якщо лаба відхилена (Status=2) — авто-оцінка не виставляється
+        await db.Database.ExecuteSqlRawAsync(
+            "UPDATE Submissions SET AutoScore = NULL WHERE Status = 2 AND AutoScore IS NOT NULL");
+    }
+
+    private async Task AddColumnIfMissingAsync(string table, string column, string type)
+    {
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                $"ALTER TABLE \"{table}\" ADD COLUMN \"{column}\" {type}");
+            log.LogInformation("Soft-migrated: added {Column} to {Table}", column, table);
+        }
+        catch { /* column already exists — that's fine */ }
     }
 
     // ── Labs ─────────────────────────────────────────────────────────────
@@ -196,15 +230,26 @@ public class DatabaseSeeder(
                     if (li < CustomStatuses.Length)
                     {
                         var (status, auto, def, cur) = CustomStatuses[li];
+                        var hasAttempt = status != LabStatus.Locked && auto > 0;
+                        // Demo: show 2 attempts for first two labs to illustrate attempt history
+                        int? a1 = hasAttempt ? (li == 0 ? 82 : li == 1 ? 71 : auto) : null;
+                        int? a2 = hasAttempt && li <= 1 ? auto : null;
+                        int? a3 = null;
+                        // AutoScore виставляється лише якщо >= 50 та статус не Rejected
+                        var autoScore = (status != LabStatus.Locked && status != LabStatus.Rejected && auto >= 50)
+                            ? auto : (int?)null;
                         sub = new Submission
                         {
                             StudentId = rec.Id, LabDefId = lab.Id,
                             Status = (int)status, IsCurrent = cur,
-                            AutoScore    = status != LabStatus.Locked ? auto : null,
+                            Attempt1Score = a1, Attempt2Score = a2, Attempt3Score = a3,
+                            AutoScore    = autoScore,
                             DefenseScore = status == LabStatus.Done && def > 0 ? def : null,
                             FinalScore   = status == LabStatus.Done && def > 0 ? Final(auto, def) : null,
+                            SubmittedAt  = hasAttempt ? DateTime.UtcNow.AddDays(-(13 - li) * 4) : null,
                             Deadline = null,
-                            AttemptsUsed = li == 2 ? 1 : 0, AttemptsMax = 3,
+                            AttemptsUsed = a3.HasValue ? 3 : a2.HasValue ? 2 : a1.HasValue ? 1 : 0,
+                            AttemptsMax = 3,
                         };
                     }
                     else
@@ -214,19 +259,43 @@ public class DatabaseSeeder(
                 }
                 else if (s.Rej > 0 && j == s.Rej)
                 {
-                    int a = Clamp((int)Math.Round(s.Lvl - 25 + Noise(8)));
-                    sub = new Submission { StudentId = rec.Id, LabDefId = lab.Id, Status = (int)LabStatus.Rejected, AutoScore = a, AttemptsMax = 3 };
+                    // Відхилена лаба: оцінка < 50, AutoScore = null (не виставляється)
+                    int a = Math.Min(47, Math.Max(20, Clamp((int)Math.Round(s.Lvl - 35 + Noise(8)))));
+                    sub = new Submission
+                    {
+                        StudentId = rec.Id, LabDefId = lab.Id,
+                        Status = (int)LabStatus.Rejected,
+                        AutoScore = null, Attempt1Score = a,
+                        SubmittedAt = DateTime.UtcNow.AddDays(-(rng() * 14 + 1)),
+                        AttemptsUsed = 1, AttemptsMax = 3,
+                    };
                 }
                 else if (j <= s.Done)
                 {
-                    int a = Clamp((int)Math.Round(s.Lvl + Noise(9)));
-                    int d = Clamp((int)Math.Round(s.Lvl + Noise(7)));
-                    sub = new Submission { StudentId = rec.Id, LabDefId = lab.Id, Status = (int)LabStatus.Done, AutoScore = a, DefenseScore = d, FinalScore = Final(a, d), AttemptsMax = 3 };
+                    int a = Math.Max(50, Clamp((int)Math.Round(s.Lvl + Noise(9))));
+                    int d = Math.Max(50, Clamp((int)Math.Round(s.Lvl + Noise(7))));
+                    sub = new Submission
+                    {
+                        StudentId = rec.Id, LabDefId = lab.Id,
+                        Status = (int)LabStatus.Done,
+                        AutoScore = a, Attempt1Score = a,
+                        DefenseScore = d, FinalScore = Final(a, d),
+                        SubmittedAt = DateTime.UtcNow.AddDays(-(s.Done - j + 1) * 5 - 2),
+                        AttemptsUsed = 1, AttemptsMax = 3,
+                    };
                 }
                 else if (j == s.Done + 1 && s.Review)
                 {
-                    int a = Clamp((int)Math.Round(s.Lvl + Noise(9)));
-                    sub = new Submission { StudentId = rec.Id, LabDefId = lab.Id, Status = (int)LabStatus.Review, AutoScore = a, AttemptsMax = 3 };
+                    // Review: оцінка >= 50 — студент пройшов автоперевірку і чекає на захист
+                    int a = Math.Max(52, Clamp((int)Math.Round(s.Lvl + Noise(9))));
+                    sub = new Submission
+                    {
+                        StudentId = rec.Id, LabDefId = lab.Id,
+                        Status = (int)LabStatus.Review,
+                        AutoScore = a, Attempt1Score = a,
+                        SubmittedAt = DateTime.UtcNow.AddDays(-(rng() * 5 + 1)),
+                        AttemptsUsed = 1, AttemptsMax = 3,
+                    };
                 }
                 else
                 {

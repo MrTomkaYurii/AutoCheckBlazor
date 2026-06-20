@@ -1,15 +1,19 @@
 @* Create / Edit task dialog *@
 <MudDialog>
     <DialogContent>
-        <div class="glass" style="width:540px;max-width:92vw;padding:26px;box-shadow:var(--shadow-pop)">
-            <div style="display:flex;align-items:center;gap:13px;margin-bottom:20px">
+        <div id="task-dlg-glass" class="glass" style="width:620px;max-width:95vw;min-width:420px;min-height:480px;padding:26px;box-shadow:var(--shadow-pop);resize:both;overflow:auto;display:flex;flex-direction:column">
+
+            @* Header *@
+            <div style="display:flex;align-items:center;gap:13px;margin-bottom:20px;flex:none">
                 <span style="width:40px;height:40px;border-radius:11px;display:grid;place-items:center;background:var(--acc-dim);border:1px solid var(--glass-border);color:var(--acc-bright)"><Icon Name="spark" Size="18" /></span>
                 <h3 style="margin:0;font-size:17px;font-weight:720">@(IsNew ? "Нове завдання" : "Редагування завдання")</h3>
                 <button @onclick="Cancel" style="margin-left:auto;width:36px;height:36px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--tx-2);cursor:pointer;display:grid;place-items:center"><Icon Name="x" Size="15" /></button>
             </div>
 
-            <div style="display:flex;flex-direction:column;gap:13px">
-                <div style="display:grid;grid-template-columns:80px 1fr 110px;gap:12px;align-items:end">
+            @* Body — grows with resize *@
+            <div style="display:flex;flex-direction:column;gap:13px;flex:1;min-height:0">
+
+                <div style="display:grid;grid-template-columns:80px 1fr 110px;gap:12px;align-items:end;flex:none">
                     <div class="field">
                         <label>№ *</label>
                         <input class="input" type="number" min="1" @bind="_number" />
@@ -29,18 +33,21 @@
                     </div>
                 </div>
 
-                <div class="field">
+                @* Textarea fills all remaining vertical space *@
+                <div class="field" style="flex:1;display:flex;flex-direction:column;min-height:0">
                     <label>Умова (markdown)</label>
-                    <textarea class="input mono" rows="6" @bind="_brief" placeholder="Напишіть програму, яка…" style="resize:vertical;min-height:100px;font-size:12.5px;line-height:1.6"></textarea>
+                    <textarea class="input mono" @bind="_brief" placeholder="Напишіть програму, яка…"
+                              style="flex:1;resize:none;min-height:80px;font-size:12.5px;line-height:1.6"></textarea>
                 </div>
 
                 @if (!string.IsNullOrEmpty(_error))
                 {
-                    <div style="padding:9px 13px;background:rgba(232,128,107,0.1);border:1px solid rgba(232,128,107,0.3);border-radius:9px;color:var(--st-red);font-size:13px">@_error</div>
+                    <div style="flex:none;padding:9px 13px;background:rgba(232,128,107,0.1);border:1px solid rgba(232,128,107,0.3);border-radius:9px;color:var(--st-red);font-size:13px">@_error</div>
                 }
             </div>
 
-            <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end">
+            @* Footer *@
+            <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;flex:none">
                 <button class="btn btn-ghost" @onclick="Cancel">Скасувати</button>
                 <button class="btn btn-primary" @onclick="Save" disabled="@_saving">
                     <Icon Name="check" Size="16" />@(_saving ? "Збереження…" : (IsNew ? "Додати" : "Зберегти"))
@@ -51,6 +58,7 @@
 </MudDialog>
 
 @inject ILabManagementService LabSvc
+@inject IJSRuntime JS
 
 @code {
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
@@ -59,6 +67,12 @@
 
     private bool IsNew => Existing is null;
     private int _number = 1, _difficulty = 2; private string _title = "", _brief = "", _error = ""; private bool _saving;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            await JS.InvokeVoidAsync("dialogInterop.unlockResize", "task-dlg-glass");
+    }
 
     protected override void OnInitialized()
     {

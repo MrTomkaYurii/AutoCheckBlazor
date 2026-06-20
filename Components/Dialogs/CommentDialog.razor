@@ -57,6 +57,9 @@
 </MudDialog>
 
 @inject ICommentService CommentSvc
+@inject INotificationService NotifSvc
+@inject TeacherNotificationService TeacherNotif
+@inject AppDbContext Db
 @inject AppState App
 
 @code {
@@ -81,10 +84,36 @@
     private async Task AddComment()
     {
         if (string.IsNullOrWhiteSpace(_newText)) return;
-        var name = _isTeacher ? App.Teacher.FirstName + " " + App.Teacher.LastName : App.Student.FirstName + " " + App.Student.LastName;
+        var text = _newText.Trim();
+        var name = _isTeacher
+            ? App.Teacher.FirstName + " " + App.Teacher.LastName
+            : App.Student.FirstName + " " + App.Student.LastName;
         var role = _isTeacher ? "teacher" : "student";
-        await CommentSvc.AddAsync(SubmissionId, null, role, name, _newText.Trim());
-        _newText = "";
+        await CommentSvc.AddAsync(SubmissionId, null, role, name, text);
+
+        var preview = text.Length > 80 ? text[..80] + "…" : text;
+
+        if (_isTeacher)
+        {
+            // Викладач коментує → сповіщення студенту
+            var sub = await Db.Submissions.FindAsync(SubmissionId);
+            if (sub is not null)
+                await NotifSvc.SendAsync(
+                    sub.StudentId,
+                    $"Коментар до {LabTitle}",
+                    $"{App.Teacher.FirstName} {App.Teacher.LastName}: {preview}",
+                    "comment");
+        }
+        else
+        {
+            // Студент коментує → сповіщення викладачу
+            TeacherNotif.Add(
+                $"{StudentName} · {LabTitle}",
+                preview,
+                "comment");
+        }
+
+        _newText  = "";
         _comments = await CommentSvc.GetForSubmissionAsync(SubmissionId);
     }
 

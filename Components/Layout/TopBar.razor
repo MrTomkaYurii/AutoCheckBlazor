@@ -1,4 +1,7 @@
 @inject AppState App
+@inject NavigationManager Nav
+@inject INotificationService NotifSvc
+@inject TeacherNotificationService TeacherNotif
 
 <header style="display:flex;align-items:center;gap:18px;padding:22px 34px 20px;position:sticky;top:0;z-index:10;background:linear-gradient(180deg, rgba(15,26,22,0.92) 55%, rgba(15,26,22,0.7));backdrop-filter:blur(14px) saturate(1.1);-webkit-backdrop-filter:blur(14px) saturate(1.1);border-bottom:1px solid var(--line)">
     <div style="min-width:0">
@@ -7,10 +10,7 @@
             <div style="display:flex;align-items:center;gap:7px;margin-bottom:7px;color:var(--tx-3);font-size:12.5px;font-weight:500">
                 @for (int i = 0; i < Crumbs.Length; i++)
                 {
-                    if (i > 0)
-                    {
-                        <Icon Name="chevR" Size="13" />
-                    }
+                    if (i > 0) { <Icon Name="chevR" Size="13" /> }
                     <span style="color:@(i == Crumbs.Length - 1 ? "var(--tx-2)" : "var(--tx-3)")">@Crumbs[i]</span>
                 }
             </div>
@@ -24,21 +24,199 @@
 
     <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
         @ChildContent
-        <button class="topbar-icon" style="@IconBtn"><Icon Name="search" Size="18" /></button>
-        <button class="topbar-icon" style="@IconBtn;position:relative">
-            <Icon Name="bell" Size="18" />
-            <span style="position:absolute;top:9px;right:10px;width:7px;height:7px;border-radius:50%;background:var(--st-yellow);box-shadow:0 0 8px var(--st-yellow)"></span>
+
+        @* Search *@
+        <button class="topbar-icon" @onclick="OpenSearch" style="@IconBtn" title="Пошук">
+            <Icon Name="search" Size="18" />
         </button>
+
+        @* Bell — students and teachers *@
+        <button class="topbar-icon" @onclick="OpenBell" style="@IconBtn;position:relative" title="Сповіщення">
+            <Icon Name="bell" Size="18" />
+            @if (_unreadCount > 0)
+            {
+                <span style="position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%;background:var(--st-yellow);box-shadow:0 0 8px var(--st-yellow)"></span>
+            }
+        </button>
+
+        @* Avatar *@
         <div style="display:flex;align-items:center;gap:10px;padding-left:6px">
             <div style="text-align:right;line-height:1.25">
                 <div style="font-size:13.5px;font-weight:650">@Name</div>
                 <div style="font-size:11px;color:var(--tx-3)">@RoleLabel</div>
                 <div style="font-size:10.5px;color:var(--tx-faint);margin-top:1px">Кафедра КН · ЧНУ</div>
             </div>
-            <div style="@Avatar">@Initials</div>
+            <div style="@AvatarCss">@Initials</div>
         </div>
     </div>
 </header>
+
+@* ── Search overlay ──────────────────────────────────────────────────────── *@
+@if (_searchOpen)
+{
+    <div @onclick="CloseSearch"
+         style="position:fixed;inset:0;z-index:500;background:rgba(6,12,10,0.75);backdrop-filter:blur(7px);display:flex;align-items:flex-start;justify-content:center;padding-top:90px">
+        <div @onclick:stopPropagation style="width:580px;max-width:94vw;animation:popIn .2s cubic-bezier(.22,1,.36,1) both">
+            <div class="glass" style="padding:0;overflow:hidden;border-radius:18px;box-shadow:var(--shadow-pop);border:1px solid var(--glass-border-hover)">
+
+                @* Input *@
+                <div style="display:flex;align-items:center;gap:12px;padding:16px 20px">
+                    <Icon Name="search" Size="18" Style="color:var(--acc);flex:none" />
+                    <input @bind="_searchQuery" @bind:event="oninput"
+                           placeholder="Пошук по розділах…"
+                           style="flex:1;background:transparent;border:none;outline:none;font-size:15.5px;color:var(--tx-1);font-family:inherit;letter-spacing:-0.01em" />
+                    @if (!string.IsNullOrEmpty(_searchQuery))
+                    {
+                        <button @onclick="@(() => _searchQuery = "")" style="@XBtn"><Icon Name="x" Size="13" /></button>
+                    }
+                </div>
+
+                @* Page filter chips *@
+                <div style="padding:0 20px 14px;display:flex;flex-wrap:wrap;gap:6px">
+                    @foreach (var p in AllPages)
+                    {
+                        var on = _enabledPages.Contains(p.Url);
+                        <button @onclick="@(() => TogglePage(p.Url))"
+                                style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:20px;border:1px solid;border-color:@(on ? "var(--acc)" : "var(--line)");background:@(on ? "var(--acc-dim)" : "rgba(255,255,255,0.03)");color:@(on ? "var(--acc-bright)" : "var(--tx-3)");font-size:12px;font-weight:@(on ? "650" : "500");cursor:pointer;transition:all .15s;font-family:inherit">
+                            @if (on) { <span style="font-size:10px">✓</span> }
+                            @p.Label
+                        </button>
+                    }
+                </div>
+
+                <div style="height:1px;background:var(--line)"></div>
+
+                @* Results *@
+                <div style="max-height:290px;overflow-y:auto;padding:8px">
+                    @{ var pages = FilteredPages; }
+                    @if (pages.Count == 0)
+                    {
+                        <div style="padding:28px;text-align:center;color:var(--tx-faint);font-size:13.5px">
+                            @(string.IsNullOrEmpty(_searchQuery) ? "Всі розділи приховано" : "Нічого не знайдено")
+                        </div>
+                    }
+                    @foreach (var p in pages)
+                    {
+                        <button @onclick="@(() => Navigate(p.Url))"
+                                class="grow"
+                                style="display:flex;align-items:center;gap:14px;padding:10px 12px;border-radius:11px;border:none;background:transparent;color:var(--tx-1);cursor:pointer;text-align:left;width:100%">
+                            <span style="width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:var(--acc-dim);color:var(--acc);border:1px solid var(--glass-border);flex:none">
+                                <Icon Name="@p.Icon" Size="17" />
+                            </span>
+                            <div style="flex:1;min-width:0">
+                                <div style="font-size:14px;font-weight:640;letter-spacing:-0.01em">@p.Label</div>
+                                <div style="font-size:11.5px;color:var(--tx-3);margin-top:2px;font-family:var(--mono)">@p.Url</div>
+                            </div>
+                            <Icon Name="chevR" Size="15" Style="color:var(--tx-faint);flex:none" />
+                        </button>
+                    }
+                </div>
+
+                <div style="padding:10px 20px 12px;border-top:1px solid var(--line);display:flex;align-items:center;gap:16px">
+                    <span style="font-size:11.5px;color:var(--tx-faint)">Esc — закрити</span>
+                    <button @onclick="@(() => _enabledPages = AllPages.Select(p => p.Url).ToHashSet())"
+                            style="margin-left:auto;font-size:11.5px;color:var(--tx-3);background:none;border:none;cursor:pointer;font-family:inherit;padding:0">
+                        Вибрати всі
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ── Notifications dropdown ──────────────────────────────────────────────── *@
+@if (_bellOpen)
+{
+    <div @onclick="CloseBell" style="position:fixed;inset:0;z-index:500">
+        <div @onclick:stopPropagation
+             style="position:absolute;top:80px;right:34px;width:370px;animation:popIn .18s cubic-bezier(.22,1,.36,1) both">
+            <div class="glass" style="padding:0;overflow:hidden;border-radius:16px;box-shadow:var(--shadow-pop);border:1px solid var(--glass-border-hover)">
+
+                @* Header *@
+                <div style="display:flex;align-items:center;gap:10px;padding:15px 18px;border-bottom:1px solid var(--line)">
+                    <Icon Name="bell" Size="17" Style="color:var(--st-yellow)" />
+                    <span style="font-size:15px;font-weight:720">Сповіщення</span>
+                    @if (_unreadCount > 0)
+                    {
+                        <span class="badge badge-yellow" style="margin-left:auto">@_unreadCount нових</span>
+                    }
+                </div>
+
+                @* List *@
+                <div style="max-height:380px;overflow-y:auto">
+                    @{
+                        var anyItems   = _isTeacher ? _teacherNotifications.Count > 0 : _notifications.Count > 0;
+                        var anyUnread  = _isTeacher ? _teacherNotifications.Any(n => !n.IsRead) : _notifications.Any(n => !n.IsRead);
+                    }
+                    @if (!anyItems)
+                    {
+                        <div style="padding:32px;text-align:center">
+                            <div style="font-size:28px;margin-bottom:8px">🔔</div>
+                            <div style="font-size:13.5px;color:var(--tx-faint)">Нових сповіщень немає</div>
+                        </div>
+                    }
+
+                    @if (_isTeacher)
+                    {
+                        @foreach (var n in _teacherNotifications)
+                        {
+                            <div style="display:flex;gap:12px;padding:13px 18px;border-bottom:1px solid var(--line);background:@(n.IsRead ? "transparent" : "rgba(118,199,173,0.04)")">
+                                <span style="width:34px;height:34px;border-radius:9px;display:grid;place-items:center;background:var(--acc)18;color:var(--acc);border:1px solid var(--acc)33;flex:none">
+                                    <Icon Name="spark" Size="15" />
+                                </span>
+                                <div style="min-width:0;flex:1">
+                                    <div style="font-size:13.5px;font-weight:@(n.IsRead ? "500" : "680");color:var(--tx-1)">@n.Title</div>
+                                    <div style="font-size:12.5px;color:var(--tx-3);margin-top:3px;line-height:1.5">@n.Body</div>
+                                    <div style="font-size:11px;color:var(--tx-faint);margin-top:4px">@FormatTime(n.CreatedAt)</div>
+                                </div>
+                                @if (!n.IsRead)
+                                {
+                                    <span style="width:7px;height:7px;border-radius:50%;background:var(--st-yellow);flex:none;margin-top:5px"></span>
+                                }
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        @foreach (var n in _notifications)
+                        {
+                            var (icon, tone) = n.Type switch
+                            {
+                                "comment" => ("spark", "var(--acc)"),
+                                "grade"   => ("target", "var(--st-green)"),
+                                _         => ("check", "var(--st-yellow)"),
+                            };
+                            <div style="display:flex;gap:12px;padding:13px 18px;border-bottom:1px solid var(--line);background:@(n.IsRead ? "transparent" : "rgba(118,199,173,0.04)")">
+                                <span style="width:34px;height:34px;border-radius:9px;display:grid;place-items:center;background:@(tone)18;color:@tone;border:1px solid @(tone)33;flex:none">
+                                    <Icon Name="@icon" Size="15" />
+                                </span>
+                                <div style="min-width:0;flex:1">
+                                    <div style="font-size:13.5px;font-weight:@(n.IsRead ? "500" : "680");color:var(--tx-1)">@n.Title</div>
+                                    <div style="font-size:12.5px;color:var(--tx-3);margin-top:3px;line-height:1.5">@n.Body</div>
+                                    <div style="font-size:11px;color:var(--tx-faint);margin-top:4px">@FormatTime(n.CreatedAt)</div>
+                                </div>
+                                @if (!n.IsRead)
+                                {
+                                    <span style="width:7px;height:7px;border-radius:50%;background:var(--st-yellow);flex:none;margin-top:5px"></span>
+                                }
+                            </div>
+                        }
+                    }
+                </div>
+
+                @* Footer *@
+                @if (_isTeacher ? _teacherNotifications.Any(n => !n.IsRead) : _notifications.Any(n => !n.IsRead))
+                {
+                    <div style="padding:11px 18px;border-top:1px solid var(--line)">
+                        <button class="btn btn-ghost btn-block btn-sm" @onclick="MarkAllRead">
+                            <Icon Name="check" Size="14" />Позначити всі як прочитані
+                        </button>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
 
 @code {
     [Parameter] public string Title { get; set; } = "";
@@ -49,16 +227,128 @@
     [CascadingParameter] private Task<AuthenticationState> AuthStateTask { get; set; } = default!;
     private bool _isTeacher;
 
-    protected override async Task OnInitializedAsync()
+    // ── Search ────────────────────────────────────────────────────────────────
+    private bool _searchOpen;
+    private string _searchQuery = "";
+    private HashSet<string> _enabledPages = [];
+
+    private record PageEntry(string Label, string Url, string Icon, string Keywords = "");
+
+    private static readonly PageEntry[] StudentPages =
+    [
+        new("Мій дашборд",   "/student",          "target", "головна огляд"),
+        new("Мої лаби",      "/student/labs",     "braces", "лабораторні список здати"),
+        new("Журнал оцінок", "/student/grades",   "grades", "журнал оцінки бали"),
+        new("Профіль",       "/student/profile",  "user",   "профіль github налаштування"),
+    ];
+
+    private static readonly PageEntry[] TeacherPages =
+    [
+        new("Огляд курсу",   "/teacher",               "target",  "головна огляд дашборд"),
+        new("Студенти",      "/teacher/students",      "users",   "студенти список"),
+        new("Журнал",        "/teacher/journal",       "grades",  "журнал оцінки"),
+        new("Лабораторні",   "/teacher/labs",          "braces",  "лаби завдання керування"),
+        new("Групи",         "/teacher/groups",        "spark",   "групи"),
+        new("Моніторинг",    "/teacher/monitoring",    "clock",   "моніторинг активність"),
+        new("Кабінет",       "/teacher/profile",       "profile", "профіль викладач посада курс практикум"),
+    ];
+
+    private PageEntry[] AllPages => _isTeacher ? TeacherPages : StudentPages;
+
+    private List<PageEntry> FilteredPages
     {
-        var state = await AuthStateTask;
-        _isTeacher = App.IsTeacher(state.User);
+        get
+        {
+            var enabled = AllPages.Where(p => _enabledPages.Contains(p.Url));
+            if (string.IsNullOrWhiteSpace(_searchQuery)) return [.. enabled];
+            var q = _searchQuery.Trim();
+            return enabled.Where(p =>
+                p.Label.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                p.Keywords.Contains(q, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
     }
 
-    private string Name => _isTeacher ? $"{App.Teacher.FirstName} {App.Teacher.LastName}" : $"{App.Student.FirstName} {App.Student.LastName}";
-    private string Initials => _isTeacher ? App.Teacher.Initials : App.Student.Initials;
+    private void TogglePage(string url)
+    {
+        if (!_enabledPages.Remove(url)) _enabledPages.Add(url);
+    }
+
+    private void OpenSearch()
+    {
+        _searchOpen   = true;
+        _searchQuery  = "";
+        _bellOpen     = false;
+        _enabledPages = AllPages.Select(p => p.Url).ToHashSet();
+    }
+    private void CloseSearch() => _searchOpen = false;
+    private void Navigate(string url) { CloseSearch(); Nav.NavigateTo(url); }
+
+    // ── Notifications ─────────────────────────────────────────────────────────
+    private bool _bellOpen;
+    private int  _unreadCount;
+    private List<Notification>      _notifications        = [];
+    private List<TeacherNotif>      _teacherNotifications = [];
+
+    private async Task OpenBell()
+    {
+        _bellOpen   = true;
+        _searchOpen = false;
+        if (_isTeacher)
+        {
+            _teacherNotifications = TeacherNotif.GetAll();
+            _unreadCount          = TeacherNotif.UnreadCount;
+        }
+        else
+        {
+            _notifications = await NotifSvc.GetUnreadAsync(App.StudentDbId ?? 1);
+        }
+        StateHasChanged();
+    }
+
+    private void CloseBell() => _bellOpen = false;
+
+    private async Task MarkAllRead()
+    {
+        if (_isTeacher)
+        {
+            TeacherNotif.MarkAllRead();
+            _teacherNotifications = TeacherNotif.GetAll();
+            _unreadCount          = 0;
+        }
+        else
+        {
+            await NotifSvc.MarkAllReadAsync(App.StudentDbId ?? 1);
+            foreach (var n in _notifications) n.IsRead = true;
+            _unreadCount = 0;
+        }
+        StateHasChanged();
+    }
+
+    private static string FormatTime(DateTime dt)
+    {
+        var diff = DateTime.UtcNow - dt.ToUniversalTime();
+        if (diff.TotalMinutes < 1)  return "щойно";
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes} хв тому";
+        if (diff.TotalHours   < 24) return $"{(int)diff.TotalHours} год тому";
+        return dt.ToLocalTime().ToString("dd.MM HH:mm");
+    }
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+    protected override async Task OnInitializedAsync()
+    {
+        var state  = await AuthStateTask;
+        _isTeacher = App.IsTeacher(state.User);
+        _unreadCount = _isTeacher
+            ? TeacherNotif.UnreadCount
+            : await NotifSvc.GetUnreadCountAsync(App.StudentDbId ?? 1);
+    }
+
+    private string Name      => _isTeacher ? $"{App.Teacher.FirstName} {App.Teacher.LastName}" : $"{App.Student.FirstName} {App.Student.LastName}";
+    private string Initials  => _isTeacher ? App.Teacher.Initials : App.Student.Initials;
     private string RoleLabel => _isTeacher ? $"Викладач · {App.Teacher.Title}" : $"{App.Student.Group} · Студент";
 
-    private const string IconBtn = "width:42px;height:42px;border-radius:12px;flex:none;border:1px solid var(--line);background:rgba(255,255,255,0.03);color:var(--tx-2);cursor:pointer;display:grid;place-items:center;transition:background .18s, color .18s, border-color .18s";
-    private const string Avatar = "width:44px;height:44px;border-radius:13px;flex:none;display:grid;place-items:center;font-weight:700;font-size:15px;background:linear-gradient(150deg, rgba(118,199,173,0.3), rgba(118,199,173,0.12));border:1px solid var(--glass-border-hover);color:var(--acc-bright)";
+    private const string IconBtn  = "width:42px;height:42px;border-radius:12px;flex:none;border:1px solid var(--line);background:rgba(255,255,255,0.03);color:var(--tx-2);cursor:pointer;display:grid;place-items:center;transition:background .18s,color .18s,border-color .18s";
+    private const string AvatarCss= "width:44px;height:44px;border-radius:13px;flex:none;display:grid;place-items:center;font-weight:700;font-size:15px;background:linear-gradient(150deg,rgba(118,199,173,0.3),rgba(118,199,173,0.12));border:1px solid var(--glass-border-hover);color:var(--acc-bright)";
+    private const string XBtn     = "width:26px;height:26px;border-radius:7px;border:1px solid var(--line);background:transparent;color:var(--tx-3);cursor:pointer;display:grid;place-items:center;flex:none";
 }

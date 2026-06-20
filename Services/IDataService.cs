@@ -17,4 +17,5 @@ public interface IDataService
     Task<TeacherStats> GetStatsAsync();
     Task<List<LabStat>> GetLabStatsAsync();
     Task<List<ReviewItem>> GetReviewQueueAsync();
+    Task<List<ReviewItem>> GetRejectedQueueAsync();
 }

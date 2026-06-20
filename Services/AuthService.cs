@@ -129,7 +129,7 @@ public class AuthService(AppDbContext db) : IAuthService
         // Create Locked submissions for all existing labs
         var labs = await db.Labs.ToListAsync();
         foreach (var lab in labs)
-            db.Submissions.Add(new Submission { StudentId = s.Id, LabDefId = lab.Id, Status = (int)LabStatus.Locked, AttemptsMax = 3 });
+            db.Submissions.Add(new Submission { StudentId = s.Id, LabDefId = lab.Id, Status = (int)LabStatus.Locked, AttemptsMax = lab.AttemptsMax });
         await db.SaveChangesAsync();
         return s;
     }

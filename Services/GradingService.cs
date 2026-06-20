@@ -19,7 +19,8 @@ public class GradingService(
     INotificationService notif,
     IConfiguration cfg,
     IWebHostEnvironment env,
-    ILogger<GradingService> log) : IGradingService
+    ILogger<GradingService> log,
+    GeminiQuotaService quota) : IGradingService
 {
     private string ApiKey   => cfg["Gemini:ApiKey"]  ?? "";
     private string Model    => cfg["Gemini:Model"]   ?? "gemini-2.5-flash";
@@ -41,7 +42,15 @@ public class GradingService(
             .FirstOrDefaultAsync(x => x.Id == submissionId && x.StudentId == studentId, ct)
             ?? throw new InvalidOperationException("Submission not found");
 
-        // ── 0. Pre-flight: Gemini availability ───────────────────────────────
+        // ── 0. Pre-flight ────────────────────────────────────────────────────
+        if (sub.AttemptsUsed >= sub.AttemptsMax)
+            throw new InvalidOperationException(
+                $"Ліміт спроб вичерпано ({sub.AttemptsMax} з {sub.AttemptsMax}). Зверніться до викладача.");
+
+        if (quota.IsExhausted)
+            throw new InvalidOperationException(
+                $"Денний ліміт перевірок вичерпано ({quota.DailyLimit} з {quota.DailyLimit} використано сьогодні). Спробуйте завтра.");
+
         if (string.IsNullOrEmpty(ApiKey))
             throw new InvalidOperationException(
                 "Система перевірки наразі недоступна. Зверніться до викладача.");
@@ -78,9 +87,16 @@ public class GradingService(
         var taskInputs = await Task.WhenAll(orderedTasks.Select(async taskDef =>
         {
             var mappedSha = commitMap?.FirstOrDefault(m => m.TaskNumber == taskDef.Number)?.Sha;
-            var code = !string.IsNullOrEmpty(mappedSha)
-                ? await GetCommitCodeAsync(workDir, mappedSha, ct)
-                : FindRelevantCode(codeFiles, taskDef.Title);
+            string code;
+            if (!string.IsNullOrEmpty(mappedSha))
+            {
+                var rawDiff = await GetCommitCodeAsync(workDir, mappedSha, ct);
+                code = FilterDiffToTask(rawDiff, taskDef.Number);
+            }
+            else
+            {
+                code = FindRelevantCode(codeFiles, taskDef.Title);
+            }
             var checks = LoadTaskChecks(lab.Number, taskDef.Number);
             return (Task: taskDef, Code: code, Checks: checks);
         }));
@@ -122,11 +138,27 @@ public class GradingService(
             ? (int)Math.Round(graded.Average(g => (double)g.Result.Score))
             : 0;
 
-        sub.AutoScore    = autoScore;
+        // Store score in the corresponding attempt slot (AttemptsUsed = index before increment)
+        var attemptIdx = sub.AttemptsUsed;
+        if      (attemptIdx == 0) sub.Attempt1Score = autoScore;
+        else if (attemptIdx == 1) sub.Attempt2Score = autoScore;
+        else                      sub.Attempt3Score = autoScore;
+
+        // AutoScore = найкраща спроба серед усіх; статус залежить від порогу 50
+        var bestScore = new[] { sub.Attempt1Score ?? 0, sub.Attempt2Score ?? 0, sub.Attempt3Score ?? 0 }.Max();
+        if (bestScore >= 50)
+        {
+            sub.AutoScore = bestScore;
+            sub.Status    = (int)LabStatus.Review;
+        }
+        else
+        {
+            sub.AutoScore = null;   // оцінка не виставляється — лаба відхилена до захисту
+            sub.Status    = (int)LabStatus.Rejected;
+        }
+
         sub.AttemptsUsed++;
-        sub.SubmittedAt  = DateTime.UtcNow;
-        if (sub.Status == (int)LabStatus.Locked)
-            sub.Status = (int)LabStatus.Review;
+        sub.SubmittedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync(ct);
 
@@ -187,22 +219,22 @@ public class GradingService(
 [
   {
     "n": <номер завдання>,
-    "state": "pass" або "warn" або "fail",
-    "score": <ціле 0-100>,
-    "done": ["<конкретна вимога — виконано>", "..."],
-    "issues": ["<конкретна вимога — НЕ виконано або з помилкою>", "..."],
-    "analysis": "<2-3 речення загальної оцінки>"
+    "done": ["<конкретна вимога з умови — виконана>", "..."],
+    "issues": ["<конкретна вимога з умови — НЕ виконана або виконана з помилкою>", "..."],
+    "analysis": "<2-3 речення загальної оцінки коду>"
   },
   ...
 ]
 """);
         sb.AppendLine("Правила:");
-        sb.AppendLine("• pass 80-100, warn 50-79, fail 0-49");
-        sb.AppendLine("• done/issues — лише конкретні вимоги з умови, не загальні фрази");
+        sb.AppendLine("• Перерахуй у done/issues ВСІ конкретні вимоги з умови — кожна має потрапити або в done, або в issues");
+        sb.AppendLine("• done/issues — лише конкретні вимоги з умови, не загальні фрази на кшталт 'код написаний' чи 'є помилки'");
+        sb.AppendLine("• Оцінка буде розрахована автоматично: score = done.length / (done.length + issues.length) × 100");
         sb.AppendLine($"• Поверни масив рівно з {inputs.Length} елементами (n=1..{inputs.Length})");
 
         try
         {
+            quota.RecordCall();
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(120) };
 
             var body = JsonSerializer.Serialize(new
@@ -258,10 +290,19 @@ public class GradingService(
             {
                 if (!item.TryGetProperty("n", out var nEl)) continue;
                 var n        = nEl.GetInt32();
-                var state    = item.TryGetProperty("state",    out var st) ? st.GetString() ?? "fail" : "fail";
-                var score    = item.TryGetProperty("score",    out var sc) ? sc.GetInt32()             : 0;
-                var analysis = item.TryGetProperty("analysis", out var an) ? an.GetString() ?? ""      : "";
-                byN[n] = new GradeResult(state, Math.Clamp(score, 0, 100), Arr(item, "done"), Arr(item, "issues"), analysis);
+                var done     = Arr(item, "done");
+                var issues   = Arr(item, "issues");
+                var analysis = item.TryGetProperty("analysis", out var an) ? an.GetString() ?? "" : "";
+
+                // Score is calculated from done/issues ratio for transparency.
+                // Gemini's own "score" field is ignored to avoid arbitrary numbers.
+                var total = done.Length + issues.Length;
+                var score = total > 0
+                    ? Math.Clamp((int)Math.Round((double)done.Length / total * 100), 0, 100)
+                    : (item.TryGetProperty("score", out var sc) ? Math.Clamp(sc.GetInt32(), 0, 100) : 0);
+                var state = score >= 80 ? "pass" : score >= 50 ? "warn" : "fail";
+
+                byN[n] = new GradeResult(state, score, done, issues, analysis);
             }
 
             return inputs
@@ -332,9 +373,16 @@ public class GradingService(
             Directory.CreateDirectory(WorkRoot);
 
             if (!Directory.Exists(dir))
-                await Git(".", $"clone --depth=1 --no-single-branch {repoUrl} {dir}", ct);
+            {
+                // Full clone — we need full history so git show works for any mapped commit
+                await Git(".", $"clone --no-single-branch {repoUrl} {dir}", ct);
+            }
             else
+            {
+                // Unshallow if previously cloned with --depth; ignore error if already full
+                await RunProcessAsync("git", "fetch --unshallow --all --prune", dir, ct);
                 await Git(dir, "fetch --all --prune", ct);
+            }
 
             await Git(dir, $"checkout {branch}", ct);
             await Git(dir, $"reset --hard origin/{branch}", ct);
@@ -415,16 +463,65 @@ public class GradingService(
     {
         try
         {
-            var (exit, stdout, _) = await RunProcessAsync(
+            var (exit, stdout, stderr) = await RunProcessAsync(
                 "git", $"show {sha} --unified=5 --no-color", workDir, ct);
-            if (exit != 0) return "(не вдалося отримати коміт)";
+            if (exit != 0)
+            {
+                log.LogWarning("git show {Sha} failed: {Err}", sha, stderr);
+                return "";
+            }
             return stdout.Length > 8000 ? stdout[..8000] + "\n// [truncated]" : stdout;
         }
-        catch { return "(помилка при отриманні diff коміту)"; }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "GetCommitCode failed for {Sha}", sha);
+            return "";
+        }
     }
 
     private static bool IsUkrainianStopWord(string w) =>
         w is "Клас" or "Метод" or "Клас:" or "Реалізуй" or "Визнач" or "Додай" or "Зростаючий";
+
+    // ── Diff filter — keeps only the hunk(s) for Task{N}.cs ─────────────────
+
+    private static string FilterDiffToTask(string diffOutput, int taskNumber)
+    {
+        if (string.IsNullOrWhiteSpace(diffOutput)) return diffOutput;
+
+        var trimmed = diffOutput.TrimStart();
+        if (!trimmed.StartsWith("commit ") && !trimmed.StartsWith("diff --git"))
+            return diffOutput; // plain file content, not a git diff
+
+        var pattern  = $"task{taskNumber}";
+        var lines    = diffOutput.Split('\n');
+        var header   = new List<string>(); // commit / Author / Date / message lines
+        var taskSec  = new List<string>(); // lines for this task's file
+        bool inDiff  = false;
+        bool inTask  = false;
+
+        foreach (var rawLine in lines)
+        {
+            var line = rawLine.TrimEnd('\r');
+            if (line.StartsWith("diff --git"))
+            {
+                inDiff = true;
+                inTask = line.Contains(pattern, StringComparison.OrdinalIgnoreCase);
+                if (inTask) taskSec.Add(line);
+            }
+            else if (!inDiff)
+            {
+                header.Add(line);
+            }
+            else if (inTask)
+            {
+                taskSec.Add(line);
+            }
+        }
+
+        return taskSec.Count > 0
+            ? string.Join('\n', header.Concat(taskSec))
+            : diffOutput; // fallback: show full diff if no task-specific file found
+    }
 
     // ── Diff parser ───────────────────────────────────────────────────────────
 

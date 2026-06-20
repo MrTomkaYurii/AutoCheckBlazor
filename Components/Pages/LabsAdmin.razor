@@ -41,7 +41,7 @@
             var isExpanded = _expanded == lab.Id;
             <div style="border-bottom:1px solid var(--line)">
                 @* Lab row *@
-                <div style="display:grid;grid-template-columns:50px 1fr 160px 80px auto;align-items:center;gap:16px;padding:14px 22px;min-width:0">
+                <div style="display:grid;grid-template-columns:50px 1fr 95px 110px 180px auto;align-items:center;gap:16px;padding:14px 22px;min-width:0">
                     <span class="mono" style="font-size:12.5px;font-weight:750;color:var(--acc-bright);background:var(--acc-dim);padding:5px 0;border-radius:8px;text-align:center;border:1px solid var(--glass-border)">@lab.Number.ToString("D2")</span>
                     <div>
                         <div style="font-size:14.5px;font-weight:650">@lab.Title</div>
@@ -50,35 +50,60 @@
                             {
                                 <span class="mono" style="color:var(--acc)">@lab.BranchName</span>
                             }
-                            @if (lab.Deadline.HasValue)
-                            {
-                                var dlLocal = lab.Deadline.Value.ToLocalTime();
-                                var dlOver  = DateTime.UtcNow > lab.Deadline.Value;
-                                <span style="color:@(dlOver ? "var(--st-red)" : "inherit")">
-                                    <Icon Name="calendar" Size="11" /> @dlLocal.ToString("dd.MM.yyyy HH:mm")
-                                </span>
-                            }
                             <span style="color:var(--acc-bright)">@lab.Tasks.Count завд.</span>
                         </div>
                     </div>
-                    <div style="font-size:12px;color:var(--tx-3)">
+                    @* Deadline column *@
+                    <div style="font-size:12px;line-height:1.5">
+                        @if (lab.Deadline.HasValue)
+                        {
+                            var dlLocal = lab.Deadline.Value.ToLocalTime();
+                            var dlOver  = DateTime.UtcNow > lab.Deadline.Value;
+                            <div style="display:flex;flex-direction:column;gap:2px">
+                                <div style="display:flex;align-items:center;gap:4px;color:@(dlOver ? "var(--st-red)" : "var(--tx-3)")">
+                                    <Icon Name="calendar" Size="11" />
+                                    <span>@dlLocal.ToString("dd.MM.yy")</span>
+                                </div>
+                                @if (dlOver) { <span style="font-size:10px;color:var(--st-red);opacity:0.8">прострочено</span> }
+                            </div>
+                        }
+                        else
+                        {
+                            <span style="color:var(--tx-faint)">—</span>
+                        }
+                    </div>
+                    @* Stats column *@
+                    <div style="font-size:12px;color:var(--tx-3);line-height:1.7">
                         @if (stat is not null)
                         {
-                            <div>Здано: @stat.Submitted / @stat.Total</div>
+                            <div>Здано: <span class="mono" style="color:var(--tx-2)">@stat.Submitted / @stat.Total</span></div>
                             @if (stat.Avg.HasValue)
                             {
                                 <div>Серед.: <span class="mono" style="color:var(--acc-bright)">@stat.Avg</span></div>
                             }
                         }
                     </div>
-                    <div>
-                        @if (stat is not null && stat.Submitted > 0)
+
+                    @* Status breakdown column *@
+                    <div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center">
+                        @if (stat is null || (stat.Done == 0 && stat.Review == 0 && stat.Rejected == 0))
                         {
-                            <span class="badge badge-green"><span class="dot"></span>Активна</span>
+                            <span class="badge badge-grey" style="font-size:10.5px"><span class="dot"></span>Немає здач</span>
                         }
                         else
                         {
-                            <span class="badge badge-grey"><span class="dot"></span>Нова</span>
+                            @if (stat.Done > 0)
+                            {
+                                <span class="badge badge-green" style="font-size:10.5px"><span class="dot"></span>@stat.Done зарах.</span>
+                            }
+                            @if (stat.Review > 0)
+                            {
+                                <span class="badge badge-yellow" style="font-size:10.5px"><span class="dot pulse"></span>@stat.Review захист</span>
+                            }
+                            @if (stat.Rejected > 0)
+                            {
+                                <span class="badge badge-red" style="font-size:10.5px"><span class="dot"></span>@stat.Rejected відхил.</span>
+                            }
                         }
                     </div>
                     <div style="display:flex;gap:6px;justify-content:flex-end;white-space:nowrap">
@@ -173,17 +198,23 @@
         await Reload();
     }
 
+    private static readonly DialogOptions TaskDlgOpts = new()
+    {
+        BackdropClick = true,
+        NoHeader      = true,
+    };
+
     private async Task AddTask(LabDef lab)
     {
         var p = new DialogParameters { ["LabId"] = lab.Id };
-        var dlg = await Dialog.ShowAsync<TaskDialog>("", p, new DialogOptions { BackdropClick = true, NoHeader = true });
+        var dlg = await Dialog.ShowAsync<TaskDialog>("", p, TaskDlgOpts);
         if ((await dlg.Result)?.Data is true) await Reload();
     }
 
     private async Task EditTask(LabDef lab, LabTask t)
     {
         var p = new DialogParameters { ["LabId"] = lab.Id, ["Existing"] = t };
-        var dlg = await Dialog.ShowAsync<TaskDialog>("", p, new DialogOptions { BackdropClick = true, NoHeader = true });
+        var dlg = await Dialog.ShowAsync<TaskDialog>("", p, TaskDlgOpts);
         if ((await dlg.Result)?.Data is true) await Reload();
     }
 

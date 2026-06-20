@@ -15,6 +15,7 @@ public class LabDef
     public int OrderIndex { get; set; }
     public string? FullMarkdown { get; set; }
     public DateTime? Deadline { get; set; }
+    public int AttemptsMax { get; set; } = 3;
 
     public List<LabTask> Tasks { get; set; } = [];
     public List<Submission> Submissions { get; set; } = [];
@@ -57,6 +58,7 @@ public class TeacherRecord
     public string FirstName { get; set; } = "";
     public string LastName { get; set; } = "";
     public string Initials { get; set; } = "";
+    public string Email { get; set; } = "";
     public string Title { get; set; } = "";
     public string Course { get; set; } = "";
 
@@ -98,6 +100,9 @@ public class Submission
     public DateTime? SubmittedAt { get; set; }
     public string? BranchOverride { get; set; }
     public string? CommitMappingJson { get; set; }
+    public int? Attempt1Score { get; set; }
+    public int? Attempt2Score { get; set; }
+    public int? Attempt3Score { get; set; }
 
     public List<TaskResult> TaskResults { get; set; } = [];
     public List<LabComment> Comments { get; set; } = [];

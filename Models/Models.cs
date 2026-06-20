@@ -43,6 +43,9 @@ public class Lab
     public string Title = "";
     public LabStatus Status;
     public int? Auto;
+    public int? Attempt1;
+    public int? Attempt2;
+    public int? Attempt3;
     public int? Defense;
     public int? Final;
     public bool Current;
@@ -158,6 +161,7 @@ public class ReviewItem
     public string LabTitle = "";
     public int Auto;
     public string When = "";
+    public DateTime? SubmittedAt;
 }
 
 public class LabStat

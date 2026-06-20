@@ -30,6 +30,9 @@ public class DbDataService(AppDbContext db) : IDataService
             Title      = s.LabDef.Title,
             Status     = (LabStatus)s.Status,
             Auto       = s.AutoScore,
+            Attempt1   = s.Attempt1Score,
+            Attempt2   = s.Attempt2Score,
+            Attempt3   = s.Attempt3Score,
             Defense    = s.DefenseScore,
             Final      = s.FinalScore,
             Current    = s.IsCurrent,
@@ -190,17 +193,39 @@ public class DbDataService(AppDbContext db) : IDataService
 
         return subs.Select(s => new ReviewItem
         {
-            StudentId = s.StudentId,
-            Name      = s.Student.LastName + " " + s.Student.FirstName,
-            Initials  = s.Student.Initials,
-            Group     = s.Student.Group,
-            LabId     = s.LabDef.Number,
-            LabShort  = "Lab" + s.LabDef.Number.ToString("D2"),
-            LabTitle  = s.LabDef.Title,
-            Auto      = s.AutoScore ?? 0,
-            When      = s.SubmittedAt.HasValue
-                ? FormatWhen(s.SubmittedAt.Value)
-                : Whens[s.StudentId % 5],
+            StudentId   = s.StudentId,
+            Name        = s.Student.LastName + " " + s.Student.FirstName,
+            Initials    = s.Student.Initials,
+            Group       = s.Student.Group,
+            LabId       = s.LabDef.Number,
+            LabShort    = "Lab" + s.LabDef.Number.ToString("D2"),
+            LabTitle    = s.LabDef.Title,
+            Auto        = s.AutoScore ?? 0,
+            SubmittedAt = s.SubmittedAt,
+            When        = s.SubmittedAt.HasValue ? FormatWhen(s.SubmittedAt.Value) : Whens[s.StudentId % 5],
+        }).ToList();
+    }
+
+    public async Task<List<ReviewItem>> GetRejectedQueueAsync()
+    {
+        var subs = await db.Submissions
+            .Include(x => x.Student).Include(x => x.LabDef)
+            .Where(x => x.Status == (int)LabStatus.Rejected)
+            .OrderByDescending(x => x.SubmittedAt)
+            .ToListAsync();
+
+        return subs.Select(s => new ReviewItem
+        {
+            StudentId   = s.StudentId,
+            Name        = s.Student.LastName + " " + s.Student.FirstName,
+            Initials    = s.Student.Initials,
+            Group       = s.Student.Group,
+            LabId       = s.LabDef.Number,
+            LabShort    = "Lab" + s.LabDef.Number.ToString("D2"),
+            LabTitle    = s.LabDef.Title,
+            Auto        = new[] { s.Attempt1Score ?? 0, s.Attempt2Score ?? 0, s.Attempt3Score ?? 0 }.Max(),
+            SubmittedAt = s.SubmittedAt,
+            When        = s.SubmittedAt.HasValue ? FormatWhen(s.SubmittedAt.Value) : "—",
         }).ToList();
     }
 
