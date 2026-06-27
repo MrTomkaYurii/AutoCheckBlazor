@@ -1,0 +1,61 @@
+{
+  "tasks": [
+    {
+      "n": 1,
+      "requirements": [
+        "PackageReference Microsoft.EntityFrameworkCore присутній у src/*.csproj з версією 8.0.x",
+        "PackageReference Microsoft.EntityFrameworkCore.SqlServer присутній",
+        "PackageReference Microsoft.EntityFrameworkCore.Design присутній",
+        "Директорія src/Data/ створена",
+        "Файл src/Data/ClinicDbContext.cs: public class ClinicDbContext : DbContext",
+        "ClinicDbContext: override OnConfiguring(DbContextOptionsBuilder optionsBuilder) → optionsBuilder.UseSqlServer(\"Server=(localdb)\\\\mssqllocaldb;Database=ClinicApp;Trusted_Connection=True;TrustServerCertificate=True;\")",
+        "ClinicDbContext: public DbSet<Patient> Patients { get; set; }",
+        "ClinicDbContext: public DbSet<Doctor> Doctors { get; set; }"
+      ]
+    },
+    {
+      "n": 2,
+      "requirements": [
+        "Patient.Id: public int Id { get; private set; } — НЕ { get; } readonly (EF потребує private set для оновлення після INSERT)",
+        "Patient: наявний parameterless ctor (public Patient() або protected Patient()) для EF Core",
+        "ClinicDbContext.OnModelCreating: entity.ToTable(\"Patients\") для Patient",
+        "Patient конфігурація: entity.HasKey(p => p.Id)",
+        "Patient конфігурація: entity.Property(p => p.Id).ValueGeneratedOnAdd()",
+        "Patient конфігурація: entity.Property(p => p.FirstName).HasMaxLength(100).IsRequired()",
+        "Patient конфігурація: entity.Property(p => p.LastName).HasMaxLength(100).IsRequired()",
+        "Patient.BloodType: entity.Property(p => p.BloodType).HasConversion<string>() — зберігається як рядок 'APositive', не як число",
+        "Patient.Phone конфігурована: HasMaxLength(10) або аналог",
+        "Patient.DateOfBirth конфігурована",
+        "entity.HasIndex(p => p.LastName).HasDatabaseName(\"IX_Patients_LastName\") або аналогічний індекс"
+      ]
+    },
+    {
+      "n": 3,
+      "requirements": [
+        "Doctor.Id: public int Id { get; private set; }",
+        "Doctor: parameterless ctor для EF Core",
+        "WorkSchedule: private static WorkSchedule ParseWorkSchedule(string value) — розбиває '8-17' на int Start, int End, повертає new WorkSchedule(start, end)",
+        "ValueConverter<WorkSchedule, string>: serialize → s.Start.ToString() + \"-\" + s.End.ToString(); deserialize → ParseWorkSchedule(v)",
+        "НЕ inline int.Parse в лямбді expression tree (CS0854) — використовується статичний метод або делегат",
+        "ClinicDbContext.OnModelCreating: entity.Property(d => d.Schedule).HasConversion(converter) де converter = new ValueConverter<WorkSchedule, string>(...)",
+        "Doctor.Speciality: HasConversion<string>() — зберігається як 'Cardiology', не як число",
+        "Doctor: ToTable(\"Doctors\"), HasKey(d => d.Id), ValueGeneratedOnAdd",
+        "Doctor.FirstName, LastName, LicenseNumber, Phone — налаштовані з HasMaxLength і IsRequired де доречно"
+      ]
+    },
+    {
+      "n": 4,
+      "requirements": [
+        "Файл src/Data/DbSeeder.cs: public static class DbSeeder",
+        "DbSeeder.Seed(ClinicDbContext context): перша перевірка if (context.Patients.Any()) return; — ідемпотентність",
+        "DbSeeder: додає мінімум 5 пацієнтів через context.Patients.Add(new Patient(...))",
+        "DbSeeder: додає мінімум 5 лікарів різних спеціальностей через context.Doctors.Add(new Doctor(...))",
+        "DbSeeder: context.SaveChanges() після всіх Add",
+        "Папка Migrations/ присутня в проєкті з класом InitialCreate (або аналогічна перша міграція)",
+        "Міграція InitialCreate: метод Up() створює таблиці Patients і Doctors",
+        "Program.cs або Clinic.cs: using var context = new ClinicDbContext(); DbSeeder.Seed(context); при старті",
+        "using var context — гарантує IDisposable.Dispose() після використання"
+      ]
+    }
+  ]
+}

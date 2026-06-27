@@ -1,0 +1,67 @@
+{
+  "tasks": [
+    {
+      "n": 1,
+      "requirements": [
+        "Файл src/Interfaces/IPayable.cs: public interface IPayable у відповідному namespace (ClinicApp.Interfaces або аналог)",
+        "IPayable: decimal GetCost(); — метод без реалізації",
+        "IPayable: bool IsPaid { get; } — властивість тільки get",
+        "IPayable: void MarkPaid(); — метод без реалізації",
+        "Клас Appointment оголошений як: public class Appointment : IPayable (або : IPayable, ICancellable)",
+        "Appointment: private bool _isPaid; — приватне поле",
+        "Appointment: decimal GetCost() → повертає (decimal)DurationMinutes * 10m (або аналогічну формулу)",
+        "Appointment: bool IsPaid => _isPaid; — властивість через поле",
+        "Appointment: void MarkPaid() → якщо Status != AppointmentStatus.Cancelled, встановлює _isPaid = true",
+        "MarkPaid() не змінює _isPaid для скасованих записів (IsCancelled/Cancelled — захист)",
+        "AppointmentManager: метод GetAll() → повертає копію перших _count елементів у Appointment[]"
+      ]
+    },
+    {
+      "n": 2,
+      "requirements": [
+        "Файл src/Interfaces/ICancellable.cs: public interface ICancellable у відповідному namespace",
+        "ICancellable: bool IsCancelled { get; } — властивість тільки get",
+        "ICancellable: string CancellationReason { get; } — властивість тільки get",
+        "ICancellable: bool Cancel(string reason = \"\"); — метод з дефолтним параметром",
+        "Клас Appointment реалізує обидва інтерфейси: public class Appointment : IPayable, ICancellable",
+        "Appointment: bool IsCancelled => Status == AppointmentStatus.Cancelled;",
+        "Appointment: string CancellationReason => IsCancelled ? Notes : \"\";",
+        "Метод Cancel(string reason) в Appointment вже існує і відповідає сигнатурі ICancellable — не потрібно переписувати",
+        "Program.cs або BillingManager: демонстрація змінної типу ICancellable[] або методу що приймає ICancellable"
+      ]
+    },
+    {
+      "n": 3,
+      "requirements": [
+        "Файл src/Interfaces/ISchedulable.cs: public interface ISchedulable у відповідному namespace",
+        "ISchedulable: bool CanSchedule(DateTime at); — метод без реалізації",
+        "ISchedulable: DateTime[] GetAvailableSlots(DateTime date, int slotCount); — метод без реалізації",
+        "Клас Doctor реалізує ISchedulable: public class Doctor : ISchedulable",
+        "Doctor: bool CanSchedule(DateTime at) => Schedule.Contains(at.Hour);",
+        "Doctor: DateTime[] GetAvailableSlots(DateTime date, int slotCount) → повертає масив слотів (годин) в межах Schedule.Start..Schedule.End",
+        "Файл src/Managers/BillingManager.cs: клас BillingManager у namespace ClinicApp.Managers",
+        "BillingManager конструктор приймає AppointmentManager і зберігає як приватне поле",
+        "BillingManager: IPayable[] GetAllUnpaid() → всі записи де !appointment.IsPaid && !appointment.IsCancelled, тип повернення IPayable[] (не Appointment[])",
+        "BillingManager: IPayable[] GetUnpaidByPatient(int patientId) → фільтр по patientId",
+        "BillingManager: decimal GetTotalDebt() → цикл по GetAllUnpaid(), сумує item.GetCost() — без жодного is/as, тільки IPayable методи",
+        "BillingManager: decimal GetPatientDebt(int patientId) → сума по GetUnpaidByPatient(patientId)",
+        "BillingManager: bool PayAppointment(int appointmentId) → знаходить через _appointments.FindById, викликає MarkPaid(), повертає true якщо успішно",
+        "BillingManager: void DisplayUnpaid(IPayable[] items) → виводить список та суми через GetCost()"
+      ]
+    },
+    {
+      "n": 4,
+      "requirements": [
+        "Clinic.cs: публічна властивість BillingManager Billing { get; }",
+        "Clinic конструктор: Billing = new BillingManager(Appointments);",
+        "Program.cs: підменю 'Рахунки' у вигляді статичної функції BillingMenu(Clinic clinic)",
+        "Підменю містить: борги пацієнта, всі неоплачені, оплатити запис, загальний борг",
+        "У BillingMenu: тип змінної IPayable[] unpaid = clinic.Billing.GetUnpaidByPatient(id) (не Appointment[])",
+        "Головне меню оновлене — кожен пункт має опис через '—': '1. Пацієнти — реєстрація, пошук'",
+        "Пункт '5. Рахунки' (або наступний номер) присутній у головному меню",
+        "GetTotalDebt() у BillingManager не містить is Appointment або as Appointment — тільки IPayable",
+        "Спроба оплатити вже оплачений запис: виводить повідомлення, програма не падає"
+      ]
+    }
+  ]
+}

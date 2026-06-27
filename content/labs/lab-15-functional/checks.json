@@ -1,0 +1,88 @@
+{
+  "tasks": [
+    {
+      "n": 1,
+      "requirements": [
+        "Файл src/Extensions/AppointmentExtensions.cs: public static class AppointmentExtensions у namespace ClinicApp.Extensions",
+        "Метод Unpaid(this IEnumerable<Appointment> source): .Where(a => !a.IsPaid && !a.IsCancelled)",
+        "Метод Upcoming(this IEnumerable<Appointment> source): .Where(a => a.IsUpcoming) або a.ScheduledAt > DateTime.Now",
+        "Метод ByDoctor(this IEnumerable<Appointment> source, int doctorId): .Where(a => a.DoctorId == doctorId)",
+        "Метод ByPatient(this IEnumerable<Appointment> source, int patientId): .Where(a => a.PatientId == patientId)",
+        "Метод Overdue(this IEnumerable<Appointment> source): дата в минулому, не скасовано, не оплачено",
+        "Метод CostAbove(this IEnumerable<Appointment> source, decimal minCost): .Where(a => a.GetCost() > minCost) — замикання на minCost",
+        "Метод TotalCost(this IEnumerable<Appointment> source): повертає decimal через .Sum(a => a.GetCost())",
+        "Всі методи крім TotalCost повертають IEnumerable<Appointment>"
+      ]
+    },
+    {
+      "n": 2,
+      "requirements": [
+        "Файл src/Extensions/PatientExtensions.cs: public static class PatientExtensions у namespace ClinicApp.Extensions",
+        "PatientExtensions: Adults(this IEnumerable<Patient> source) — вік >= 18 (обчислюється через DateOfBirth)",
+        "PatientExtensions: ByBloodType(this IEnumerable<Patient> source, BloodType bloodType) — замикання на bloodType",
+        "PatientExtensions: WithAppointments(this IEnumerable<Patient> source, IEnumerable<Appointment> appointments) — пацієнти у яких appointments.Any(a => a.PatientId == p.Id)",
+        "Файл src/Extensions/DoctorExtensions.cs: public static class DoctorExtensions у namespace ClinicApp.Extensions",
+        "DoctorExtensions: BySpeciality(this IEnumerable<Doctor> source, Speciality speciality) — замикання на speciality",
+        "DoctorExtensions: Available(this IEnumerable<Doctor> source) — d.IsAvailableNow == true",
+        "DoctorExtensions: WithAppointments(this IEnumerable<Doctor> source, IEnumerable<Appointment> appointments) — appointments.Any(a => a.DoctorId == d.Id)"
+      ]
+    },
+    {
+      "n": 3,
+      "requirements": [
+        "Файл src/Managers/AppointmentFilter.cs: клас AppointmentFilter",
+        "AppointmentFilter: private Func<Appointment, bool>? _combined = null;",
+        "Add(Func<Appointment, bool> predicate): var prev = _combined; if (prev == null) _combined = predicate; else { _combined = a => prev(a) && predicate(a); } return this",
+        "КРИТИЧНО: лямбда в Add захоплює локальну var prev — НЕ _combined безпосередньо (інакше нескінченна рекурсія)",
+        "And(Func<Appointment, bool> predicate): псевдонім для Add — повертає this",
+        "Or(Func<Appointment, bool> predicate): var prev = _combined; якщо null → _combined = predicate; інакше a => prev(a) || predicate(a); return this",
+        "Negate(): var prev = _combined; _combined = a => !prev!(a); return this",
+        "Apply(IEnumerable<Appointment> source): якщо _combined == null → return source; інакше return source.Where(_combined)",
+        "Reset(): _combined = null"
+      ]
+    },
+    {
+      "n": 4,
+      "requirements": [
+        "Файл src/Managers/AppointmentProcessor.cs: клас AppointmentProcessor",
+        "AppointmentProcessor: private List<Action<Appointment>> _actions = new List<Action<Appointment>>()",
+        "Run(Action<Appointment> action): _actions.Add(action); return this",
+        "RunIf(Func<Appointment, bool> predicate, Action<Appointment> action): _actions.Add(a => { if (predicate(a)) action(a); }); return this",
+        "Combine(Action<Appointment> first, Action<Appointment> second): _actions.Add(a => { first(a); second(a); }); return this",
+        "Execute(IEnumerable<Appointment> source): foreach appointment in source — для кожного виконує всі дії зі _actions",
+        "Clear(): _actions.Clear()"
+      ]
+    },
+    {
+      "n": 5,
+      "requirements": [
+        "Файл src/Managers/AppointmentPipeline.cs: клас AppointmentPipeline",
+        "AppointmentPipeline: private AppointmentFilter _filter = new AppointmentFilter()",
+        "AppointmentPipeline: private AppointmentProcessor _processor = new AppointmentProcessor()",
+        "Filter(Func<Appointment, bool> predicate): _filter.Add(predicate); return this",
+        "Then(Action<Appointment> action): _processor.Run(action); return this",
+        "Execute(IEnumerable<Appointment> source): var filtered = _filter.Apply(source).ToArray(); _processor.Execute(filtered); return filtered.Length",
+        "Execute: .ToArray() матеріалізує результат фільтру ОДИН раз перед процесором",
+        "Reset(): _filter.Reset(); _processor.Clear()",
+        "Fluent-ланцюг: pipeline.Filter(...).Filter(...).Then(...).Execute(all) — компілюється і виконується"
+      ]
+    },
+    {
+      "n": 6,
+      "requirements": [
+        "Clinic.cs: public AppointmentPipeline Pipeline { get; } = new AppointmentPipeline() (або ініціалізація в конструкторі)",
+        "Program.cs: using ClinicApp.Extensions; присутній",
+        "Program.cs: у головному меню присутній пункт '12. Фільтри' або '12. Функціональне програмування'",
+        "Program.cs: статична функція FunctionalMenu(Clinic clinic) з 8 пунктами",
+        "Пункт 1: clinic.Appointments.GetAll().Unpaid() → вивід + .TotalCost() → сума",
+        "Пункт 2: запит threshold у користувача → .Upcoming().CostAbove(threshold)",
+        "Пункт 3: clinic.Patients.GetAll().Adults()",
+        "Пункт 4: clinic.Doctors.GetAll().WithAppointments(clinic.Appointments.GetAll())",
+        "Пункт 5: AppointmentFilter — .Add(...).And(...) — AND-комбінація двох умов",
+        "Пункт 6: AppointmentFilter — .Add(...).Or(...) — OR-комбінація",
+        "Пункт 7: AppointmentProcessor — .Combine(print, logAction) — дві дії в одній",
+        "Пункт 8: clinic.Pipeline.Filter(...).Then(...).Execute(...) + вивід 'Оброблено: N записів.'"
+      ]
+    }
+  ]
+}

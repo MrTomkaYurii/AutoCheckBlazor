@@ -1,0 +1,73 @@
+{
+  "tasks": [
+    {
+      "n": 1,
+      "requirements": [
+        "Appointment.GetCost() позначений як virtual: public virtual decimal GetCost()",
+        "Appointment.GetDescription() позначений як virtual: public virtual string GetDescription() => \"Звичайний прийом\"",
+        "Appointment.GetPriority() НЕ є virtual (навмисно): public int GetPriority() => 3; — без ключового слова virtual",
+        "Appointment.ToString() оновлений: використовує GetDescription() та GetCost().ToString(\"F2\") + \" грн\"",
+        "Файл src/Models/RegularAppointment.cs: public class RegularAppointment : Appointment",
+        "RegularAppointment конструктор: виклик : base(patientId, doctorId, scheduledAt, durationMinutes)",
+        "RegularAppointment: override string GetDescription() → рядок що містить 'Звичайний прийом' або еквівалент",
+        "new RegularAppointment(1, 1, DateTime.Today) компілюється і ToString() виводить опис та вартість"
+      ]
+    },
+    {
+      "n": 2,
+      "requirements": [
+        "Файл src/Models/UrgentAppointment.cs: public class UrgentAppointment : Appointment",
+        "UrgentAppointment: public string UrgencyNote { get; } — ініціалізується в конструкторі",
+        "UrgentAppointment конструктор: викликає : base(patientId, doctorId, scheduledAt, durationMinutes)",
+        "UrgentAppointment: override decimal GetCost() → base.GetCost() × 1.5m (на 50% дорожче)",
+        "UrgentAppointment: sealed override string GetDescription() → містить 'Терміновий' + UrgencyNote якщо не порожній",
+        "UrgentAppointment: public new int GetPriority() => 1; — ключове слово new, НЕ override",
+        "Файл src/Models/SpecialistAppointment.cs: public sealed class SpecialistAppointment : Appointment",
+        "SpecialistAppointment: public string ConsultationTopic { get; } — ініціалізується в конструкторі",
+        "SpecialistAppointment: override decimal GetCost() → base.GetCost() × 1.3m (на 30% дорожче)",
+        "SpecialistAppointment: override string GetDescription() → містить 'Консультація спеціаліста' + ConsultationTopic",
+        "Спроба успадкувати від SpecialistAppointment → помилка компіляції (sealed class)",
+        "Масив Appointment[] може зберігати RegularAppointment, UrgentAppointment, SpecialistAppointment",
+        "Цикл по Appointment[] виводить різні рядки і різні суми для кожного типу — без жодного if"
+      ]
+    },
+    {
+      "n": 3,
+      "requirements": [
+        "AppointmentManager.Book(): тепер створює RegularAppointment замість Appointment",
+        "AppointmentManager: метод BookUrgent(int patientId, int doctorId, DateTime scheduledAt, string urgencyNote = \"\", int durationMinutes = 30) — створює UrgentAppointment",
+        "AppointmentManager: метод BookSpecialist(int patientId, int doctorId, DateTime scheduledAt, string topic = \"\", int durationMinutes = 45) — створює SpecialistAppointment",
+        "Program.cs seed data: виклики Book(...), BookUrgent(...), BookSpecialist(...)",
+        "Program.cs: демонстрація Appointment urgentRef = clinic.Appointments[N]; де N — індекс UrgentAppointment",
+        "Program.cs: urgentRef.GetDescription() виводить 'Терміновий (...)' — не 'Звичайний прийом' (override працює)",
+        "Program.cs: urgentRef.GetPriority() виводить 3 — не 1 (new не дає поліморфізму через базовий тип)",
+        "Код з коментарем або виводом що пояснює різницю new vs override"
+      ]
+    },
+    {
+      "n": 4,
+      "requirements": [
+        "AppointmentManager: метод GetUrgent() → Appointment[] — двопрохідний патерн з if (_appointments[i] is UrgentAppointment)",
+        "AppointmentManager: метод GetSpecialist() → Appointment[] — умова is SpecialistAppointment",
+        "AppointmentManager: метод GetRegular() → Appointment[] — умова is RegularAppointment",
+        "DisplayAppointment або DisplayList: виклик a.GetDescription() — поліморфний, різний рядок для кожного типу",
+        "DisplayAppointment або DisplayList: виклик a.GetCost().ToString(\"F2\") — різна ціна без жодного if",
+        "Program.cs: у меню 'Записи' присутній пункт '8. За типом прийому'",
+        "Program.cs: AppointmentsByTypeMenu(Clinic clinic) — статична функція з 3 підпунктами",
+        "AppointmentsByTypeMenu: пункт '1. Термінові' → DisplayList(GetUrgent())",
+        "AppointmentsByTypeMenu: пункт '2. Консультації спеціаліста' → DisplayList(GetSpecialist())",
+        "AppointmentsByTypeMenu: пункт '3. Звичайні' → DisplayList(GetRegular())"
+      ]
+    },
+    {
+      "n": 5,
+      "requirements": [
+        "Студент реалізував Варіант А або Б підходу до знижок",
+        "Варіант А: Appointment має decimal DiscountFactor { get; set; } = 1.0m; і GetCost() враховує DiscountFactor",
+        "Варіант Б: UrgentAppointment конструктор приймає decimal factor = 1.5m; GetCost() → base.GetCost() * _factor",
+        "Код містить коментар що пояснює обраний підхід",
+        "sealed обмеження задокументовані або показані (спроба успадкування і повідомлення компілятора)"
+      ]
+    }
+  ]
+}

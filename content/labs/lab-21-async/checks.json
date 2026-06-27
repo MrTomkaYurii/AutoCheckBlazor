@@ -1,0 +1,84 @@
+{
+  "tasks": [
+    {
+      "n": 1,
+      "requirements": [
+        "DbSeeder: public static async Task SeedAsync(ClinicDbContext context, CancellationToken ct = default)",
+        "SeedPatientsAsync: if (await context.Patients.AnyAsync(ct)) return;",
+        "SeedPatientsAsync: await context.SaveChangesAsync(ct) — НЕ SaveChanges()",
+        "SeedDoctorsAsync, SeedAppointmentsAsync, SeedMedicalRecordsAsync — всі приватні методи мають async Task + AnyAsync/SaveChangesAsync",
+        "Program.cs: await DbSeeder.SeedAsync(context); або await DbSeeder.SeedAsync(context, cts.Token);",
+        "Top-level statements: await використовується прямо на верхньому рівні без явного Main"
+      ]
+    },
+    {
+      "n": 2,
+      "requirements": [
+        "Файл src/Data/AsyncClinicService.cs: клас AsyncClinicService",
+        "AsyncClinicService конструктор: приймає ClinicDbContext _context",
+        "GetAllPatientsAsync(CancellationToken ct = default): return await _context.Patients.ToListAsync(ct)",
+        "GetPatientByIdAsync(int id, CancellationToken ct = default): FirstOrDefaultAsync(p => p.Id == id, ct)",
+        "GetUpcomingAppointmentsAsync(CancellationToken ct = default): фільтр по даті + Status → ToListAsync(ct)",
+        "SaveAppointmentAsync(Appointment a, CancellationToken ct = default): _context.Appointments.Add(a); return await _context.SaveChangesAsync(ct)",
+        "ClinicRepository: GetPatientWithAppointmentsAsync(int id, CancellationToken ct = default) → Task<Patient?>",
+        "ClinicRepository: GetUpcomingAppointmentsAsync(CancellationToken ct = default) → Task<List<Appointment>>",
+        ".ConfigureAwait(false) явно наявний у ClinicRepository async методах — коментар пояснює навіщо (library code, уникнути захоплення SynchronizationContext)"
+      ]
+    },
+    {
+      "n": 3,
+      "requirements": [
+        "public record ClinicDashboard(int PatientCount, int DoctorCount, decimal TotalRevenue, int UpcomingCount, int TodayCount)",
+        "GetDashboardAsync(): var t1 = _context.Patients.CountAsync(); t2 = Doctors.CountAsync(); ... t5 = ...; await Task.WhenAll(t1, t2, t3, t4, t5) — ВСІ 5 паралельно",
+        "GetDashboardAsync: НЕ послідовні await t1; await t2;... — тільки Task.WhenAll",
+        "GetDashboardWithTimeoutAsync(int timeoutMs): var winner = await Task.WhenAny(dashboardTask, Task.Delay(timeoutMs))",
+        "GetDashboardWithTimeoutAsync: if (winner == timeoutTask) → повертає null або ClinicDashboard.Empty",
+        "MarkAppointmentsAsPaidAsync(IEnumerable<int> ids, CancellationToken ct): var appointments = await _context.Appointments.Where(a => ids.Contains(a.Id)).ToListAsync(ct) — ОДИН запит",
+        "Parallel.ForEachAsync(appointments, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount, CancellationToken = ct }, async (appt, token) => { appt.MarkAsPaid(); Interlocked.Increment(ref count); await ValueTask.CompletedTask; })",
+        "MarkAppointmentsAsPaidAsync: await _context.SaveChangesAsync(ct) ОДИН РАЗ після Parallel.ForEachAsync — НЕ всередині",
+        "SearchPatientsAsync(string query, CancellationToken ct = default): await Task.Delay(200, ct) — симуляція затримки",
+        "Демонстрація: new CancellationTokenSource(TimeSpan.FromMilliseconds(100)); try/catch (OperationCanceledException)"
+      ]
+    },
+    {
+      "n": 4,
+      "requirements": [
+        "public record PatientReport(Patient Patient, List<Appointment> RecentAppointments, List<MedicalRecord> MedicalRecords, ClinicDashboard Dashboard)",
+        "BuildPatientReportAsync(int patientId, CancellationToken ct = default): 4 паралельних Task через Task.WhenAll",
+        "var allTasks = Task.WhenAll(t1, t2, t3, t4)",
+        "ContinueWith патерн: _ = allTasks.ContinueWith(t => { foreach (var ex in t.Exception!.InnerExceptions) Console.WriteLine(ex.Message); }, TaskContinuationOptions.OnlyOnFaulted);",
+        "try { await allTasks; } catch (Exception ex) { /* тільки перша помилка */ }",
+        "Перевірка: t1.IsCompletedSuccessfully, t1.IsFaulted, t1.IsCanceled — всі три властивості використовуються",
+        "Тест з неіснуючим patientId: перший Task поверне null або кине — поведінка задокументована"
+      ]
+    },
+    {
+      "n": 5,
+      "requirements": [
+        "BulkProcessAppointmentsAsync(AppointmentStatus newStatus, IProgress<(int Current, int Total, string Message)>? progress = null, CancellationToken ct = default) → Task<int>",
+        "ct.ThrowIfCancellationRequested() на кожній ітерації циклу",
+        "progress?.Report((i + 1, total, appointmentDescription)) — null-safe виклик",
+        "await Task.Delay(80, ct) всередині циклу — симуляція async обробки",
+        "Повертає кількість оброблених записів (int)",
+        "Program.cs: var p = new Progress<(int, int, string)>(p => Console.WriteLine($\"[{p.Item1}/{p.Item2}] {p.Item3}\"))",
+        "await service.BulkProcessAppointmentsAsync(AppointmentStatus.Completed, p, ct)"
+      ]
+    },
+    {
+      "n": 6,
+      "requirements": [
+        "Файл src/Services/ClinicHttpClient.cs або аналог: клас ClinicHttpClient",
+        "private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(10) } — СТАТИЧНИЙ екземпляр (не new HttpClient() всередині методу)",
+        "public record DrugInfo(string Name, string Purpose, string Warnings, string Dosage)",
+        "Приватні record FdaResponse і FdaResult з [JsonPropertyName(\"...\")]атрибутами для JSON-маппінгу",
+        "using System.Net.Http.Json; — GetFromJsonAsync<FdaResponse>",
+        "GetDrugInfoAsync: Uri.EscapeDataString(drugName) у формуванні URL",
+        "GetDrugInfoAsync: catch (HttpRequestException) — мережева помилка",
+        "GetDrugInfoAsync: catch (TaskCanceledException) when (!ct.IsCancellationRequested) — таймаут HttpClient; OperationCanceledException від ct — НЕ ловити",
+        "IsApiAvailableAsync(CancellationToken ct = default) → Task<bool>",
+        "GetDrugInfoWithRaceAsync(string drugName, int timeoutMs): Task.WhenAny(apiTask, Task.Delay(timeoutMs))",
+        "Тест на 3 препаратах: Aspirin, Ibuprofen, Omeprazole"
+      ]
+    }
+  ]
+}

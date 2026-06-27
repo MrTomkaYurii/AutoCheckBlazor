@@ -1,0 +1,77 @@
+{
+  "tasks": [
+    {
+      "n": 1,
+      "requirements": [
+        "Файл src/Models/DoctorStats.cs: public class DoctorStats у відповідному namespace",
+        "DoctorStats: властивості int DoctorId, string FullName, int AppointmentCount, decimal TotalRevenue, DateTime LastAppointmentDate — всі get-only",
+        "DoctorStats конструктор: приймає всі п'ять значень і присвоює властивостям",
+        "DoctorStats реалізує IComparable<DoctorStats>: public int CompareTo(DoctorStats? other)",
+        "CompareTo: сортування за спаданням AppointmentCount — більша кількість прийомів = нижче повернуте число = вища позиція в рейтингу",
+        "CompareTo: якщо other == null → повертає -1 (або 1, консистентно)",
+        "DoctorStats: override ToString() — один рядок з Id, FullName, AppointmentCount, TotalRevenue, LastAppointmentDate",
+        "DateTime.MinValue використовується як маркер 'прийомів не було'",
+        "Array.Sort() на DoctorStats[] ставить лікаря з найбільшою кількістю прийомів першим"
+      ]
+    },
+    {
+      "n": 2,
+      "requirements": [
+        "Файл src/Models/PatientStats.cs: public class PatientStats у відповідному namespace",
+        "PatientStats: властивості int PatientId, string FullName, int VisitCount, decimal TotalSpent, DateTime LastVisitDate — всі get-only",
+        "PatientStats конструктор: приймає всі п'ять значень і присвоює властивостям",
+        "PatientStats реалізує IComparable<PatientStats>: CompareTo за спаданням VisitCount",
+        "PatientStats: override ToString() — коли LastVisitDate == DateTime.MinValue виводить '—' або 'немає' замість '01.01.0001'",
+        "Array.Sort() на PatientStats[] ставить пацієнта з найбільшою кількістю візитів першим"
+      ]
+    },
+    {
+      "n": 3,
+      "requirements": [
+        "Директорія src/Comparators/ створена",
+        "Файл src/Comparators/DoctorStatsByRevenue.cs: public class DoctorStatsByRevenue : IComparer<DoctorStats>",
+        "DoctorStatsByRevenue.Compare: спадний порядок — y.TotalRevenue.CompareTo(x.TotalRevenue); обробляє null",
+        "Файл src/Comparators/DoctorStatsByName.cs: public class DoctorStatsByName : IComparer<DoctorStats>",
+        "DoctorStatsByName.Compare: зростаючий порядок — string.Compare(x.FullName, y.FullName, StringComparison.CurrentCulture); обробляє null",
+        "Файл src/Comparators/PatientStatsBySpent.cs: public class PatientStatsBySpent : IComparer<PatientStats>",
+        "PatientStatsBySpent.Compare: спадний порядок — y.TotalSpent.CompareTo(x.TotalSpent); обробляє null",
+        "Файл src/Comparators/PatientStatsByLastVisit.cs: public class PatientStatsByLastVisit : IComparer<PatientStats>",
+        "PatientStatsByLastVisit.Compare: спадний порядок — y.LastVisitDate.CompareTo(x.LastVisitDate); обробляє null",
+        "Кожен Compare: if (x == null && y == null) return 0; if (x == null) return -1; if (y == null) return 1;",
+        "Використання: list.Sort(new DoctorStatsByRevenue()) — дає інший порядок ніж list.Sort()"
+      ]
+    },
+    {
+      "n": 4,
+      "requirements": [
+        "Файл src/Managers/AnalyticsManager.cs: public class AnalyticsManager у відповідному namespace",
+        "AnalyticsManager конструктор: AnalyticsManager(AppointmentManager appointments, DoctorManager doctors, PatientManager patients)",
+        "AnalyticsManager: метод IEnumerable<DoctorStats> ComputeDoctorStats()",
+        "ComputeDoctorStats: зовнішній цикл по _doctors.GetAll(), внутрішній по _appointments.GetAll()",
+        "ComputeDoctorStats: використовує yield return new DoctorStats(...) — НЕ return масив",
+        "ComputeDoctorStats: для кожного лікаря рахує AppointmentCount, TotalRevenue (sum GetCost()), LastAppointmentDate (DateTime.MinValue якщо прийомів немає)",
+        "AnalyticsManager: метод IEnumerable<PatientStats> ComputePatientStats() — аналогічний патерн для пацієнтів",
+        "Clinic.cs: public AnalyticsManager Analytics { get; }",
+        "Clinic конструктор: Analytics = new AnalyticsManager(Appointments, Doctors, Patients);",
+        "foreach по ComputeDoctorStats() без збереження в список — компілюється і працює"
+      ]
+    },
+    {
+      "n": 5,
+      "requirements": [
+        "Program.cs: у головному меню присутній пункт '8. Аналітика'",
+        "Program.cs: статична функція AnalyticsMenu(Clinic clinic)",
+        "using ClinicApp.Comparators; присутній у Program.cs",
+        "AnalyticsMenu: пункт 1 — лікарі за навантаженням: CollectDoctorStats → list.Sort() → вивести",
+        "AnalyticsMenu: пункт 2 — лікарі за виручкою: list.Sort(new DoctorStatsByRevenue())",
+        "AnalyticsMenu: пункт 3 — лікарі за іменем: list.Sort(new DoctorStatsByName())",
+        "AnalyticsMenu: пункт 4 — пацієнти за кількістю візитів: CollectPatientStats → list.Sort()",
+        "AnalyticsMenu: пункт 5 — пацієнти за витратами: list.Sort(new PatientStatsBySpent())",
+        "Допоміжна функція CollectDoctorStats(Clinic clinic): foreach по ComputeDoctorStats(), .Add() → повертає List<DoctorStats>",
+        "Допоміжна функція CollectPatientStats(Clinic clinic): аналогічна для пацієнтів",
+        "Пункти 1 і 2 дають різний порядок лікарів якщо тестові дані різноманітні",
+        "Пацієнт без жодного запису відображається з VisitCount: 0 та датою '—'"
+      ]
+    }
+  ]
+}

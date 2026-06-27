@@ -1,0 +1,86 @@
+{
+  "tasks": [
+    {
+      "n": 1,
+      "requirements": [
+        "Файл src/Models/ClinicConfig.cs: public record ClinicConfig(string Name, string Address = \"\", DateTime? Founded = null)",
+        "ClinicConfig: public string FoundedYear => Founded.HasValue ? Founded.Value.Year.ToString() : \"невідомо\"",
+        "Clinic: public ClinicConfig Config { get; }",
+        "Clinic: конструктор Clinic(ClinicConfig config) — встановлює Config",
+        "Clinic: Clinic(string name) : this(new ClinicConfig(name)) — зворотна сумісність",
+        "Clinic: public string Name => Config.Name; — делегат, не поле",
+        "Clinic.cs: коментар або XML-doc що перераховує відповідальності що залишились"
+      ]
+    },
+    {
+      "n": 2,
+      "requirements": [
+        "Директорія src/Strategies/ створена",
+        "ICostStrategy: public interface ICostStrategy { string Description { get; } decimal Calculate(Appointment appointment); }",
+        "RegularCostStrategy : ICostStrategy — Calculate: DurationMinutes × 10m або аналог",
+        "UrgentCostStrategy : ICostStrategy — Calculate: базова × _multiplier (default 1.5m); multiplier через конструктор",
+        "DiscountCostStrategy : ICostStrategy — Calculate: базова × (1m - discountPercent); discountPercent через конструктор",
+        "AppointmentProcessor: private ICostStrategy? _costStrategy = null;",
+        "AppointmentProcessor: public AppointmentProcessor WithCostStrategy(ICostStrategy strategy) { _costStrategy = strategy; return this; }",
+        "AppointmentProcessor: public decimal CalculateCost(Appointment a) => _costStrategy?.Calculate(a) ?? a.GetCost();",
+        "AppointmentProcessor: public static (decimal Regular, decimal WithStrategy) CompareCost(Appointment a, ICostStrategy s)",
+        "NightShiftCostStrategy : ICostStrategy — Calculate: a.GetCost() × 1.2m якщо a.ScheduledAt.Hour >= 18",
+        "NightShiftCostStrategy: ЖОДНИХ змін в AppointmentProcessor, Appointment, або існуючих стратегіях — демо OCP"
+      ]
+    },
+    {
+      "n": 3,
+      "requirements": [
+        "Директорія src/Services/ створена",
+        "IPatientService: GetAllAsync, GetByIdAsync(int id), SearchAsync(string q), AddAsync, SoftDeleteAsync(int id), CountAsync",
+        "IDoctorService: GetAllAsync, GetByIdAsync(int id), GetBySpecialityAsync(Speciality s), CountAsync",
+        "IAppointmentService: GetUpcomingAsync, GetByPatientAsync(int id), BookAsync, CancelAsync(int id), CompleteAsync(int id), GetTotalRevenueAsync",
+        "Всі методи в інтерфейсах — async (Task<T> або Task) з CancellationToken ct = default",
+        "PatientService: public class PatientService(ClinicDbContext context) : IPatientService — primary constructor C# 12",
+        "DoctorService: public class DoctorService(ClinicDbContext context) : IDoctorService",
+        "AppointmentService: public class AppointmentService(ClinicDbContext context) : IAppointmentService",
+        "GetAllAsync у PatientService: await context.Patients.AsNoTracking().OrderBy(p => p.LastName).ToListAsync(ct)",
+        "PrintPatientCount: static async Task PrintPatientCount(IPatientService service) — приймає інтерфейс, не PatientService"
+      ]
+    },
+    {
+      "n": 4,
+      "requirements": [
+        "Файл src/Infrastructure/ServiceContainer.cs: public static class ServiceContainer",
+        "ServiceContainer.Build() → IServiceProvider",
+        "services.AddDbContext<ClinicDbContext>() або AddScoped<ClinicDbContext>() — Scoped lifetime",
+        "services.AddSingleton<ClinicLogger>() — Singleton lifetime",
+        "services.AddScoped<IDoctorService, DoctorService>()",
+        "services.AddScoped<IAppointmentService, AppointmentService>()",
+        "IPatientService реєстрація через фабрику: services.AddScoped<IPatientService>(sp => new LoggingPatientService(new PatientService(sp.GetRequiredService<ClinicDbContext>()), sp.GetRequiredService<ClinicLogger>()))",
+        "public class LoggingPatientService(IPatientService inner, ClinicLogger logger) : IPatientService — Decorator через primary constructor",
+        "LoggingPatientService.GetAllAsync: logger.LogInfo → await inner.GetAllAsync → logger.LogInfo з Count → return",
+        "Перевірка Singleton: var a = provider.GetRequiredService<ClinicLogger>(); var b = ...; Console.WriteLine(ReferenceEquals(a, b)); // true",
+        "Перевірка Scoped: using var s1 = provider.CreateScope(); using var s2 = ...; ReferenceEquals(svc1, svc2) // false"
+      ]
+    },
+    {
+      "n": 5,
+      "requirements": [
+        "GetRequiredService<T>: використовується для обов'язкових залежностей — кидає InvalidOperationException якщо не зареєстровано",
+        "GetService<T>: повертає null якщо сервіс не зареєстровано — опціональна залежність",
+        "Демо: provider.GetService<SessionManager>() → null (не зареєстровано); GetRequiredService → кидає",
+        "Правило задокументовано або продемонстровано: GetRequiredService для mandatory, GetService для optional",
+        "LSP демо: static void ProcessAppointment(Appointment a) — виклик GetDescription() + GetCost()",
+        "ProcessAppointment: протестований з RegularAppointment, UrgentAppointment, SpecialistAppointment — всі працюють без is/as",
+        "LSP потенційне порушення: задокументовано який метод міг би кинути виняток замість коректної поведінки (наприклад UrgentAppointment.Cancel() або аналог)"
+      ]
+    },
+    {
+      "n": 6,
+      "requirements": [
+        "Program.cs: var provider = ServiceContainer.Build()",
+        "using var scope = provider.CreateScope(); var patientSvc = scope.ServiceProvider.GetRequiredService<IPatientService>()",
+        "Виклик PrintPatientCount(patientSvc) або аналогічне використання через інтерфейс",
+        "ICostStrategy: AppointmentProcessor.WithCostStrategy(new NightShiftCostStrategy()).CalculateCost(appt) демонструється",
+        "CompareCost: виводить обидві вартості для порівняння Regular vs Strategy",
+        "ClinicConfig: Program.cs: new Clinic(new ClinicConfig(\"Клініка\", \"вул. Медична 1\")) або Clinic(\"Назва\") — обидва варіанти компілюються"
+      ]
+    }
+  ]
+}

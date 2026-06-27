@@ -1,0 +1,74 @@
+{
+  "tasks": [
+    {
+      "n": 1,
+      "requirements": [
+        "Директорія src/Events/ створена",
+        "Файл src/Events/AppointmentEventArgs.cs: public class AppointmentEventArgs : EventArgs",
+        "AppointmentEventArgs: readonly властивості AppointmentId, PatientId, DoctorId, ScheduledAt (DateTime), Notes (string, default \"\")",
+        "AppointmentEventArgs: всі властивості заповнюються через конструктор — без set після створення",
+        "AppointmentManager: public event EventHandler<AppointmentEventArgs>? AppointmentBooked; (знак ? — nullable event)",
+        "AppointmentManager.Book(): після успішного створення: AppointmentBooked?.Invoke(this, new AppointmentEventArgs(...))",
+        "Виклик через ?.Invoke — безпечний, не кидає NullReferenceException якщо підписників немає",
+        "Program.cs: clinic.Appointments.AppointmentBooked += OnAppointmentBookedConsole; — підписка ДО ініціалізації тестових даних",
+        "Program.cs: static void OnAppointmentBookedConsole(object? sender, AppointmentEventArgs e) — виводить '[EVENT] Запис #N створено'",
+        "Спроба clinic.Appointments.AppointmentBooked = null → помилка компілятора (event захист)"
+      ]
+    },
+    {
+      "n": 2,
+      "requirements": [
+        "Файл src/Events/PatientEventArgs.cs: public class PatientEventArgs : EventArgs з властивостями PatientId, FullName",
+        "Файл src/Events/PaymentEventArgs.cs: public class PaymentEventArgs : EventArgs з властивостями AppointmentId, Amount (decimal)",
+        "Файл src/Events/TreatmentPlanEventArgs.cs: public class TreatmentPlanEventArgs : EventArgs з властивостями PlanId, PatientId, Diagnosis",
+        "AppointmentManager: event AppointmentCancelled, AppointmentCompleted, UrgentAppointmentBooked",
+        "AppointmentManager.Cancel(): після успішного скасування піднімає AppointmentCancelled?.Invoke",
+        "AppointmentManager.Complete(): після успішного завершення піднімає AppointmentCompleted?.Invoke",
+        "AppointmentManager.BookUrgent(): піднімає ОБИДВІ події — AppointmentBooked І UrgentAppointmentBooked",
+        "PatientManager: event EventHandler<PatientEventArgs>? PatientAdded; піднімається в Add() після успішного додавання",
+        "BillingManager: event EventHandler<PaymentEventArgs>? PaymentReceived; піднімається в PayAppointment() з сумою через GetCost()",
+        "TreatmentPlanManager: event EventHandler<TreatmentPlanEventArgs>? PlanCompleted; + метод Complete(int id) що піднімає подію після успішного плану.Complete()",
+        "ClinicLogger: обробники OnPatientAdded (LogInfo), OnAppointmentBooked (LogInfo), OnAppointmentCancelled (LogWarning), OnAppointmentCompleted (LogInfo), OnPaymentReceived (LogInfo), OnPlanCompleted (LogInfo)",
+        "ClinicLogger.OnUrgentBooked: LogWarning + File.AppendAllText до 'alerts/urgent_{дата}.txt' (Encoding.UTF8)",
+        "Clinic.cs: private void SubscribeEvents() викликається в кінці конструктора",
+        "SubscribeEvents: підписує Logger на всі відповідні події (Patients.PatientAdded, Appointments.AppointmentBooked тощо)",
+        "Program.cs: видалені ручні clinic.Logger.LogInfo(...) для дій що тепер покриті подіями"
+      ]
+    },
+    {
+      "n": 3,
+      "requirements": [
+        "Файл src/Utils/PatientPassportWriter.cs: клас PatientPassportWriter",
+        "Конструктор: PatientPassportWriter(Clinic clinic, string baseDir = \"patients\") — зберігає _clinic і _baseDir",
+        "Конструктор: Directory.CreateDirectory(baseDir) — папка створюється одразу",
+        "Три публічні обробники: OnPatientAdded(object? sender, PatientEventArgs e), OnAppointmentCompleted(object? sender, AppointmentEventArgs e), OnPlanCompleted(object? sender, TreatmentPlanEventArgs e)",
+        "Всі три обробники викликають private Write(int patientId) — не дублюють логіку",
+        "Write: якщо пацієнта не знайдено — ранній return",
+        "Write: Path.Combine(_baseDir, \"passport_\" + patientId + \".txt\")",
+        "Write: StreamWriter з append: false — перезаписує файл (паспорт завжди актуальний)",
+        "Write: секція особистих даних пацієнта (ім'я, DateOfBirth, BloodType, Phone)",
+        "Write: секція медичних записів з is pattern: is Diagnosis d, is LabResult lr, is Prescription rx",
+        "Write: секція записів на прийом через _clinic.Appointments.GetByPatient(patientId)",
+        "Write: секція планів лікування через _clinic.TreatmentPlans.GetByPatient(patientId)",
+        "Clinic.cs: public PatientPassportWriter Passport { get; }",
+        "SubscribeEvents: Patients.PatientAdded += Passport.OnPatientAdded; Appointments.AppointmentCompleted += Passport.OnAppointmentCompleted; TreatmentPlans.PlanCompleted += Passport.OnPlanCompleted"
+      ]
+    },
+    {
+      "n": 4,
+      "requirements": [
+        "Файл src/Utils/SessionEventTracker.cs: клас SessionEventTracker",
+        "Конструктор: SessionEventTracker(Clinic clinic) — зберігає _clinic",
+        "Публічні лічильники з private set: PatientsAdded, AppointmentsBooked, UrgentBooked, AppointmentsCancelled, AppointmentsCompleted, PaymentsReceived, PlansCompleted",
+        "Більшість обробників: відповідний лічильник++",
+        "OnAppointmentCancelled: AppointmentsCancelled++; if (!_clinic.WaitingRoom.IsEmpty) → Peek() + Console.WriteLine('[ЧЕРГА] Слот звільнився. Наступний: {name}')",
+        "PrintSummary(): виводить всі лічильники в консоль у читабельному форматі",
+        "SaveSummary(string path = \"session_summary.txt\"): StreamWriter записує лічильники + DateTime.Now (дата формування)",
+        "Clinic.cs: public SessionEventTracker Tracker { get; }",
+        "SubscribeEvents: підписує всі обробники Tracker на відповідні події",
+        "Program.cs при виході (case \"0\" або аналог): clinic.Tracker.PrintSummary(); clinic.Tracker.SaveSummary();",
+        "session_summary.txt має коректні лічильники після серії дій у системі"
+      ]
+    }
+  ]
+}

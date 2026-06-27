@@ -1,0 +1,83 @@
+{
+  "tasks": [
+    {
+      "n": 1,
+      "requirements": [
+        "Файли Patient.cs, Doctor.cs, Appointment.cs, WorkSchedule.cs переміщені у src/Models/ з namespace ClinicApp.Models;",
+        "Файли BloodType.cs, Speciality.cs, AppointmentStatus.cs переміщені у src/Enums/ з namespace ClinicApp.Enums;",
+        "Файли PatientManager.cs, DoctorManager.cs, AppointmentManager.cs переміщені у src/Managers/ з namespace ClinicApp.Managers;",
+        "Файл ClinicFormatter.cs переміщений у src/Utils/ з namespace ClinicApp.Utils;",
+        "Clinic.cs залишається у src/ з namespace ClinicApp; і має using ClinicApp.Models; using ClinicApp.Managers;",
+        "Program.cs має using ClinicApp; using ClinicApp.Models; using ClinicApp.Enums; using ClinicApp.Managers; using ClinicApp.Utils;",
+        "PatientManager.cs має using ClinicApp.Models; using ClinicApp.Enums; (бо використовує Patient і BloodType)",
+        "Appointment.cs має using ClinicApp.Enums; (бо використовує AppointmentStatus)",
+        "Doctor.cs має using ClinicApp.Enums; using ClinicApp.Utils; (бо використовує Speciality і WorkSchedule)",
+        "Старі файли у корені src/ видалені (не дублюються: немає src/Patient.cs поряд з src/Models/Patient.cs)",
+        "Проєкт компілюється без помилок після реорганізації (dotnet build)"
+      ]
+    },
+    {
+      "n": 2,
+      "requirements": [
+        "Patient: private string _firstName = \"\"; і відповідна властивість public string FirstName { get => _firstName; set => _firstName = value; }",
+        "Patient: private string _lastName = \"\"; з аналогічною властивістю LastName",
+        "Patient: private DateTime _dateOfBirth; з властивістю DateOfBirth { get; set; } через приватне поле",
+        "Patient: private string _phone = \"\"; з властивістю Phone через приватне поле",
+        "Doctor: private string _firstName, _lastName, _licenseNumber, _phone з відповідними явними властивостями",
+        "Appointment: private int _durationMinutes; з властивістю DurationMinutes { get => _durationMinutes; set => _durationMinutes = value; }",
+        "Patient.Id та Doctor.Id залишаються { get; } без сеттера (Id змінюється тільки в конструкторі)",
+        "Patient.BloodType (enum) може залишатись auto-property { get; set; } — enum не може мати некоректне значення",
+        "Patient.Email може залишатись auto-property — валідація email опційна",
+        "Приватні поля іменуються у стилі _camelCase (підкреслення + маленька перша літера)",
+        "Зовнішній код patient.FirstName = \"Іван\"; продовжує працювати — поведінка ідентична до auto-property"
+      ]
+    },
+    {
+      "n": 3,
+      "requirements": [
+        "Patient.FirstName сеттер: if (string.IsNullOrWhiteSpace(value)) throw new ArgumentException(\"Ім'я не може бути порожнім.\");",
+        "Patient.FirstName сеттер: if (value.Length > 50) throw new ArgumentException(\"Ім'я занадто довге (макс. 50 символів).\");",
+        "Patient.LastName сеттер: аналогічні перевірки (IsNullOrWhiteSpace, length > 50)",
+        "Doctor.FirstName, Doctor.LastName сеттери: ті самі перевірки що і в Patient",
+        "Doctor.LicenseNumber сеттер: if (string.IsNullOrWhiteSpace(value)) throw new ArgumentException",
+        "Patient.Phone сеттер: if (phone.Length != 10) throw new ArgumentException; перевірка кожного символу — тільки цифри",
+        "Doctor.Phone сеттер: аналогічна перевірка Phone",
+        "Patient.DateOfBirth сеттер: if (value > DateTime.Today) throw new ArgumentOutOfRangeException(nameof(DateOfBirth), \"Дата не може бути в майбутньому.\");",
+        "Patient.DateOfBirth сеттер: if (value.Year < 1900) throw new ArgumentOutOfRangeException(nameof(DateOfBirth), \"Дата не може бути раніше 1900 року.\");",
+        "Appointment.DurationMinutes сеттер: if (value <= 0) throw new ArgumentOutOfRangeException(nameof(DurationMinutes), \"Тривалість має бути більше 0.\");",
+        "WorkSchedule конструктор: if (start < 0 || start > 23) throw new ArgumentOutOfRangeException; if (end < 1 || end > 24) throw new ArgumentOutOfRangeException; if (start >= end) throw new ArgumentException",
+        "Конструктори Patient і Doctor присвоюють поля через властивості (FirstName = firstName;), а не напряму в поле (_firstName = firstName;), щоб валідація спрацьовувала"
+      ]
+    },
+    {
+      "n": 4,
+      "requirements": [
+        "Файл src/Utils/ClinicValidator.cs: public static class ClinicValidator у namespace ClinicApp.Utils;",
+        "Метод ValidateName(string value, string fieldName): IsNullOrWhiteSpace → ArgumentException; length > 50 → ArgumentException",
+        "Метод ValidatePhone(string phone): length != 10 → ArgumentException; символи що не є цифрами → ArgumentException",
+        "Метод ValidateDate(DateTime value, string fieldName): value > DateTime.Today → ArgumentOutOfRangeException; value.Year < 1900 → ArgumentOutOfRangeException",
+        "Метод ValidatePositive(int value, string fieldName): value <= 0 → ArgumentOutOfRangeException",
+        "Patient.FirstName сеттер після рефакторингу: ClinicValidator.ValidateName(value, \"Ім'я\"); _firstName = value; (не inline перевірки)",
+        "Patient.LastName, Doctor.FirstName, Doctor.LastName, Doctor.LicenseNumber аналогічно через ClinicValidator.ValidateName",
+        "Patient.Phone, Doctor.Phone сеттери: ClinicValidator.ValidatePhone(value);",
+        "Patient.DateOfBirth сеттер: ClinicValidator.ValidateDate(value, nameof(DateOfBirth));",
+        "Appointment.DurationMinutes сеттер: ClinicValidator.ValidatePositive(value, nameof(DurationMinutes));",
+        "Program.cs у меню 'Додати пацієнта': try { clinic.Patients.Add(new Patient(...)); } catch (ArgumentOutOfRangeException e) { ... } catch (ArgumentException e) { ... }",
+        "Program.cs у меню 'Додати лікаря': аналогічний try/catch блок",
+        "catch блоки у правильному порядку: ArgumentOutOfRangeException перший (він підклас ArgumentException), ArgumentException другий",
+        "При некоректному введенні: програма виводить e.Message і повертається до меню (не падає з stack trace)"
+      ]
+    },
+    {
+      "n": 5,
+      "requirements": [
+        "ClinicValidator: private static readonly Regex _phoneRegex = new Regex(@\"^\\d{10}$\"); (static readonly — компіляція шаблону один раз)",
+        "ValidatePhone: використовує _phoneRegex.IsMatch(phone) замість for-циклу",
+        "ClinicValidator: private static readonly Regex _emailRegex = new Regex(@\"^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$\");",
+        "Метод ValidateEmail(string email): if (!_emailRegex.IsMatch(email)) throw new ArgumentException(\"Некоректний формат email.\");",
+        "Patient.Email сеттер оновлений: викликає ClinicValidator.ValidateEmail(value) перед _email = value;",
+        "Regex зберігається як static readonly (не new Regex(...) при кожному виклику — це дорого)"
+      ]
+    }
+  ]
+}

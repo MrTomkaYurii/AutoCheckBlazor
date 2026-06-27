@@ -1,0 +1,62 @@
+{
+  "tasks": [
+    {
+      "n": 1,
+      "requirements": [
+        "MedicalRecord.Id: public int Id { get; private set; }",
+        "MedicalRecord.PatientId: public int PatientId { get; private set; }",
+        "MedicalRecord.DoctorId: public int DoctorId { get; private set; }",
+        "MedicalRecord.Date: public DateTime Date { get; private set; }",
+        "MedicalRecord: protected MedicalRecord() { Date = DateTime.Today; } — безпечне дефолтне значення Date",
+        "MedicalRecord: public Patient? Patient { get; set; } — navigation property",
+        "Diagnosis: protected Diagnosis() { } — parameterless ctor для EF",
+        "LabResult: protected LabResult() { } — parameterless ctor для EF",
+        "Prescription: protected Prescription() { } — parameterless ctor для EF"
+      ]
+    },
+    {
+      "n": 2,
+      "requirements": [
+        "ClinicDbContext: public DbSet<MedicalRecord> MedicalRecords { get; set; }",
+        "MedicalRecord конфігурація: ToTable(\"MedicalRecords\"), HasKey(r => r.Id), ValueGeneratedOnAdd",
+        "MedicalRecord FK: HasOne(r => r.Patient).WithMany(...).HasForeignKey(r => r.PatientId).OnDelete(DeleteBehavior.Cascade)",
+        "MedicalRecord FK: HasOne(r => r.Doctor? або без nav).HasForeignKey(r => r.DoctorId).OnDelete(DeleteBehavior.Restrict)",
+        "ОДИН CASCADE: Patient→MedicalRecords; Doctor→MedicalRecords — Restrict (дві каскадні доріжки до однієї таблиці заборонені)",
+        "HasDiscriminator<string>(\"RecordType\").HasValue<Diagnosis>(\"Diagnosis\").HasValue<LabResult>(\"LabResult\").HasValue<Prescription>(\"Prescription\")",
+        "modelBuilder.Entity<Diagnosis>(): DiagnosisCode HasMaxLength(20) IsRequired(false); Description IsRequired(false); IsChronic IsRequired(false)",
+        "modelBuilder.Entity<LabResult>(): TestName, Unit, ReferenceRange — IsRequired(false); Value — IsRequired(false); IsNormal — IsRequired(false)",
+        "modelBuilder.Entity<Prescription>(): MedicationName, Dosage, Instructions — IsRequired(false); DurationDays — IsRequired(false)",
+        "Notes: HasMaxLength(500) IsRequired(false) — поле базового MedicalRecord"
+      ]
+    },
+    {
+      "n": 3,
+      "requirements": [
+        "Файл src/Models/EmergencyContact.cs (або клас у моделі Patient): public class EmergencyContact без Id, без власної таблиці",
+        "EmergencyContact: public string Name { get; set; }, Phone { get; set; }, Relationship { get; set; }",
+        "Patient: public EmergencyContact? EmergencyContact { get; set; } — nullable (контакт необов'язковий)",
+        "ClinicDbContext.OnModelCreating: modelBuilder.Entity<Patient>().OwnsOne(p => p.EmergencyContact, ec => { ... })",
+        "ec.Property(e => e.Name).HasColumnName(\"EC_Name\").HasMaxLength(100)",
+        "ec.Property(e => e.Phone).HasColumnName(\"EC_Phone\").HasMaxLength(20)",
+        "ec.Property(e => e.Relationship).HasColumnName(\"EC_Relationship\").HasMaxLength(50)",
+        "Після міграції: у таблиці Patients з'явилися стовпці EC_Name, EC_Phone, EC_Relationship (nullable)"
+      ]
+    },
+    {
+      "n": 4,
+      "requirements": [
+        "Patient: public byte[]? RowVersion { get; private set; }",
+        "ClinicDbContext.OnModelCreating: entity.Property(p => p.RowVersion).IsRowVersion() — автоматичний timestamp SQL Server",
+        "Метод SimulateConcurrencyConflict() або аналогічна демонстрація: два окремих DbContext екземпляри (context1 і context2)",
+        "Демонстрація: context1.SaveChanges() успішно → context2.SaveChanges() кидає DbUpdateConcurrencyException",
+        "try { context2.SaveChanges(); } catch (DbUpdateConcurrencyException ex) { ... } — обробка виключення є",
+        "DbSeeder.SeedMedicalRecords(ClinicDbContext context): if (context.MedicalRecords.Any()) return;",
+        "SeedMedicalRecords: var patients = context.Patients.ToList(); var doctors = context.Doctors.ToList(); — реальні IDs",
+        "SeedMedicalRecords: додає мінімум 1 Diagnosis хронічний (IsChronic=true) і 1 звичайний",
+        "SeedMedicalRecords: додає мінімум 1 LabResult в нормі і 1 поза нормою",
+        "SeedMedicalRecords: додає мінімум 1 Prescription",
+        "Міграція AddMedicalRecordsAndOwnedEntities або аналогічна присутня в Migrations/"
+      ]
+    }
+  ]
+}

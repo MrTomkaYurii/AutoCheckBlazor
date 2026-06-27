@@ -1,0 +1,57 @@
+{
+  "tasks": [
+    {
+      "n": 1,
+      "requirements": [
+        "Файл src/Data/ClinicQueryService.cs: клас ClinicQueryService",
+        "ClinicQueryService конструктор: приймає ClinicDbContext _context",
+        "DemoQueryableVsEnumerable(string filter): повертає два списки — efficient і inefficient",
+        "efficient варіант: context.Patients.Where(p => p.LastName.Contains(filter)).ToList() — SQL WHERE LIKE",
+        "inefficient варіант: context.Patients.ToList().Where(p => p.LastName.Contains(filter)) — фільтр у C# пам'яті після матеріалізації",
+        "OnConfiguring: optionsBuilder.LogTo(Console.WriteLine, LogLevel.Information) тимчасово доданий для демонстрації SQL",
+        "ClinicQueryService: public IQueryable<Patient> QueryPatients() => _context.Patients.AsNoTracking()",
+        "QueryPatients() повертає IQueryable — виклик кód може додати .Where/.OrderBy до виконання SQL"
+      ]
+    },
+    {
+      "n": 2,
+      "requirements": [
+        "ClinicQueryService: GetPatientsPaged(int page, int pageSize, string? searchTerm = null) → (List<Patient> Items, int TotalCount)",
+        "GetPatientsPaged: var query = _context.Patients.AsNoTracking(); якщо searchTerm != null → query = query.Where(p => p.LastName.Contains(searchTerm))",
+        "GetPatientsPaged: int total = query.Count() — окремий SELECT COUNT(*) ДО Skip/Take",
+        "GetPatientsPaged: .OrderBy(p => p.LastName).Skip((page - 1) * pageSize).Take(pageSize).ToList()",
+        "GetPatientsPaged: OrderBy ОБОВ'ЯЗКОВИЙ перед Skip/Take (без нього порядок непередбачуваний)",
+        "ClinicQueryService: GetAppointmentsPaged(int page, int pageSize, AppointmentStatus? status = null, int? patientId = null) → (List<Appointment> Items, int TotalCount)",
+        "GetAppointmentsPaged: динамічне нарощування query: if (status.HasValue) query = query.Where(a => a.Status == status.Value)",
+        "GetAppointmentsPaged: if (patientId.HasValue) query = query.Where(a => a.PatientId == patientId.Value)",
+        "GetAppointmentsPaged: int total = query.Count() ДО Skip/Take"
+      ]
+    },
+    {
+      "n": 3,
+      "requirements": [
+        "Файл src/DTOs/PatientSummaryDto.cs: public record PatientSummaryDto(int Id, string FullName, int Age, string Phone, string BloodType, int AppointmentCount)",
+        "Файл src/DTOs/AppointmentSummaryDto.cs: public record AppointmentSummaryDto(int Id, string PatientName, string DoctorName, string Speciality, DateTime Date, string Status, decimal Cost) або аналог",
+        "record замість class — незмінний тип даних для DTO",
+        "ClinicQueryService: GetPatientSummaries() → IList<PatientSummaryDto>",
+        "GetPatientSummaries: context.Patients.Select(p => new PatientSummaryDto(p.Id, p.FirstName + \" \" + p.LastName, ..., p.Appointments.Count)).ToList()",
+        "p.Appointments.Count у Select — генерує COUNT subquery у SQL, не завантажує колекцію",
+        "ClinicQueryService: GetAppointmentSummaries() → IList<AppointmentSummaryDto>",
+        "GetAppointmentSummaries: .Include(a => a.Patient).Include(a => a.Doctor).Select(a => new AppointmentSummaryDto(...))"
+      ]
+    },
+    {
+      "n": 4,
+      "requirements": [
+        "Patient: public bool IsDeleted { get; private set; }",
+        "Patient: public void SoftDelete() { IsDeleted = true; }",
+        "ClinicDbContext.OnModelCreating: entity.HasQueryFilter(p => !p.IsDeleted) для Patient",
+        "Після HasQueryFilter: context.Patients.ToList() НЕ повертає IsDeleted=true пацієнтів",
+        "ClinicQueryService або ClinicRepository: GetDeletedPatients() → _context.Patients.IgnoreQueryFilters().Where(p => p.IsDeleted).ToList()",
+        "SoftDeletePatient(int id): знаходить пацієнта (IgnoreQueryFilters або пряме знаходження), викликає SoftDelete(), SaveChanges()",
+        "Міграція для стовпця IsDeleted у таблиці Patients присутня в Migrations/",
+        "Program.cs або демо: виклик SoftDeletePatient → перевірка що пацієнт зникає з GetAll → IgnoreQueryFilters показує його"
+      ]
+    }
+  ]
+}

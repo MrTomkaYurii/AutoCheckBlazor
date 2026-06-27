@@ -1,0 +1,57 @@
+{
+  "tasks": [
+    {
+      "n": 1,
+      "requirements": [
+        "Patient: public ICollection<Appointment> Appointments { get; private set; } = new List<Appointment>()",
+        "Doctor: public ICollection<Appointment> Appointments { get; private set; } = new List<Appointment>()",
+        "Appointment: public Patient? Patient { get; set; } — navigation property",
+        "Appointment: public Doctor? Doctor { get; set; } — navigation property",
+        "Appointment: protected Appointment() — parameterless ctor для EF Core (з безпечними дефолтами для private set полів)",
+        "UrgentAppointment.UrgencyNote: змінено з { get; } на { get; private set; } — EF може встановити після конструктора",
+        "UrgentAppointment: protected UrgentAppointment() parameterless ctor для EF",
+        "SpecialistAppointment (sealed class): private SpecialistAppointment() для EF (sealed + protected безглуздо)",
+        "SpecialistAppointment.ConsultationTopic: змінено з { get; } на { get; private set; }"
+      ]
+    },
+    {
+      "n": 2,
+      "requirements": [
+        "ClinicDbContext: DbSet<Appointment> Appointments { get; set; }",
+        "Appointment конфігурація: ToTable(\"Appointments\"), HasKey(a => a.Id), ValueGeneratedOnAdd",
+        "Appointment: HasOne(a => a.Patient).WithMany(p => p.Appointments).HasForeignKey(a => a.PatientId).OnDelete(DeleteBehavior.Cascade)",
+        "Appointment: HasOne(a => a.Doctor).WithMany(d => d.Appointments).HasForeignKey(a => a.DoctorId).OnDelete(DeleteBehavior.Restrict)",
+        "OnDelete: ТІЛЬКИ ОДИН CASCADE (Patient→Appointments); Doctor→Appointments — Restrict (SQL Server забороняє два cascade на одну таблицю)",
+        "HasDiscriminator<string>(\"AppointmentType\").HasValue<Appointment>(\"Base\").HasValue<RegularAppointment>(\"Regular\").HasValue<UrgentAppointment>(\"Urgent\").HasValue<SpecialistAppointment>(\"Specialist\")",
+        "modelBuilder.Entity<UrgentAppointment>(): Property UrgencyNote HasMaxLength(200) HasDefaultValue(\"\")",
+        "modelBuilder.Entity<SpecialistAppointment>(): Property ConsultationTopic HasMaxLength(200) HasDefaultValue(\"\")"
+      ]
+    },
+    {
+      "n": 3,
+      "requirements": [
+        "DbSeeder: окремий метод SeedAppointments(ClinicDbContext context) або аналог",
+        "SeedAppointments: var patients = context.Patients.ToList() — завантажує з БД щоб отримати реальні Id після попереднього SaveChanges",
+        "SeedAppointments: var doctors = context.Doctors.ToList() — аналогічно",
+        "SeedAppointments: додає мінімум 4 записи різних типів (RegularAppointment, UrgentAppointment, SpecialistAppointment)",
+        "SeedAppointments: деякі записи з Status = Completed + _isPaid = true (або через відповідний метод)",
+        "SeedAppointments: ідемпотентна перевірка if (context.Appointments.Any()) return;",
+        "Папка Migrations/ містить клас AddAppointmentsWithRelations (або аналогічну другу міграцію) після dotnet ef migrations add",
+        "dotnet ef database update виконано успішно"
+      ]
+    },
+    {
+      "n": 4,
+      "requirements": [
+        "Файл src/Data/ClinicRepository.cs: клас ClinicRepository",
+        "ClinicRepository конструктор: ClinicRepository(ClinicDbContext context) — зберігає _context",
+        "GetPatientWithAppointments(int patientId): context.Patients.Include(p => p.Appointments).FirstOrDefault(p => p.Id == patientId); повертає Patient?",
+        "GetUpcomingAppointments(): включає .Include(a => a.Patient) і .Include(a => a.Doctor) — два Include",
+        "GetUpcomingAppointments(): фільтрує за ScheduledAt > DateTime.Now та Status == Scheduled (або аналог)",
+        "GetAppointmentsByPatient(int patientId): .Include(a => a.Doctor).Where(a => a.PatientId == patientId).OrderByDescending(a => a.ScheduledAt)",
+        "GetDoctorStats(): .AsNoTracking().Include(d => d.Appointments).Select(d => new { d.Id, d.FirstName, Count = d.Appointments.Count() })",
+        "AsNoTracking() явно присутній у GetDoctorStats() — read-only запит без Change Tracker overhead"
+      ]
+    }
+  ]
+}

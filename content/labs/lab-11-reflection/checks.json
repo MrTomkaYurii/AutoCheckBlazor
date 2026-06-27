@@ -1,0 +1,87 @@
+{
+  "tasks": [
+    {
+      "n": 1,
+      "requirements": [
+        "Директорія src/Attributes/ створена",
+        "Файл src/Attributes/RequiredAttribute.cs: public sealed class RequiredAttribute : Attribute",
+        "[AttributeUsage(AttributeTargets.Property, AllowMultiple = false)] присутній над RequiredAttribute",
+        "RequiredAttribute: public string ErrorMessage { get; } та конструктор з дефолтом \"Field is required.\"",
+        "Файл src/Attributes/MaxLengthAttribute.cs: public sealed class MaxLengthAttribute : Attribute",
+        "[AttributeUsage(AttributeTargets.Property, AllowMultiple = false)] присутній над MaxLengthAttribute",
+        "MaxLengthAttribute: public int Length { get; }, public string ErrorMessage { get; }, конструктор(int length, string errorMessage = \"\")",
+        "Файл src/Attributes/MinValueAttribute.cs: public sealed class MinValueAttribute : Attribute",
+        "[AttributeUsage(AttributeTargets.Property, AllowMultiple = false)] присутній над MinValueAttribute",
+        "MinValueAttribute: public double Min { get; }, public string ErrorMessage { get; }, конструктор(double min, string errorMessage = \"\")",
+        "Усі три класи є sealed — не підлягають подальшому спадкуванню"
+      ]
+    },
+    {
+      "n": 2,
+      "requirements": [
+        "Файл src/Enums/TreatmentStatus.cs: public enum TreatmentStatus { Planned, Active, Completed, Cancelled }",
+        "Файл src/Models/TreatmentPlan.cs: клас TreatmentPlan з using YourApp.Attributes (або аналог)",
+        "TreatmentPlan: private static int _nextId = 1; public int Id { get; } — автоінкремент",
+        "TreatmentPlan: [Required(\"Patient ID is required.\")] public int PatientId { get; set; }",
+        "TreatmentPlan: [Required(\"Diagnosis cannot be empty.\")] [MaxLength(200, \"...\")] public string Diagnosis { get; set; } — обидва атрибути на одній властивості",
+        "TreatmentPlan: [MinValue(1, \"...\")] public int DurationDays { get; set; }",
+        "TreatmentPlan: public TreatmentStatus Status { get; private set; } = TreatmentStatus.Planned",
+        "TreatmentPlan: bool Activate() → якщо Status == Planned: Status = Active, return true; інакше return false",
+        "TreatmentPlan: bool Complete() → якщо Status == Active: Status = Completed, return true; інакше return false",
+        "TreatmentPlan: bool Cancel() → якщо Status != Completed && Status != Cancelled: Status = Cancelled, return true"
+      ]
+    },
+    {
+      "n": 3,
+      "requirements": [
+        "Файл src/Utils/ValidationResult.cs: клас ValidationResult",
+        "ValidationResult: private readonly List<string> _errors = new List<string>()",
+        "ValidationResult: bool IsValid => _errors.Count == 0",
+        "ValidationResult: IReadOnlyList<string> Errors => _errors (або аналог, що не дозволяє модифікацію ззовні)",
+        "ValidationResult: void AddError(string error) → _errors.Add(error)",
+        "ValidationResult: void Print() → для кожної помилки виводить '[!] {error}'",
+        "Файл src/Utils/ModelValidator.cs: public static class ModelValidator",
+        "ModelValidator: public static ValidationResult Validate(object obj)",
+        "Validate: var type = obj.GetType(); — не typeof(TreatmentPlan), саме GetType() щоб працювало з будь-яким типом",
+        "Validate: foreach (var prop in type.GetProperties()) → prop.GetValue(obj) → перевірка атрибутів",
+        "Validate: prop.GetCustomAttribute<RequiredAttribute>() — якщо не null: перевіряє null або IsNullOrWhiteSpace, додає помилку",
+        "Validate: prop.GetCustomAttribute<MaxLengthAttribute>() — якщо не null: перевіряє довжину рядка",
+        "Validate: prop.GetCustomAttribute<MinValueAttribute>() — якщо не null: перевіряє числове значення >= Min",
+        "Validate: жодного if (plan.Diagnosis == null) — валідація через рефлексію, не hardcoded поля",
+        "ModelValidator: public static void PrintInfo(Type type) → виводить назву типу і список властивостей з їх атрибутами"
+      ]
+    },
+    {
+      "n": 4,
+      "requirements": [
+        "Файл src/Managers/TreatmentPlanManager.cs: клас TreatmentPlanManager",
+        "TreatmentPlanManager: private readonly List<TreatmentPlan> _plans = new List<TreatmentPlan>()",
+        "TreatmentPlanManager.Add(TreatmentPlan plan): викликає ModelValidator.Validate(plan); якщо !IsValid — validation.Print(), return false; інакше _plans.Add(plan), return true",
+        "TreatmentPlanManager: TreatmentPlan? GetById(int id) → пошук за Id",
+        "TreatmentPlanManager: TreatmentPlan[] GetByPatient(int patientId)",
+        "TreatmentPlanManager: TreatmentPlan[] GetByStatus(TreatmentStatus status)",
+        "TreatmentPlanManager: TreatmentPlan[] GetAll() → _plans.ToArray()",
+        "Файл src/Utils/FormBuilder.cs: public static class FormBuilder",
+        "FormBuilder: public static T Build<T>() where T : new()",
+        "FormBuilder: var obj = new T(); var type = typeof(T);",
+        "FormBuilder: foreach по type.GetProperties() де prop.CanWrite — пропускає readonly властивості",
+        "FormBuilder: зчитує атрибути для hint (RequiredAttribute, MaxLengthAttribute, MinValueAttribute) і виводить підказку поруч з іменем поля",
+        "FormBuilder: Console.ReadLine() → Convert.ChangeType(input, prop.PropertyType) у try/catch → prop.SetValue(obj, converted)",
+        "FormBuilder: повертає заповнений об'єкт"
+      ]
+    },
+    {
+      "n": 5,
+      "requirements": [
+        "Clinic.cs: public TreatmentPlanManager TreatmentPlans { get; }",
+        "Clinic конструктор: TreatmentPlans = new TreatmentPlanManager();",
+        "Program.cs: у головному меню присутній пункт '9. Плани лікування' або аналог",
+        "Program.cs: функція TreatmentPlansMenu(Clinic clinic) або аналог",
+        "Меню містить: Показати всі плани, Додати план, Плани пацієнта, Активувати план, Завершити план, Скасувати план, Інформація про тип",
+        "Пункт 'Додати план': використовує FormBuilder.Build<TreatmentPlan>() — форма генерується автоматично з атрибутів",
+        "Пункт 'Інформація про тип': викликає ModelValidator.PrintInfo(typeof(TreatmentPlan)) — без екземпляра об'єкта",
+        "Спроба додати план без обов'язкових полів: виводить повідомлення з помилками, програма не падає"
+      ]
+    }
+  ]
+}
