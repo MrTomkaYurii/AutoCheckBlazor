@@ -9,20 +9,24 @@ Per-circuit singleton. Кешує поточного юзера.
 - `PreloadAsync(user)` — перезавантажити після оновлення профілю
 
 ## IAuthService / AuthService (Services/AuthService.cs)
-Робота з Keycloak claims та зв'язком з БД.
+Робота з Identity claims та зв'язком з БД.
 
-**`EnsureLinkedAsync(user)`** — викликається в MainLayout при кожному вході:
-1. Шукає UserLink по `KeycloakSub`
+**`EnsureLinkedAsync(user)`** — викликається в MainLayout при кожному вході (страхувальна сітка;
+зазвичай лінк уже створений при реєстрації):
+1. Шукає UserLink по `UserId`
 2. Якщо знайдено — виходить (вже зв'язано)
-3. Якщо ні — шукає студента/викладача по email
-4. Якщо студент вже має UserLink з іншим sub (скидання Keycloak) → **оновлює** KeycloakSub і Email
+3. Якщо ні — бере AppUser з БД, лінкує як викладача або студента (по email)
+4. Якщо запис вже має UserLink зі старим UserId → **оновлює** UserId і Email
 5. Якщо студента немає → створює новий StudentRecord + Submission(Locked) для всіх лаб
 6. Зберігає UserLink
 7. Race condition (подвійний рендер SSR+SignalR): catch DbUpdateException → `ChangeTracker.Clear()`
 
-**`GetStudentRecordAsync(user)`** / **`GetTeacherRecordAsync(user)`** — завантаження запису по sub.
+**`LinkStudentAsync(appUser, group)`** / **`LinkTeacherAsync(appUser)`** — створення зв'язку
+при реєстрації / Google-вході / сідуванні.
 
-**`GetSub(user)`** — витягує sub claim (NameIdentifier або "sub").
+**`GetStudentRecordAsync(user)`** / **`GetTeacherRecordAsync(user)`** — завантаження запису по UserId.
+
+**`GetSub(user)`** — витягує Id користувача (ClaimTypes.NameIdentifier).
 
 ## IDataService / DbDataService (Services/DbDataService.cs)
 Читання даних для UI-компонентів.

@@ -5,7 +5,8 @@
 @inject IConfiguration Cfg
 @inject IWebHostEnvironment Env
 @inject GeminiQuotaService Quota
-@inject KeycloakAdminService KcAdmin
+@inject UserManager<AppUser> UserManager
+@inject NavigationManager Nav
 
 <TopBar Title="Кабінет" Sub="Профіль викладача та параметри практикуму" />
 
@@ -82,9 +83,6 @@
         else if (_pwEdit)
         {
             <div style="padding:20px 26px;display:flex;flex-direction:column;gap:14px">
-                <div style="font-size:12px;color:var(--tx-3);padding:10px 14px;background:rgba(255,255,255,0.03);border-radius:9px;border:1px solid var(--line)">
-                    Зміна паролю виконується через Keycloak. Потрібен admin-пароль у <span class="mono" style="font-size:11px">appsettings.json → Keycloak:AdminPassword</span>.
-                </div>
                 <div class="field">
                     <label>Поточний пароль</label>
                     <input class="input" type="password" @bind="_pwOld" autocomplete="current-password" />
@@ -284,7 +282,7 @@
         // load email from DB (TeacherRecord.Email)
         var state = await AuthStateTask;
         var sub   = Auth.GetSub(state.User);
-        var link  = await Db.UserLinks.AsNoTracking().FirstOrDefaultAsync(l => l.KeycloakSub == sub);
+        var link  = await Db.UserLinks.AsNoTracking().FirstOrDefaultAsync(l => l.UserId == sub);
         if (link?.TeacherId is int tid)
         {
             var rec = await Db.Teachers.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tid);
@@ -371,14 +369,27 @@
         try
         {
             var state = await AuthStateTask;
-            var email = Auth.GetEmail(state.User);
-            var sub   = Auth.GetSub(state.User);
-
-            await KcAdmin.VerifyPasswordAsync(email, _pwOld);
-            await KcAdmin.ChangePasswordAsync(sub, _pwNew);
-
-            _pwMsg = "ok:Пароль успішно змінено";
-            _pwOld = _pwNew = _pwConfirm = "";
+            var user  = await UserManager.FindByIdAsync(Auth.GetSub(state.User));
+            if (user == null)
+            {
+                _pwMsg = "err:Акаунт не знайдено.";
+            }
+            else
+            {
+                var result = await UserManager.ChangePasswordAsync(user, _pwOld, _pwNew);
+                if (result.Succeeded)
+                {
+                    _pwMsg = "ok:Пароль успішно змінено";
+                    _pwOld = _pwNew = _pwConfirm = "";
+                }
+                else
+                {
+                    var wrongOld = result.Errors.Any(e => e.Code == "PasswordMismatch");
+                    _pwMsg = "err:" + (wrongOld
+                        ? "Поточний пароль невірний."
+                        : string.Join(" ", result.Errors.Select(e => e.Description)));
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -387,8 +398,9 @@
         _savingPw = false; StateHasChanged();
         if (_pwMsg.StartsWith("ok:"))
         {
-            await Task.Delay(1500);
-            _pwEdit = false; _pwMsg = ""; StateHasChanged();
+            // Security stamp changed → re-issue the auth cookie so the session stays valid
+            await Task.Delay(1200);
+            Nav.NavigateTo("/account/refresh-signin?returnUrl=/teacher/profile", forceLoad: true);
         }
     }
 
@@ -404,7 +416,7 @@
         _savingProfile = true; StateHasChanged();
         var state = await AuthStateTask;
         var sub   = Auth.GetSub(state.User);
-        var link  = await Db.UserLinks.AsNoTracking().FirstOrDefaultAsync(l => l.KeycloakSub == sub);
+        var link  = await Db.UserLinks.AsNoTracking().FirstOrDefaultAsync(l => l.UserId == sub);
         if (link?.TeacherId is int teacherId)
         {
             var initials = (_firstName.Length > 0 ? _firstName[0].ToString() : "")

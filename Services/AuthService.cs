@@ -1,28 +1,26 @@
 using System.Security.Claims;
 using AutoCheck.Data;
 using AutoCheck.Models;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace AutoCheck.Services;
 
-public class AuthService(AppDbContext db) : IAuthService
+public class AuthService(AppDbContext db, UserManager<AppUser> userManager) : IAuthService
 {
     public bool IsTeacher(ClaimsPrincipal user) =>
         user.IsInRole("teacher");
 
     public string GetSub(ClaimsPrincipal user) =>
-        user.FindFirst(ClaimTypes.NameIdentifier)?.Value
-        ?? user.FindFirst("sub")?.Value
-        ?? "";
+        user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
 
     public string GetEmail(ClaimsPrincipal user) =>
         user.FindFirst(ClaimTypes.Email)?.Value
-        ?? user.FindFirst("email")?.Value
+        ?? user.FindFirst(ClaimTypes.Name)?.Value   // UserName == email
         ?? "";
 
     public string GetDisplayName(ClaimsPrincipal user) =>
-        user.FindFirst("preferred_username")?.Value
-        ?? user.FindFirst(ClaimTypes.Name)?.Value
+        user.FindFirst(ClaimTypes.Name)?.Value
         ?? GetEmail(user);
 
     public async Task<StudentRecord?> GetStudentRecordAsync(ClaimsPrincipal user)
@@ -30,7 +28,7 @@ public class AuthService(AppDbContext db) : IAuthService
         var sub = GetSub(user);
         if (string.IsNullOrEmpty(sub)) return null;
         var link = await db.UserLinks.AsNoTracking().Include(l => l.Student)
-                                     .FirstOrDefaultAsync(l => l.KeycloakSub == sub);
+                                     .FirstOrDefaultAsync(l => l.UserId == sub);
         return link?.Student;
     }
 
@@ -39,7 +37,7 @@ public class AuthService(AppDbContext db) : IAuthService
         var sub = GetSub(user);
         if (string.IsNullOrEmpty(sub)) return null;
         var link = await db.UserLinks.AsNoTracking().Include(l => l.Teacher)
-                                     .FirstOrDefaultAsync(l => l.KeycloakSub == sub);
+                                     .FirstOrDefaultAsync(l => l.UserId == sub);
         return link?.Teacher;
     }
 
@@ -49,79 +47,96 @@ public class AuthService(AppDbContext db) : IAuthService
         if (string.IsNullOrEmpty(sub)) return;
 
         // Already linked
-        if (await db.UserLinks.AnyAsync(l => l.KeycloakSub == sub)) return;
+        if (await db.UserLinks.AnyAsync(l => l.UserId == sub)) return;
 
-        var email = GetEmail(user);
-        var isTeacher = IsTeacher(user);
-        var firstName = user.FindFirst(ClaimTypes.GivenName)?.Value
-                        ?? user.FindFirst("given_name")?.Value
-                        ?? "Новий";
-        var lastName  = user.FindFirst(ClaimTypes.Surname)?.Value
-                        ?? user.FindFirst("family_name")?.Value
-                        ?? (isTeacher ? "Викладач" : "Студент");
+        var appUser = await userManager.FindByIdAsync(sub);
+        if (appUser == null) return;
 
-        var link = new UserLink
+        if (IsTeacher(user)) await LinkTeacherAsync(appUser);
+        else                 await LinkStudentAsync(appUser, "");
+    }
+
+    public async Task LinkTeacherAsync(AppUser user)
+    {
+        if (await db.UserLinks.AnyAsync(l => l.UserId == user.Id)) return;
+
+        var email = user.Email ?? "";
+        var teacher = await db.Teachers.FirstOrDefaultAsync()
+            ?? await CreateTeacherAsync(user.FirstName, user.LastName);
+
+        if (!string.IsNullOrEmpty(email) && string.IsNullOrEmpty(teacher.Email))
         {
-            KeycloakSub = sub,
-            Email = email,
-            Role = isTeacher ? "teacher" : "student",
-        };
-
-        if (isTeacher)
-        {
-            var teacher = await db.Teachers.FirstOrDefaultAsync()
-                ?? await CreateTeacherAsync(firstName, lastName, email);
-
-            // Keycloak reset: teacher already has a link with a stale sub — reuse it
-            var existing = await db.UserLinks.FirstOrDefaultAsync(l => l.TeacherId == teacher.Id);
-            if (existing != null)
-            {
-                existing.KeycloakSub = sub;
-                existing.Email = email;
-                await db.SaveChangesAsync();
-                return;
-            }
-            link.TeacherId = teacher.Id;
-        }
-        else
-        {
-            var student = await db.Students.FirstOrDefaultAsync(s => s.Email == email)
-                ?? await CreateStudentAsync(firstName, lastName, email);
-
-            // Keycloak reset: student already has a link with a stale sub — reuse it
-            var existing = await db.UserLinks.FirstOrDefaultAsync(l => l.StudentId == student.Id);
-            if (existing != null)
-            {
-                existing.KeycloakSub = sub;
-                existing.Email = email;
-                await db.SaveChangesAsync();
-                return;
-            }
-            link.StudentId = student.Id;
+            teacher.Email = email;
+            await db.SaveChangesAsync();
         }
 
-        db.UserLinks.Add(link);
+        // Teacher record may already be linked to a stale user — reuse the link
+        var existing = await db.UserLinks.FirstOrDefaultAsync(l => l.TeacherId == teacher.Id);
+        if (existing != null)
+        {
+            existing.UserId = user.Id;
+            existing.Email = email;
+            await db.SaveChangesAsync();
+            return;
+        }
+
+        db.UserLinks.Add(new UserLink
+        {
+            UserId = user.Id, Email = email, Role = "teacher", TeacherId = teacher.Id,
+        });
+        await SaveLinkAsync();
+    }
+
+    public async Task LinkStudentAsync(AppUser user, string group)
+    {
+        if (await db.UserLinks.AnyAsync(l => l.UserId == user.Id)) return;
+
+        var email = user.Email ?? "";
+        var student = !string.IsNullOrEmpty(email)
+            ? await db.Students.FirstOrDefaultAsync(s => s.Email == email)
+            : null;
+        student ??= await CreateStudentAsync(user.FirstName, user.LastName, email, group);
+
+        // Student record may already be linked to a stale user — reuse the link
+        var existing = await db.UserLinks.FirstOrDefaultAsync(l => l.StudentId == student.Id);
+        if (existing != null)
+        {
+            existing.UserId = user.Id;
+            existing.Email = email;
+            await db.SaveChangesAsync();
+            return;
+        }
+
+        db.UserLinks.Add(new UserLink
+        {
+            UserId = user.Id, Email = email, Role = "student", StudentId = student.Id,
+        });
+        await SaveLinkAsync();
+    }
+
+    private async Task SaveLinkAsync()
+    {
         try
         {
             await db.SaveChangesAsync();
         }
-        catch (Microsoft.EntityFrameworkCore.DbUpdateException)
+        catch (DbUpdateException)
         {
             // Race condition: another concurrent render already created the link.
             db.ChangeTracker.Clear();
         }
     }
 
-    private async Task<StudentRecord> CreateStudentAsync(string first, string last, string email)
+    private async Task<StudentRecord> CreateStudentAsync(string first, string last, string email, string group)
     {
-        // Find a group — default to first available or "—"
-        var group = await db.Students.Select(s => s.Group).FirstOrDefaultAsync() ?? "—";
         var initials = (first.Length > 0 ? first[0].ToString() : "") +
                        (last.Length > 0  ? last[0].ToString()  : "");
         var s = new StudentRecord
         {
-            FirstName = first, LastName = last, Group = group,
-            Email = email, Initials = initials,
+            FirstName = first.Length > 0 ? first : "Новий",
+            LastName  = last.Length  > 0 ? last  : "Студент",
+            Group = group, Email = email,
+            Initials = initials.Length > 0 ? initials : "НС",
         };
         db.Students.Add(s);
         await db.SaveChangesAsync();
@@ -134,12 +149,13 @@ public class AuthService(AppDbContext db) : IAuthService
         return s;
     }
 
-    private async Task<TeacherRecord> CreateTeacherAsync(string first, string last, string _email)
+    private async Task<TeacherRecord> CreateTeacherAsync(string first, string last)
     {
         var t = new TeacherRecord
         {
-            FirstName = first, LastName = last,
-            Initials = (first.Length > 0 ? first[0].ToString() : "") + (last.Length > 0 ? last[0].ToString() : ""),
+            FirstName = first.Length > 0 ? first : "Новий",
+            LastName  = last.Length  > 0 ? last  : "Викладач",
+            Initials = (first.Length > 0 ? first[0].ToString() : "Н") + (last.Length > 0 ? last[0].ToString() : "В"),
             Title = "Викладач", Course = "ООП на C#",
         };
         db.Teachers.Add(t);

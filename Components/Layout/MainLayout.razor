@@ -23,11 +23,18 @@
         var state = await AuthStateTask;
         if (!state.User.Identity?.IsAuthenticated ?? true)
         {
-            Nav.NavigateTo($"/account/login?returnUrl={Uri.EscapeDataString(Nav.Uri)}", forceLoad: true);
+            var returnUrl = new Uri(Nav.Uri).PathAndQuery;
+            Nav.NavigateTo($"/?returnUrl={Uri.EscapeDataString(returnUrl)}", forceLoad: true);
             return;
         }
         await Auth.EnsureLinkedAsync(state.User);
         await App.PreloadAsync(state.User);
+
+        // New Google users have no group yet — finish onboarding first
+        if (!Auth.IsTeacher(state.User) && string.IsNullOrEmpty(App.Student.Group))
+        {
+            Nav.NavigateTo("/onboarding", replace: true);
+        }
     }
 
     private readonly MudTheme _theme = new()

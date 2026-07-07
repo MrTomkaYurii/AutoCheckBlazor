@@ -10,19 +10,27 @@
 | **Runtime** | .NET 10, Blazor Server |
 | **БД** | SQLite + EF Core 9 |
 | **UI** | MudBlazor 9, CSS glassmorphism |
-| **Auth** | Keycloak 24 (OIDC) |
-| **Infra** | Docker Compose |
+| **Auth** | ASP.NET Core Identity (+ Google OAuth, опційно) |
 
 ## Запуск
 
 ```bash
-# 1. Keycloak (потрібен Docker Desktop)
-docker compose up -d
-
-# 2. Blazor додаток
 dotnet run
 # → http://localhost:5186
 ```
+
+Жодних контейнерів чи зовнішніх сервісів — акаунти зберігаються в тій самій SQLite базі.
+
+Для входу через Google додайте ключі у `appsettings.json`:
+
+```json
+"Authentication": {
+  "Google": { "ClientId": "…", "ClientSecret": "…" }
+}
+```
+
+(Google Cloud Console → OAuth 2.0 Client ID, redirect URI: `http://localhost:5186/signin-google`.)
+Якщо ключі порожні — кнопка Google просто не показується.
 
 Тестові акаунти:
 
@@ -34,7 +42,7 @@ dotnet run
 ## Функціонал
 
 ### Студент
-- Реєстрація через Keycloak (вибір ролі, групи, GitHub репо)
+- Реєстрація на `/register` (email+пароль) або через Google (вибір групи на онбордингу)
 - Дашборд з картками лаб, прогресом і дедлайнами
 - Здача лаб: вибір гілки + коміту через GitHub API, маппінг комітів до завдань
 - Перегляд результатів авто-перевірки (pass/warn/fail по завданнях, diff коду)
@@ -59,7 +67,6 @@ AutoCheckBlazor/
 ├── Services/          # Бізнес-логіка, GitHub API, grading
 ├── Grading/           # Pipeline перевірки (частково реалізований)
 ├── content/labs/      # 22 лаби: instructions.md + checks.json
-├── keycloak/          # Realm config + кастомна FTL тема
 ├── wwwroot/css/       # Dark glassmorphism стилі
 └── _instructions/     # Документація для розробки
 ```
@@ -69,11 +76,8 @@ AutoCheckBlazor/
 SQLite файл `autocheck.db` у кореневій теці.
 
 ```bash
-# Скид до seed-даних (14 демо-студентів, 22 лаби):
+# Скид до seed-даних (14 демо-студентів, 22 лаби, тестові акаунти):
 rm autocheck.db && dotnet run
-
-# Скид Keycloak (якщо змінився realm-autocheck.json):
-docker compose down -v && docker compose up -d
 ```
 
 ## Лаби

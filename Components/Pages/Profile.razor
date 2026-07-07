@@ -2,6 +2,8 @@
 @inject AppState App
 @inject IAuthService Auth
 @inject AppDbContext Db
+@inject UserManager<AppUser> UserManager
+@inject NavigationManager Nav
 
 <TopBar Title="Профіль" Sub="Дані студента" />
 
@@ -69,6 +71,66 @@
             </div>
         }
     </section>
+
+    @* ── Безпека ──────────────────────────────────────────────────────────── *@
+    <section class="glass" style="padding:0;overflow:hidden;margin-top:20px">
+        <div style="display:flex;align-items:center;gap:11px;padding:18px 30px;border-bottom:1px solid var(--line)">
+            <Icon Name="settings" Size="18" Style="color:var(--acc)" />
+            <h3 style="margin:0;font-size:15px;font-weight:720">Безпека</h3>
+            @if (_hasGoogle)
+            {
+                <span class="badge badge-green" style="margin-left:auto"><span class="dot"></span>Google підключено</span>
+            }
+        </div>
+
+        @if (!_pwEdit)
+        {
+            <div style="display:flex;align-items:center;padding:14px 30px">
+                <span style="width:140px;font-size:13px;color:var(--tx-3);font-weight:600">Пароль</span>
+                <span style="font-size:13.5px;color:var(--tx-2);flex:1;letter-spacing:0.12em">
+                    @(_hasPassword ? "••••••••••" : "не встановлено — вхід через Google")
+                </span>
+                <button class="btn btn-ghost btn-sm" @onclick="@(() => { _pwEdit = true; _pwMsg = ""; })">
+                    <Icon Name="settings" Size="13" />@(_hasPassword ? "Змінити" : "Встановити")
+                </button>
+            </div>
+        }
+        else
+        {
+            <div style="padding:20px 30px;display:flex;flex-direction:column;gap:14px">
+                @if (_hasPassword)
+                {
+                    <div class="field">
+                        <label>Поточний пароль</label>
+                        <input class="input" type="password" @bind="_pwOld" autocomplete="current-password" />
+                    </div>
+                }
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                    <div class="field">
+                        <label>Новий пароль</label>
+                        <input class="input" type="password" @bind="_pwNew" autocomplete="new-password" />
+                    </div>
+                    <div class="field">
+                        <label>Підтвердження</label>
+                        <input class="input" type="password" @bind="_pwConfirm" autocomplete="new-password" />
+                    </div>
+                </div>
+                @if (!string.IsNullOrEmpty(_pwMsg))
+                {
+                    var isErr = _pwMsg.StartsWith("err:");
+                    <div style="padding:9px 13px;background:@(isErr ? "rgba(255,80,80,0.08)" : "rgba(118,199,173,0.1)");border:1px solid @(isErr ? "rgba(255,80,80,0.25)" : "rgba(118,199,173,0.25)");border-radius:9px;color:@(isErr ? "var(--st-red)" : "var(--st-green)");font-size:13px">@(isErr ? _pwMsg[4..] : _pwMsg[3..])</div>
+                }
+                <div style="display:flex;justify-content:flex-end;gap:8px">
+                    <button class="btn btn-ghost btn-sm" @onclick="@(() => { _pwEdit = false; _pwOld = _pwNew = _pwConfirm = _pwMsg = ""; })">
+                        Скасувати
+                    </button>
+                    <button class="btn btn-primary btn-sm" @onclick="ChangePassword" disabled="@_savingPw">
+                        <Icon Name="check" Size="15" />@(_savingPw ? "Збереження…" : (_hasPassword ? "Змінити пароль" : "Встановити пароль"))
+                    </button>
+                </div>
+            </div>
+        }
+    </section>
 </div>
 
 @code {
@@ -77,6 +139,10 @@
     private bool _editing, _saving;
     private string _firstName = "", _lastName = "", _email = "", _github = "", _githubToken = "", _msg = "";
 
+    // ── Security ──────────────────────────────────────────────────────────────
+    private bool _pwEdit, _savingPw, _hasPassword, _hasGoogle;
+    private string _pwOld = "", _pwNew = "", _pwConfirm = "", _pwMsg = "";
+
     protected override async Task OnInitializedAsync()
     {
         _firstName   = App.Student.FirstName;
@@ -84,6 +150,62 @@
         _email       = App.Student.Email;
         _github      = App.Student.Github;
         _githubToken = App.Student.GithubToken;
+
+        var state = await AuthStateTask;
+        var user  = await UserManager.FindByIdAsync(Auth.GetSub(state.User));
+        if (user != null)
+        {
+            _hasPassword = await UserManager.HasPasswordAsync(user);
+            _hasGoogle   = (await UserManager.GetLoginsAsync(user)).Any(l => l.LoginProvider == "Google");
+        }
+    }
+
+    private async Task ChangePassword()
+    {
+        if (string.IsNullOrWhiteSpace(_pwNew))              { _pwMsg = "err:Новий пароль не може бути порожнім."; return; }
+        if (_pwNew.Length < 6)                              { _pwMsg = "err:Пароль має бути не менше 6 символів."; return; }
+        if (_pwNew != _pwConfirm)                           { _pwMsg = "err:Паролі не збігаються."; return; }
+        if (_hasPassword && string.IsNullOrWhiteSpace(_pwOld)) { _pwMsg = "err:Введіть поточний пароль."; return; }
+
+        _savingPw = true; StateHasChanged();
+        try
+        {
+            var state = await AuthStateTask;
+            var user  = await UserManager.FindByIdAsync(Auth.GetSub(state.User));
+            if (user == null)
+            {
+                _pwMsg = "err:Акаунт не знайдено.";
+            }
+            else
+            {
+                var result = _hasPassword
+                    ? await UserManager.ChangePasswordAsync(user, _pwOld, _pwNew)
+                    : await UserManager.AddPasswordAsync(user, _pwNew);
+                if (result.Succeeded)
+                {
+                    _pwMsg = "ok:Пароль успішно " + (_hasPassword ? "змінено" : "встановлено");
+                    _pwOld = _pwNew = _pwConfirm = "";
+                }
+                else
+                {
+                    var wrongOld = result.Errors.Any(e => e.Code == "PasswordMismatch");
+                    _pwMsg = "err:" + (wrongOld
+                        ? "Поточний пароль невірний."
+                        : string.Join(" ", result.Errors.Select(e => e.Description)));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _pwMsg = $"err:{ex.Message}";
+        }
+        _savingPw = false; StateHasChanged();
+        if (_pwMsg.StartsWith("ok:"))
+        {
+            // Security stamp changed → re-issue the auth cookie so the session stays valid
+            await Task.Delay(1200);
+            Nav.NavigateTo("/account/refresh-signin?returnUrl=/student/profile", forceLoad: true);
+        }
     }
 
     private void ToggleEdit()
@@ -105,7 +227,7 @@
         var state = await AuthStateTask;
         var sub = Auth.GetSub(state.User);
         var link = await Db.UserLinks.AsNoTracking()
-                                     .FirstOrDefaultAsync(l => l.KeycloakSub == sub);
+                                     .FirstOrDefaultAsync(l => l.UserId == sub);
         if (link?.StudentId is int studentId)
         {
             var initials = (_firstName.Length > 0 ? _firstName[0].ToString() : "")

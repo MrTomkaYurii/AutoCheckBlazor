@@ -37,13 +37,16 @@ EF Core зберігає enum як int за замовчуванням. Конв
 ### Чому checks.json а не тести в коді
 Простіше редагувати для викладача без знання C#. I/O пари надійніші за перевірку назв методів.
 
-## Keycloak
+## Автентифікація
 
-### Чому login-reset-password.ftl а не login-reset-credentials.ftl
-Keycloak 24 використовує шаблон `login-reset-password.ftl` для першого кроку скидання пароля (введення email). В старших версіях він називався `login-reset-credentials.ftl`. Помилка в назві = Keycloak падає на дефолтну тему.
+### Чому ASP.NET Core Identity замість Keycloak
+Спочатку був Keycloak 24 у Docker: окремий контейнер, admin-паролі в конфігу, кастомні FTL-теми, скидання sub при `down -v`. Для навчального застосунку це зайва інфраструктура. Identity зберігає акаунти в тій самій SQLite базі — застосунок запускається одним `dotnet run`, а Google OAuth підключається опційно ключами в appsettings.json.
 
-### Чому оновлюємо KeycloakSub замість створення нового UserLink
-При `docker compose down -v` Keycloak видаляє своїх юзерів і створює нових з новими UUID (sub). SQLite не скидається. Нова спроба зв'язати студента по email → UNIQUE constraint на StudentId. Правильне рішення: оновити sub на існуючому UserLink.
+### Чому логін/реєстрація — form POST на minimal API, а не інтерактивний Blazor
+Інтерактивний circuit (SignalR) не може встановити auth cookie — response вже відправлений. Тому Login.razor/Register.razor рендерять звичайні `<form method="post">` на `/account/login` та `/account/register`, помилки повертаються назад через query string.
+
+### Чому оновлюємо UserId замість створення нового UserLink
+Якщо запис студента вже має UserLink (наприклад, після пересоздання акаунта з тим самим email) — нова спроба зв'язати по email дала б UNIQUE constraint на StudentId. Правильне рішення: оновити UserId на існуючому UserLink.
 
 ## Відомі обмеження
 

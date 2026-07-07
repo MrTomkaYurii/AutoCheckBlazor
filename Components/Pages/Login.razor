@@ -3,6 +3,7 @@
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthProvider
 @inject AppState App
+@inject IConfiguration Cfg
 
 <div style="position:relative;z-index:1;min-height:100%;display:grid;grid-template-columns:1.05fr 0.95fr">
 
@@ -59,7 +60,7 @@
     <div style="display:grid;place-items:center;padding:40px 28px">
         <div class="glass screen-anim" style="width:100%;max-width:408px;padding:34px">
 
-            <div style="margin-bottom:30px">
+            <div style="margin-bottom:24px">
                 <h2 style="margin:0 0 6px;font-size:24px;font-weight:730;letter-spacing:-0.025em">
                     @if (_loading)
                     { <span>Завантаження…</span> }
@@ -67,7 +68,7 @@
                     { <span>З поверненням 👋</span> }
                 </h2>
                 <p style="margin:0;color:var(--tx-3);font-size:13.5px">
-                    Єдиний вхід через університетський Keycloak
+                    Увійдіть у свій акаунт AutoCheck
                 </p>
             </div>
 
@@ -80,15 +81,51 @@
             }
             else
             {
-                @* Main login button *@
-                <a href="/account/login"
-                   style="display:flex;align-items:center;justify-content:center;gap:12px;height:52px;border-radius:13px;background:linear-gradient(160deg, var(--acc-bright), var(--acc));color:#08110d;font-weight:750;font-size:15.5px;text-decoration:none;box-shadow:0 8px 24px -10px rgba(118,199,173,0.8),inset 0 1px 0 rgba(255,255,255,0.25);transition:opacity .18s;letter-spacing:-0.01em">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
-                    Увійти через Keycloak
-                </a>
+                @if (!string.IsNullOrEmpty(Error))
+                {
+                    <div style="margin-bottom:16px;padding:10px 14px;background:rgba(255,80,80,0.08);border:1px solid rgba(255,80,80,0.25);border-radius:10px;color:var(--st-red);font-size:13px;line-height:1.5">@Error</div>
+                }
+
+                @* Email + password form (plain POST — auth cookie is set outside the circuit) *@
+                <form method="post" action="/account/login" style="display:flex;flex-direction:column;gap:14px">
+                    <input type="hidden" name="returnUrl" value="@_returnUrl" />
+                    <div class="field">
+                        <label>Email</label>
+                        <input class="input" type="email" name="email" value="@Email" placeholder="you@example.com" required autocomplete="username" />
+                    </div>
+                    <div class="field">
+                        <label>Пароль</label>
+                        <input class="input" type="password" name="password" placeholder="••••••••" required autocomplete="current-password" />
+                    </div>
+                    <button type="submit"
+                            style="display:flex;align-items:center;justify-content:center;gap:11px;height:50px;border:none;cursor:pointer;border-radius:13px;background:linear-gradient(160deg, var(--acc-bright), var(--acc));color:#08110d;font-weight:750;font-size:15px;box-shadow:0 8px 24px -10px rgba(118,199,173,0.8),inset 0 1px 0 rgba(255,255,255,0.25);transition:opacity .18s;letter-spacing:-0.01em;font-family:inherit">
+                        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                        Увійти
+                    </button>
+                </form>
+
+                @if (_googleEnabled)
+                {
+                    <div style="display:flex;align-items:center;gap:12px;margin:18px 0">
+                        <div style="flex:1;height:1px;background:var(--line)"></div>
+                        <span style="font-size:12px;color:var(--tx-faint)">або</span>
+                        <div style="flex:1;height:1px;background:var(--line)"></div>
+                    </div>
+
+                    <a href="/account/google-login?returnUrl=@Uri.EscapeDataString(_returnUrl)"
+                       style="display:flex;align-items:center;justify-content:center;gap:11px;height:48px;border-radius:13px;background:rgba(255,255,255,0.04);border:1px solid var(--line-strong);color:var(--tx-1);font-weight:650;font-size:14px;text-decoration:none;transition:background .18s,border-color .18s">
+                        <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18A10.96 10.96 0 0 0 1 12c0 1.77.43 3.45 1.18 4.94l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
+                        Увійти через Google
+                    </a>
+                }
+
+                <div style="text-align:center;margin-top:20px;font-size:13px;color:var(--tx-3)">
+                    Немає акаунта?
+                    <a href="/register" style="color:var(--acc-bright);font-weight:650;text-decoration:none">Зареєструватися</a>
+                </div>
 
                 @* Divider *@
-                <div style="display:flex;align-items:center;gap:12px;margin:22px 0">
+                <div style="display:flex;align-items:center;gap:12px;margin:22px 0 14px">
                     <div style="flex:1;height:1px;background:var(--line)"></div>
                     <span style="font-size:12px;color:var(--tx-faint)">тестові акаунти</span>
                     <div style="flex:1;height:1px;background:var(--line)"></div>
@@ -120,7 +157,19 @@
 </div>
 
 @code {
+    [SupplyParameterFromQuery] public string? Error { get; set; }
+    [SupplyParameterFromQuery] public string? Email { get; set; }
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+
     private bool _loading = true;
+    private bool _googleEnabled;
+    private string _returnUrl = "/";
+
+    protected override void OnInitialized()
+    {
+        _googleEnabled = !string.IsNullOrEmpty(Cfg["Authentication:Google:ClientId"]);
+        _returnUrl = !string.IsNullOrEmpty(ReturnUrl) && ReturnUrl.StartsWith('/') ? ReturnUrl : "/";
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

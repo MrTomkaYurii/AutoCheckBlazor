@@ -1,8 +1,9 @@
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace AutoCheck.Data;
 
-public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbContext<AppUser>(options)
 {
     public DbSet<LabDef> Labs => Set<LabDef>();
     public DbSet<LabTask> LabTasks => Set<LabTask>();
@@ -18,6 +19,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
+        base.OnModelCreating(mb);
+
         mb.Entity<LabDef>(e =>
         {
             e.HasIndex(x => x.Slug).IsUnique();
@@ -35,7 +38,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         mb.Entity<UserLink>(e =>
         {
-            e.HasIndex(x => x.KeycloakSub).IsUnique();
+            e.HasIndex(x => x.UserId).IsUnique();
             e.HasOne(x => x.Student).WithOne(x => x.UserLink)
                 .HasForeignKey<UserLink>(x => x.StudentId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Teacher).WithOne(x => x.UserLink)

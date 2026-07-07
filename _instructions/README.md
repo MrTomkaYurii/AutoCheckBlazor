@@ -11,5 +11,5 @@
 | [05-grading-pipeline](05-grading-pipeline.md) | Концепція, флоу, checks.json, стан реалізації |
 | [06-lab-structure](06-lab-structure.md) | Формати заголовків завдань, LabMdParser, checks.json |
 | [07-ui-pages](07-ui-pages.md) | Всі сторінки, Lab.razor діалог здачі, git граф, кастомний dropdown |
-| [08-keycloak](08-keycloak.md) | SSO, FTL теми, назви шаблонів Keycloak 24, EnsureLinkedAsync |
+| [08-auth](08-auth.md) | ASP.NET Core Identity, Google OAuth, ендпоінти, EnsureLinkedAsync |
 | [09-decisions](09-decisions.md) | Чому так а не інакше, відомі обмеження, TODO |

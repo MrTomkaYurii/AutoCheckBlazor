@@ -6,7 +6,7 @@
             <NotAuthorized>
                 @{
                     var returnUrl = Uri.EscapeDataString(new Uri(NavigationManager.Uri).PathAndQuery);
-                    NavigationManager.NavigateTo($"/account/login?returnUrl={returnUrl}", forceLoad: true);
+                    NavigationManager.NavigateTo($"/?returnUrl={returnUrl}", forceLoad: true);
                 }
             </NotAuthorized>
             <Authorizing>

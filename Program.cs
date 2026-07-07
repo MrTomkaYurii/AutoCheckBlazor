@@ -1,13 +1,10 @@
 using System.Security.Claims;
-using System.Text.Json;
 using AutoCheck.Components;
 using AutoCheck.Data;
 using AutoCheck.Services;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Authentication.Google;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -20,89 +17,42 @@ builder.Services.AddMudServices();
 builder.Services.AddDbContext<AppDbContext>(opt =>
     opt.UseSqlite(builder.Configuration.GetConnectionString("Default")));
 
-// ── Auth — Keycloak OIDC + Cookie ─────────────────────────────────────────────
-var kc = builder.Configuration.GetSection("Keycloak");
-
-builder.Services.AddAuthentication(opt =>
+// ── Auth — ASP.NET Core Identity (+ optional Google) ─────────────────────────
+builder.Services.AddIdentity<AppUser, IdentityRole>(opt =>
 {
-    opt.DefaultAuthenticateScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-    opt.DefaultSignInScheme       = CookieAuthenticationDefaults.AuthenticationScheme;
-    opt.DefaultChallengeScheme    = OpenIdConnectDefaults.AuthenticationScheme;
+    opt.User.RequireUniqueEmail = true;
+    opt.SignIn.RequireConfirmedAccount = false;
+    opt.Password.RequiredLength = 6;
+    opt.Password.RequireNonAlphanumeric = false;
+    opt.Password.RequireUppercase = false;
+    opt.Password.RequireLowercase = false;
+    opt.Password.RequireDigit = false;
+    opt.Lockout.MaxFailedAccessAttempts = 8;
+    opt.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
 })
-.AddCookie(opt =>
+.AddEntityFrameworkStores<AppDbContext>()
+.AddDefaultTokenProviders();
+
+builder.Services.ConfigureApplicationCookie(opt =>
 {
     opt.Cookie.HttpOnly = true;
-    opt.LoginPath    = "/account/login";
-    opt.LogoutPath   = "/account/logout";
+    opt.LoginPath = "/";
+    opt.AccessDeniedPath = "/";
     opt.ExpireTimeSpan = TimeSpan.FromHours(8);
     opt.SlidingExpiration = true;
-})
-.AddOpenIdConnect(opt =>
-{
-    opt.Authority           = kc["Authority"];
-    opt.MetadataAddress     = kc["Authority"] + "/.well-known/openid-configuration";
-    opt.ClientId            = kc["ClientId"];
-    opt.ClientSecret        = kc["ClientSecret"];
-    opt.ResponseType        = OpenIdConnectResponseType.Code;
-    opt.SaveTokens          = true;
-    opt.GetClaimsFromUserInfoEndpoint = true;
-    opt.RequireHttpsMetadata = false;  // Keycloak runs on HTTP locally
-    opt.BackchannelTimeout  = TimeSpan.FromSeconds(30);
-    // Refresh metadata every 5 min so stale config is auto-recovered
-    opt.ConfigurationManager = new Microsoft.IdentityModel.Protocols.ConfigurationManager<
-        Microsoft.IdentityModel.Protocols.OpenIdConnect.OpenIdConnectConfiguration>(
-        opt.MetadataAddress,
-        new Microsoft.IdentityModel.Protocols.OpenIdConnect.OpenIdConnectConfigurationRetriever(),
-        new Microsoft.IdentityModel.Protocols.HttpDocumentRetriever { RequireHttps = false })
-    {
-        AutomaticRefreshInterval  = TimeSpan.FromMinutes(5),
-        RefreshInterval           = TimeSpan.FromSeconds(30),
-    };
-
-    opt.Scope.Add("openid");
-    opt.Scope.Add("profile");
-    opt.Scope.Add("email");
-
-    opt.TokenValidationParameters.NameClaimType = "preferred_username";
-    opt.TokenValidationParameters.RoleClaimType = ClaimTypes.Role;
-
-    opt.Events = new OpenIdConnectEvents
-    {
-        OnRedirectToIdentityProviderForSignOut = async ctx =>
-        {
-            // Keycloak 24 requires id_token_hint; read it from the saved session token
-            var idToken = await ctx.HttpContext.GetTokenAsync("id_token");
-            if (!string.IsNullOrEmpty(idToken))
-                ctx.ProtocolMessage.IdTokenHint = idToken;
-        },
-        OnTokenValidated = ctx =>
-        {
-            var identity = (ClaimsIdentity)ctx.Principal!.Identity!;
-
-            // Keycloak sends roles as a JSON array claim named "roles" (via custom mapper)
-            foreach (var c in ctx.Principal.FindAll("roles"))
-                if (!string.IsNullOrEmpty(c.Value))
-                    identity.AddClaim(new Claim(ClaimTypes.Role, c.Value));
-
-            // Fallback: parse realm_access.roles from JWT
-            var ra = ctx.Principal.FindFirst("realm_access")?.Value;
-            if (!string.IsNullOrEmpty(ra))
-            {
-                try
-                {
-                    using var doc = JsonDocument.Parse(ra);
-                    if (doc.RootElement.TryGetProperty("roles", out var roles))
-                        foreach (var r in roles.EnumerateArray())
-                            if (r.GetString() is { Length: > 0 } role
-                                && !identity.HasClaim(ClaimTypes.Role, role))
-                                identity.AddClaim(new Claim(ClaimTypes.Role, role));
-                }
-                catch { /* ignore malformed JSON */ }
-            }
-            return Task.CompletedTask;
-        },
-    };
 });
+
+// Google login is optional — enabled only when ClientId is configured
+var googleCfg = builder.Configuration.GetSection("Authentication:Google");
+if (!string.IsNullOrEmpty(googleCfg["ClientId"]))
+{
+    builder.Services.AddAuthentication().AddGoogle(opt =>
+    {
+        opt.ClientId     = googleCfg["ClientId"]!;
+        opt.ClientSecret = googleCfg["ClientSecret"] ?? "";
+        opt.SignInScheme = IdentityConstants.ExternalScheme;
+    });
+}
 
 builder.Services.AddAuthorization();
 builder.Services.AddHttpContextAccessor();
@@ -119,7 +69,6 @@ builder.Services.AddSingleton<GeminiQuotaService>();
 builder.Services.AddSingleton<TeacherNotificationService>();
 builder.Services.AddScoped<AppState>();
 builder.Services.AddScoped<GitHubService>();
-builder.Services.AddScoped<KeycloakAdminService>();
 builder.Services.AddHttpClient("github");
 
 // ── Build ─────────────────────────────────────────────────────────────────────
@@ -140,24 +89,155 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
 
-// ── Auth endpoints (must be outside Blazor circuit) ───────────────────────────
-app.MapGet("/account/login", async (HttpContext ctx, string? returnUrl) =>
+// ── Auth endpoints (must be outside Blazor circuit — they set/clear cookies) ──
+
+static string SafeReturnUrl(string? url) =>
+    !string.IsNullOrEmpty(url) && url.StartsWith('/') && !url.StartsWith("//") ? url : "/";
+
+// Email + password login (plain form POST from the login page)
+app.MapPost("/account/login", async (HttpContext ctx,
+    SignInManager<AppUser> signIn, UserManager<AppUser> users) =>
 {
-    var props = new AuthenticationProperties { RedirectUri = returnUrl ?? "/" };
-    await ctx.ChallengeAsync(OpenIdConnectDefaults.AuthenticationScheme, props);
+    var form      = await ctx.Request.ReadFormAsync();
+    var email     = form["email"].ToString().Trim();
+    var password  = form["password"].ToString();
+    var returnUrl = SafeReturnUrl(form["returnUrl"]);
+
+    string Fail(string msg) =>
+        $"/?error={Uri.EscapeDataString(msg)}&email={Uri.EscapeDataString(email)}" +
+        $"&returnUrl={Uri.EscapeDataString(returnUrl)}";
+
+    if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
+        return Results.Redirect(Fail("Введіть email і пароль."));
+
+    var user = await users.FindByEmailAsync(email);
+    if (user == null)
+        return Results.Redirect(Fail("Користувача з таким email не знайдено."));
+
+    var result = await signIn.PasswordSignInAsync(user, password,
+        isPersistent: true, lockoutOnFailure: true);
+
+    if (result.IsLockedOut)
+        return Results.Redirect(Fail("Забагато невдалих спроб — акаунт тимчасово заблоковано. Спробуйте за 5 хвилин."));
+    if (!result.Succeeded)
+        return Results.Redirect(Fail(user.PasswordHash == null
+            ? "Для цього акаунта пароль не встановлено — увійдіть через Google."
+            : "Невірний пароль."));
+
+    return Results.Redirect(returnUrl);
+}).AllowAnonymous().DisableAntiforgery();
+
+// Student self-registration (plain form POST from /register)
+app.MapPost("/account/register", async (HttpContext ctx,
+    SignInManager<AppUser> signIn, UserManager<AppUser> users, IAuthService auth) =>
+{
+    var form      = await ctx.Request.ReadFormAsync();
+    var firstName = form["firstName"].ToString().Trim();
+    var lastName  = form["lastName"].ToString().Trim();
+    var email     = form["email"].ToString().Trim();
+    var group     = form["group"].ToString().Trim();
+    var password  = form["password"].ToString();
+    var confirm   = form["confirm"].ToString();
+
+    string Fail(string msg) =>
+        $"/register?error={Uri.EscapeDataString(msg)}" +
+        $"&firstName={Uri.EscapeDataString(firstName)}&lastName={Uri.EscapeDataString(lastName)}" +
+        $"&email={Uri.EscapeDataString(email)}&group={Uri.EscapeDataString(group)}";
+
+    if (string.IsNullOrEmpty(firstName) || string.IsNullOrEmpty(lastName))
+        return Results.Redirect(Fail("Вкажіть ім'я та прізвище."));
+    if (string.IsNullOrEmpty(email) || !email.Contains('@'))
+        return Results.Redirect(Fail("Вкажіть коректний email."));
+    if (string.IsNullOrEmpty(group))
+        return Results.Redirect(Fail("Оберіть групу."));
+    if (password.Length < 6)
+        return Results.Redirect(Fail("Пароль має містити щонайменше 6 символів."));
+    if (password != confirm)
+        return Results.Redirect(Fail("Паролі не збігаються."));
+    if (await users.FindByEmailAsync(email) != null)
+        return Results.Redirect(Fail("Користувач з таким email вже зареєстрований — увійдіть."));
+
+    var user = new AppUser
+    {
+        UserName = email, Email = email, EmailConfirmed = true,
+        FirstName = firstName, LastName = lastName,
+    };
+    var created = await users.CreateAsync(user, password);
+    if (!created.Succeeded)
+        return Results.Redirect(Fail(string.Join(" ", created.Errors.Select(e => e.Description))));
+
+    await users.AddToRoleAsync(user, "student");
+    await auth.LinkStudentAsync(user, group);
+    await signIn.SignInAsync(user, isPersistent: true);
+    return Results.Redirect("/student");
+}).AllowAnonymous().DisableAntiforgery();
+
+// Google sign-in / sign-up
+app.MapGet("/account/google-login", (SignInManager<AppUser> signIn, string? returnUrl) =>
+{
+    var redirect = "/account/google-callback?returnUrl=" + Uri.EscapeDataString(SafeReturnUrl(returnUrl));
+    var props = signIn.ConfigureExternalAuthenticationProperties(
+        GoogleDefaults.AuthenticationScheme, redirect);
+    return Results.Challenge(props, [GoogleDefaults.AuthenticationScheme]);
+}).AllowAnonymous();
+
+app.MapGet("/account/google-callback", async (
+    SignInManager<AppUser> signIn, UserManager<AppUser> users, IAuthService auth,
+    string? returnUrl) =>
+{
+    var dest = SafeReturnUrl(returnUrl);
+    string Fail(string msg) => "/?error=" + Uri.EscapeDataString(msg);
+
+    var info = await signIn.GetExternalLoginInfoAsync();
+    if (info == null)
+        return Results.Redirect(Fail("Не вдалося увійти через Google. Спробуйте ще раз."));
+
+    // Known Google account → straight sign-in
+    var result = await signIn.ExternalLoginSignInAsync(
+        info.LoginProvider, info.ProviderKey, isPersistent: true, bypassTwoFactor: true);
+    if (result.Succeeded)
+        return Results.Redirect(dest);
+
+    var email = info.Principal.FindFirstValue(ClaimTypes.Email);
+    if (string.IsNullOrEmpty(email))
+        return Results.Redirect(Fail("Google не надав email. Використайте вхід з паролем."));
+
+    var user = await users.FindByEmailAsync(email);
+    var isNew = user == null;
+    if (user == null)
+    {
+        user = new AppUser
+        {
+            UserName = email, Email = email, EmailConfirmed = true,
+            FirstName = info.Principal.FindFirstValue(ClaimTypes.GivenName) ?? "",
+            LastName  = info.Principal.FindFirstValue(ClaimTypes.Surname)   ?? "",
+        };
+        var created = await users.CreateAsync(user);
+        if (!created.Succeeded)
+            return Results.Redirect(Fail(string.Join(" ", created.Errors.Select(e => e.Description))));
+        await users.AddToRoleAsync(user, "student");
+        await auth.LinkStudentAsync(user, "");   // group is chosen at /onboarding
+    }
+
+    await users.AddLoginAsync(user, info);
+    await signIn.SignInAsync(user, isPersistent: true);
+    return Results.Redirect(isNew ? "/onboarding" : dest);
+}).AllowAnonymous();
+
+app.MapPost("/account/logout", async (SignInManager<AppUser> signIn) =>
+{
+    await signIn.SignOutAsync();
+    return Results.Redirect("/");
 });
 
-app.MapPost("/account/logout", async (HttpContext ctx) =>
+// Re-issues the auth cookie after a security-stamp change (e.g. password change)
+app.MapGet("/account/refresh-signin", async (HttpContext ctx,
+    SignInManager<AppUser> signIn, UserManager<AppUser> users, string? returnUrl) =>
 {
-    await ctx.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-    await ctx.SignOutAsync(OpenIdConnectDefaults.AuthenticationScheme,
-        new AuthenticationProperties { RedirectUri = "/" });
-});
-
-// Public endpoint so Keycloak registration page can load groups via fetch
-app.MapGet("/api/groups", async (AppDbContext db) =>
-    await db.Groups.OrderBy(g => g.OrderIndex).ThenBy(g => g.Name).Select(g => g.Name).ToListAsync())
-    .AllowAnonymous();
+    var user = await users.GetUserAsync(ctx.User);
+    if (user != null) await signIn.RefreshSignInAsync(user);
+    return Results.Redirect(SafeReturnUrl(returnUrl));
+}).RequireAuthorization();
 
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 

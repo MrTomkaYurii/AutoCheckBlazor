@@ -12,9 +12,8 @@
 | Frontend + Backend | Blazor Server (.NET 10) |
 | БД | SQLite + EF Core 9 |
 | UI компоненти | MudBlazor 9 |
-| Автентифікація | Keycloak 24 (OIDC) |
+| Автентифікація | ASP.NET Core Identity (+ Google OAuth, опційно) |
 | Markdown | Markdig |
-| Контейнеризація | Docker Compose |
 
 ## Ролі
 
@@ -39,8 +38,7 @@ https://github.com/MrTomkaYurii/AutoCheckBlazor
 ## Запуск
 
 ```bash
-docker compose up -d   # Keycloak на :8080 (потрібен Docker Desktop)
-dotnet run             # Blazor на :5186
+dotnet run             # Blazor на :5186 (без контейнерів і зовнішніх сервісів)
 ```
 
 Тестові акаунти:
@@ -49,8 +47,7 @@ dotnet run             # Blazor на :5186
 
 ## Ключові факти
 
-- `autocheck.db` — SQLite у кореневій теці. Видалити + перезапустити = повний скид до seed-даних.
-- Keycloak volume: `docker compose down -v && docker compose up -d` = realm імпортується заново.
+- `autocheck.db` — SQLite у кореневій теці (включно з Identity-акаунтами). Видалити + перезапустити = повний скид до seed-даних.
 - 22 лабораторних парсяться з `content/labs/lab-*/instructions.md` при першому старті.
 - Студенти реєструються самі. Seed-дані (14 студентів) — демо для викладача, не реальні акаунти.
 - GitHub API використовується для тягання гілок і комітів (без локального git clone).

@@ -30,17 +30,24 @@ GithubToken   ← особистий токен (необов'язково, дл
 
 ### TeacherRecord — викладач
 ```
-Id, FirstName, LastName, Initials, Title, Course
+Id, FirstName, LastName, Initials, Email, Title, Course
 ```
 
-### UserLink — зв'язок Keycloak ↔ StudentRecord/TeacherRecord
+### AppUser — Identity-акаунт (таблиця AspNetUsers)
 ```
-Id, KeycloakSub (UNIQUE), Email, Role (student|teacher)
+IdentityUser + FirstName, LastName
+```
+Ролі teacher/student — стандартні Identity ролі (AspNetRoles/AspNetUserRoles).
+Google-логіни — AspNetUserLogins.
+
+### UserLink — зв'язок AppUser ↔ StudentRecord/TeacherRecord
+```
+Id, UserId (UNIQUE, → AspNetUsers.Id), Email, Role (student|teacher)
 StudentId?   ← UNIQUE (один студент — один link)
 TeacherId?   ← UNIQUE (один викладач — один link)
 ```
-**Важливо:** при скиданні Keycloak volume студент отримує новий sub.
-`EnsureLinkedAsync` знаходить існуючий UserLink по StudentId і оновлює KeycloakSub — не створює новий запис.
+Якщо запис студента/викладача вже має UserLink зі старим UserId,
+`EnsureLinkedAsync` **оновлює** UserId — не створює новий запис.
 
 ### Submission — здача лаби студентом
 ```
@@ -116,6 +123,6 @@ Locked   = 3  // не здавалось (початковий стан)
 
 ```
 LabDef:     Slug UNIQUE, Number UNIQUE
-UserLink:   KeycloakSub UNIQUE, StudentId UNIQUE, TeacherId UNIQUE
+UserLink:   UserId UNIQUE, StudentId UNIQUE, TeacherId UNIQUE
 Submission: (StudentId, LabDefId) UNIQUE
 ```

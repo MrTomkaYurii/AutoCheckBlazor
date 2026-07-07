@@ -1,4 +1,6 @@
 using AutoCheck.Models;
+using AutoCheck.Services;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace AutoCheck.Data;
@@ -9,6 +11,9 @@ namespace AutoCheck.Data;
 /// </summary>
 public class DatabaseSeeder(
     AppDbContext db,
+    UserManager<AppUser> userManager,
+    RoleManager<IdentityRole> roleManager,
+    IAuthService auth,
     IWebHostEnvironment env,
     ILogger<DatabaseSeeder> log)
 {
@@ -24,6 +29,8 @@ public class DatabaseSeeder(
                 await db.UserLinks.AnyAsync();
                 await db.Notifications.AnyAsync();
                 await db.Comments.AnyAsync();
+                _ = await db.Users.AnyAsync();                                        // Identity tables
+                _ = await db.UserLinks.Select(l => l.UserId).FirstOrDefaultAsync();   // Keycloak → Identity rename
                 _ = await db.Submissions.Select(s => s.BranchOverride).FirstOrDefaultAsync();
                 _ = await db.Submissions.Select(s => s.SubmittedAt).FirstOrDefaultAsync();
             }
@@ -49,6 +56,8 @@ public class DatabaseSeeder(
         if (!await db.Teachers.AnyAsync()) await SeedTeachersAsync();
         if (!await db.Students.AnyAsync()) await SeedStudentsAsync();
 
+        await SeedIdentityAsync();
+
         // Backfill: ensure every submission has AttemptsMax = 3
         await db.Database.ExecuteSqlRawAsync(
             "UPDATE Submissions SET AttemptsMax = 3 WHERE AttemptsMax != 3");
@@ -61,6 +70,46 @@ public class DatabaseSeeder(
         // Backfill: якщо лаба відхилена (Status=2) — авто-оцінка не виставляється
         await db.Database.ExecuteSqlRawAsync(
             "UPDATE Submissions SET AutoScore = NULL WHERE Status = 2 AND AutoScore IS NOT NULL");
+    }
+
+    // ── Identity: roles + built-in accounts ───────────────────────────────
+
+    private async Task SeedIdentityAsync()
+    {
+        foreach (var role in new[] { "teacher", "student" })
+            if (!await roleManager.RoleExistsAsync(role))
+                await roleManager.CreateAsync(new IdentityRole(role));
+
+        await EnsureAccountAsync("teacher@test.com", "Test1234!", "teacher", "Олена", "Ковальчук");
+        await EnsureAccountAsync("student@test.com", "Test1234!", "student", "Петро", "Іваненко");
+    }
+
+    private async Task EnsureAccountAsync(string email, string password, string role,
+        string firstName, string lastName)
+    {
+        var user = await userManager.FindByEmailAsync(email);
+        if (user == null)
+        {
+            user = new AppUser
+            {
+                UserName = email, Email = email, EmailConfirmed = true,
+                FirstName = firstName, LastName = lastName,
+            };
+            var result = await userManager.CreateAsync(user, password);
+            if (!result.Succeeded)
+            {
+                log.LogWarning("Failed to seed account {Email}: {Errors}",
+                    email, string.Join("; ", result.Errors.Select(e => e.Description)));
+                return;
+            }
+            log.LogInformation("Seeded {Role} account {Email}", role, email);
+        }
+
+        if (!await userManager.IsInRoleAsync(user, role))
+            await userManager.AddToRoleAsync(user, role);
+
+        if (role == "teacher") await auth.LinkTeacherAsync(user);
+        else                   await auth.LinkStudentAsync(user, "КІ-31");
     }
 
     private async Task AddColumnIfMissingAsync(string table, string column, string type)
@@ -140,7 +189,7 @@ public class DatabaseSeeder(
         {
             FirstName = "Олена", LastName = "Ковальчук",
             Initials = "ОК", Title = "Доцент кафедри КН", Course = "ООП на C#",
-            // teacher@test.com matches the Keycloak test account
+            // linked to the seeded teacher@test.com account in SeedIdentityAsync
         });
         await db.SaveChangesAsync();
     }
@@ -208,7 +257,7 @@ public class DatabaseSeeder(
             var rec = new StudentRecord
             {
                 FirstName = s.First, LastName = s.Last, Group = s.Group,
-                // student@test.com matches the Keycloak test account → auto-links on first login
+                // student@test.com matches the seeded test account → auto-links by email
                 Email  = si == 0 ? "student@test.com" : "",
                 Github = si == 0 ? "github.com/petro-iv" : "",
                 Initials = "" + s.First[0] + s.Last[0],

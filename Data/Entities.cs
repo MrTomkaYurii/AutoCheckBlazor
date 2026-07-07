@@ -1,4 +1,14 @@
+using Microsoft.AspNetCore.Identity;
+
 namespace AutoCheck.Data;
+
+// ── Identity user ─────────────────────────────────────────────────────────────
+
+public class AppUser : IdentityUser
+{
+    public string FirstName { get; set; } = "";
+    public string LastName { get; set; } = "";
+}
 
 // ── Lab definitions ───────────────────────────────────────────────────────────
 
@@ -67,11 +77,11 @@ public class TeacherRecord
 
 // ── Auth link ─────────────────────────────────────────────────────────────────
 
-/// <summary>Links a Keycloak user (sub claim) to a StudentRecord or TeacherRecord.</summary>
+/// <summary>Links an Identity user (AppUser.Id) to a StudentRecord or TeacherRecord.</summary>
 public class UserLink
 {
     public int Id { get; set; }
-    public string KeycloakSub { get; set; } = "";
+    public string UserId { get; set; } = "";
     public string Email { get; set; } = "";
     public string Role { get; set; } = "";   // "student" | "teacher"
     public int? StudentId { get; set; }

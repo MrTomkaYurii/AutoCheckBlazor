@@ -18,7 +18,7 @@ AutoCheckBlazor/
     Models.cs         ← DTO для UI (не сутності БД)
   Services/
     AppState.cs           ← per-circuit кеш поточного юзера
-    AuthService.cs        ← Keycloak → StudentRecord/TeacherRecord
+    AuthService.cs        ← Identity claims → StudentRecord/TeacherRecord
     DbDataService.cs      ← читання даних для UI
     GitHubService.cs      ← GitHub API (гілки, коміти)
     GitBranchService.cs   ← локальний git (для grading pipeline)
@@ -31,9 +31,6 @@ AutoCheckBlazor/
     Models/         ← GradingContext, GradingResult
   content/
     labs/           ← MD файли лаб + checks.json
-  keycloak/
-    themes/autocheck/login/  ← кастомна тема (FTL файли + CSS)
-    realm-autocheck.json     ← конфіг realm (імпортується при старті)
   _instructions/    ← цей каталог
   _design/          ← прототипи UI (виключені з компіляції)
 ```
@@ -41,12 +38,12 @@ AutoCheckBlazor/
 ## Потік даних
 
 ```
-Keycloak (SSO) :8080
-    ↓ OIDC / redirect
-ASP.NET Core Authentication (cookie + OIDC middleware)
+Login.razor (/) або Register.razor (/register)
+    ↓ form POST → /account/login | /account/register | Google OAuth
+ASP.NET Core Identity (cookie, ролі teacher/student у SQLite)
     ↓
 MainLayout.OnInitializedAsync()
-    ├─ AuthService.EnsureLinkedAsync()  ← пов'язує Keycloak sub → StudentRecord
+    ├─ AuthService.EnsureLinkedAsync()  ← пов'язує AppUser.Id → StudentRecord
     └─ AppState.PreloadAsync()          ← кешує дані поточного юзера в скоупі
     ↓
 Blazor компоненти
@@ -69,12 +66,11 @@ Blazor компоненти
 - При зміні схеми (нова колонка, новий індекс) — видалити `autocheck.db` і перезапустити.
 - У dev-режимі seeder автоматично виявляє застарілу схему і пересоздає БД.
 
-## Keycloak
+## Автентифікація
 
-- `docker compose up -d` — піднімає Keycloak на :8080.
-- Realm `autocheck` імпортується з `keycloak/realm-autocheck.json` при першому старті.
-- Кастомна тема `autocheck` монтується як Docker volume → зміни в FTL файлах підхоплюються одразу.
-- `cacheThemes=false` і `cacheTemplates=false` в `theme.properties`.
+- ASP.NET Core Identity в тій самій SQLite базі — без контейнерів і зовнішніх сервісів.
+- Google OAuth опційний (Authentication:Google у appsettings.json).
+- Деталі: [08-auth](08-auth.md).
 
 ## GitHub API
 
