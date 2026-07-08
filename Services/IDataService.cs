@@ -7,7 +7,8 @@ public interface IDataService
     // ── Student view ──────────────────────────────────────────────────────
     Task<Student> GetCurrentStudentAsync();
     Task<List<Lab>> GetStudentLabsAsync(int studentId = 1);
-    Task<LabDetail?> GetLabDetailAsync(int labNumber, int studentId = 1);
+    /// <param name="attemptNo">Which attempt's results to load; null = latest attempt with results.</param>
+    Task<LabDetail?> GetLabDetailAsync(int labNumber, int studentId = 1, int? attemptNo = null);
 
     // ── Teacher view ──────────────────────────────────────────────────────
     Task<Teacher> GetTeacherAsync();

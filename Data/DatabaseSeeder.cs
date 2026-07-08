@@ -50,6 +50,23 @@ public class DatabaseSeeder(
         await AddColumnIfMissingAsync("Submissions", "Attempt3Score", "INTEGER");
         await AddColumnIfMissingAsync("Labs",    "AttemptsMax", "INTEGER NOT NULL DEFAULT 3");
         await AddColumnIfMissingAsync("Teachers", "Email",       "TEXT NOT NULL DEFAULT ''");
+        await AddColumnIfMissingAsync("TaskResults", "AttemptNo", "INTEGER NOT NULL DEFAULT 1");
+        await AddColumnIfMissingAsync("Submissions", "PlagiarismFlag",     "INTEGER NOT NULL DEFAULT 0");
+        await AddColumnIfMissingAsync("Submissions", "PlagiarismNote",     "TEXT");
+        await AddColumnIfMissingAsync("Submissions", "PlagiarismApproved", "INTEGER NOT NULL DEFAULT 0");
+
+        // Soft migration: new tables (EnsureCreated does nothing when the DB already exists)
+        await db.Database.ExecuteSqlRawAsync("""
+            CREATE TABLE IF NOT EXISTS "GradeAudits" (
+                "Id" INTEGER NOT NULL CONSTRAINT "PK_GradeAudits" PRIMARY KEY AUTOINCREMENT,
+                "SubmissionId" INTEGER NOT NULL,
+                "Actor" TEXT NOT NULL,
+                "Action" TEXT NOT NULL,
+                "OldValue" TEXT NULL,
+                "NewValue" TEXT NULL,
+                "At" TEXT NOT NULL
+            )
+            """);
 
         if (!await db.Labs.AnyAsync())     await SeedLabsAsync();
         if (!await db.Groups.AnyAsync())   await SeedGroupsAsync();
@@ -189,7 +206,8 @@ public class DatabaseSeeder(
         {
             FirstName = "Олена", LastName = "Ковальчук",
             Initials = "ОК", Title = "Доцент кафедри КН", Course = "ООП на C#",
-            // linked to the seeded teacher@test.com account in SeedIdentityAsync
+            // email matches the seeded teacher@test.com account (linked in SeedIdentityAsync)
+            Email = "teacher@test.com",
         });
         await db.SaveChangesAsync();
     }
@@ -363,8 +381,55 @@ public class DatabaseSeeder(
                 var lab3Tasks = await db.LabTasks.Where(t => t.LabDefId == lab3.Id).OrderBy(t => t.Number).ToListAsync();
                 if (lab3Tasks.Count >= 3)
                     await SeedLab3TaskResultsAsync(lab3Sub.Id, lab3Tasks);
+
+                // Attempt history demo: labs 1-2 mають по 2 спроби (82→96, 71→88) —
+                // сідяться результати обох, щоб перемикач спроб було видно одразу
+                if (labs.Count >= 2)
+                {
+                    await SeedAttemptHistoryAsync(rec.Id, labs[0], (1, 82), (2, 96));
+                    await SeedAttemptHistoryAsync(rec.Id, labs[1], (1, 71), (2, 88));
+                }
             }
         }
+    }
+
+    /// <summary>Seeds per-attempt TaskResults so the attempt switcher has demo data.</summary>
+    private async Task SeedAttemptHistoryAsync(int studentId, LabDef lab, params (int No, int Avg)[] attempts)
+    {
+        var sub = await db.Submissions.FirstAsync(s => s.StudentId == studentId && s.LabDefId == lab.Id);
+        var tasks = await db.LabTasks.Where(t => t.LabDefId == lab.Id).OrderBy(t => t.Number).ToListAsync();
+        int[] offsets = [-6, 4, -2, 8, 0, -4, 6, 2];
+
+        foreach (var (no, avg) in attempts)
+        {
+            for (int i = 0; i < tasks.Count; i++)
+            {
+                int score = Math.Clamp(avg + offsets[i % offsets.Length], 0, 100);
+                string state = score >= 80 ? "pass" : score >= 50 ? "warn" : "fail";
+
+                string[] done = score >= 80
+                    ? ["Клас реалізовано за умовою", "Валідація вхідних даних присутня", "Іменування відповідає конвенціям C#"]
+                    : ["Базову структуру класу створено"];
+                string[] issues = score >= 80
+                    ? []
+                    : score >= 50
+                        ? ["Бракує обробки граничних випадків", "Публічні поля замість властивостей"]
+                        : ["Код не компілюється — відсутній конструктор"];
+                string analysis = $"Спроба {no}: " + (score >= 80
+                    ? "вимоги виконано, код чистий і читабельний."
+                    : score >= 50
+                        ? "рішення працює, але є зауваження до якості коду."
+                        : "суттєві проблеми, потрібно виправити та здати повторно.");
+
+                db.TaskResults.Add(new TaskResult
+                {
+                    SubmissionId = sub.Id, LabTaskId = tasks[i].Id, AttemptNo = no,
+                    State = state, Score = score,
+                    Feedback = System.Text.Json.JsonSerializer.Serialize(new { done, issues, analysis }),
+                });
+            }
+        }
+        await db.SaveChangesAsync();
     }
 
     private async Task SeedLab3TaskResultsAsync(int subId, List<LabTask> tasks)

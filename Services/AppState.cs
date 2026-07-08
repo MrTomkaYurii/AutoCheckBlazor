@@ -5,7 +5,7 @@ using AutoCheck.Models;
 namespace AutoCheck.Services;
 
 /// <summary>Per-circuit cached identity + role helpers.</summary>
-public class AppState(IAuthService auth)
+public class AppState(IAuthService auth, TokenProtector tokens)
 {
     private StudentRecord? _student;
     private TeacherRecord? _teacher;
@@ -42,7 +42,7 @@ public class AppState(IAuthService auth)
                     Group        = _student.Group,
                     Email        = _student.Email,
                     Github       = _student.Github,
-                    GithubToken  = _student.GithubToken,
+                    GithubToken  = tokens.Unprotect(_student.GithubToken),
                     Initials     = _student.Initials,
                 };
         }

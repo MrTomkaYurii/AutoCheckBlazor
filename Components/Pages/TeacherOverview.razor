@@ -82,7 +82,7 @@
                     </div>
                     @foreach (var (q, last) in grp.Select((x, i) => (x, i == grp.Count() - 1)))
                     {
-                        <div class="qrow" @onclick="@(() => OpenGrade(q.StudentId, q.LabId))"
+                        <div class="qrow" @onclick="@(() => OpenResults(q.StudentId, q.LabId))"
                              style="display:flex;align-items:center;gap:14px;padding:13px 22px;cursor:pointer;border-bottom:@(last ? "none" : "1px solid var(--line)")">
                             <div style="@Avatar">@q.Initials</div>
                             <div style="min-width:0;flex:1">
@@ -96,6 +96,7 @@
                                 <span class="mono tnum" style="font-size:15px;font-weight:750;color:@ScoreColor(q.Auto)">@q.Auto</span>
                             </div>
                             <span style="font-size:11.5px;color:var(--tx-faint);flex:none;width:72px;text-align:right">@q.When</span>
+                            <button class="btn btn-ghost btn-sm" style="flex:none" title="Переглянути результати автоперевірки" @onclick:stopPropagation @onclick="@(() => OpenResults(q.StudentId, q.LabId))"><Icon Name="search" Size="14" />Результати</button>
                             <button class="btn btn-outline btn-sm" style="flex:none" @onclick:stopPropagation @onclick="@(() => OpenGrade(q.StudentId, q.LabId))">Оцінити</button>
                         </div>
                     }
@@ -107,7 +108,7 @@
                 {
                     var q    = SortedQueue[i];
                     var last = i == SortedQueue.Count - 1;
-                    <div class="qrow" @onclick="@(() => OpenGrade(q.StudentId, q.LabId))"
+                    <div class="qrow" @onclick="@(() => OpenResults(q.StudentId, q.LabId))"
                          style="display:flex;align-items:center;gap:14px;padding:13px 22px;cursor:pointer;border-bottom:@(last ? "none" : "1px solid var(--line)")">
                         <div style="@Avatar">@q.Initials</div>
                         <div style="min-width:0;flex:1">
@@ -121,6 +122,7 @@
                             <span class="mono tnum" style="font-size:15px;font-weight:750;color:@ScoreColor(q.Auto)">@q.Auto</span>
                         </div>
                         <span style="font-size:11.5px;color:var(--tx-faint);flex:none;width:72px;text-align:right">@q.When</span>
+                        <button class="btn btn-ghost btn-sm" style="flex:none" title="Переглянути результати автоперевірки" @onclick:stopPropagation @onclick="@(() => OpenResults(q.StudentId, q.LabId))"><Icon Name="search" Size="14" />Результати</button>
                         <button class="btn btn-outline btn-sm" style="flex:none" @onclick:stopPropagation @onclick="@(() => OpenGrade(q.StudentId, q.LabId))">Оцінити</button>
                     </div>
                 }
@@ -158,7 +160,8 @@
                     </div>
                     @foreach (var (q, last) in grp.Select((x, i) => (x, i == grp.Count() - 1)))
                     {
-                        <div style="display:flex;align-items:center;gap:14px;padding:13px 22px;border-bottom:@(last ? "none" : "1px solid var(--line)")">
+                        <div class="qrow" @onclick="@(() => OpenResults(q.StudentId, q.LabId))"
+                             style="display:flex;align-items:center;gap:14px;padding:13px 22px;cursor:pointer;border-bottom:@(last ? "none" : "1px solid var(--line)")">
                             <div style="@AvatarRed">@q.Initials</div>
                             <div style="min-width:0;flex:1">
                                 <div style="font-size:14px;font-weight:640">@q.Name</div>
@@ -172,6 +175,7 @@
                                 <span class="mono tnum" style="font-size:15px;font-weight:750;color:var(--st-red)">@q.Auto</span>
                             </div>
                             <span style="font-size:11.5px;color:var(--tx-faint);flex:none;width:72px;text-align:right">@q.When</span>
+                            <button class="btn btn-ghost btn-sm" style="flex:none" title="Переглянути результати автоперевірки" @onclick:stopPropagation @onclick="@(() => OpenResults(q.StudentId, q.LabId))"><Icon Name="search" Size="14" />Результати</button>
                         </div>
                     }
                 }
@@ -182,7 +186,8 @@
                 {
                     var q    = SortedRejected[i];
                     var last = i == SortedRejected.Count - 1;
-                    <div style="display:flex;align-items:center;gap:14px;padding:13px 22px;border-bottom:@(last ? "none" : "1px solid var(--line)")">
+                    <div class="qrow" @onclick="@(() => OpenResults(q.StudentId, q.LabId))"
+                         style="display:flex;align-items:center;gap:14px;padding:13px 22px;cursor:pointer;border-bottom:@(last ? "none" : "1px solid var(--line)")">
                         <div style="@AvatarRed">@q.Initials</div>
                         <div style="min-width:0;flex:1">
                             <div style="font-size:14px;font-weight:640">@q.Name</div>
@@ -196,6 +201,7 @@
                             <span class="mono tnum" style="font-size:15px;font-weight:750;color:var(--st-red)">@q.Auto</span>
                         </div>
                         <span style="font-size:11.5px;color:var(--tx-faint);flex:none;width:72px;text-align:right">@q.When</span>
+                        <button class="btn btn-ghost btn-sm" style="flex:none" title="Переглянути результати автоперевірки" @onclick:stopPropagation @onclick="@(() => OpenResults(q.StudentId, q.LabId))"><Icon Name="search" Size="14" />Результати</button>
                     </div>
                 }
             }
@@ -258,6 +264,9 @@
 
     private const string Avatar    = "width:40px;height:40px;border-radius:11px;flex:none;display:grid;place-items:center;font-weight:700;font-size:13.5px;background:linear-gradient(150deg, rgba(118,199,173,0.3), rgba(118,199,173,0.12));border:1px solid var(--glass-border-hover);color:var(--acc-bright)";
     private const string AvatarRed = "width:40px;height:40px;border-radius:11px;flex:none;display:grid;place-items:center;font-weight:700;font-size:13.5px;background:rgba(232,128,107,0.12);border:1px solid rgba(232,128,107,0.25);color:var(--st-red)";
+
+    private void OpenResults(int studentId, int labId) =>
+        Nav.NavigateTo($"/teacher/results/{studentId}/{labId}");
 
     private async Task OpenGrade(int studentId, int labId)
     {

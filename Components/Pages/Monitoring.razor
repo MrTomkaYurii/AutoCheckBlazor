@@ -4,6 +4,7 @@
 @inject ICommentService CommentSvc
 @inject IDialogService Dialog
 @inject NavigationManager Nav
+@inject PlagiarismService Plagiarism
 
 <TopBar Title="Моніторинг" Sub="Детальна аналітика курсу" />
 
@@ -212,6 +213,62 @@
             }
         }
     </section>
+
+    @* ── Перевірка на плагіат ─────────────────────────────────────────────── *@
+    <section class="glass" style="padding:20px 24px;margin-top:18px">
+        <div style="display:flex;align-items:center;gap:11px;margin-bottom:16px;flex-wrap:wrap">
+            <Icon Name="search" Size="18" Style="color:var(--st-red)" />
+            <h3 style="margin:0;font-size:16px;font-weight:720;letter-spacing:-0.02em">Перевірка на плагіат</h3>
+            <span style="font-size:12px;color:var(--tx-3)">— порівняння коду здач між студентами</span>
+            <div style="display:flex;gap:8px;align-items:center;margin-left:auto">
+                <select class="input" @bind="_plagLab" style="height:34px;width:220px;appearance:auto">
+                    <option value="0" disabled>Оберіть лабу…</option>
+                    @foreach (var (id, sh, title) in _labCols)
+                    {
+                        <option value="@id">@sh · @title</option>
+                    }
+                </select>
+                <button class="btn btn-primary btn-sm" @onclick="RunPlagiarism" disabled="@(_plagLab == 0 || _plagRunning)">
+                    <Icon Name="search" Size="14" />@(_plagRunning ? "Аналіз…" : "Перевірити")
+                </button>
+            </div>
+        </div>
+
+        @if (_plagChecked)
+        {
+            @if (_plagPairs.Count == 0)
+            {
+                <div style="padding:18px;text-align:center;color:var(--tx-faint);font-size:13px">
+                    Підозрілих збігів не знайдено (поріг 50% спільного коду) ✓
+                </div>
+            }
+            else
+            {
+                <div style="display:flex;flex-direction:column;gap:8px">
+                    @foreach (var p in _plagPairs)
+                    {
+                        var pct = (int)Math.Round(p.Similarity * 100);
+                        var tone = pct >= 80 ? "var(--st-red)" : "var(--st-yellow)";
+                        <div style="display:flex;align-items:center;gap:14px;padding:12px 16px;border-radius:11px;background:rgba(255,255,255,0.025);border:1px solid @(tone)33">
+                            <span class="mono tnum" style="font-size:17px;font-weight:780;color:@tone;width:52px;text-align:center;flex:none">@pct%</span>
+                            <div style="flex:1;min-width:0;font-size:13.5px">
+                                <b>@p.StudentA</b> <span style="color:var(--tx-faint)">(@p.GroupA)</span>
+                                <span style="color:var(--tx-3)"> ↔ </span>
+                                <b>@p.StudentB</b> <span style="color:var(--tx-faint)">(@p.GroupB)</span>
+                            </div>
+                            <span style="font-size:12px;color:var(--tx-3);flex:none">@p.SharedLines спільних рядків коду</span>
+                        </div>
+                    }
+                </div>
+            }
+        }
+        else
+        {
+            <div style="padding:14px;text-align:center;color:var(--tx-faint);font-size:12.5px">
+                Оберіть лабу і натисніть «Перевірити» — система порівняє код усіх зданих робіт попарно.
+            </div>
+        }
+    </section>
 </div>
 
 @code {
@@ -226,8 +283,30 @@
 
     private const string SmAvatar = "width:34px;height:34px;border-radius:9px;flex:none;display:grid;place-items:center;font-weight:700;font-size:12px;background:linear-gradient(150deg, rgba(118,199,173,0.3), rgba(118,199,173,0.12));border:1px solid var(--glass-border-hover);color:var(--acc-bright)";
 
+    // ── Plagiarism ────────────────────────────────────────────────────────────
+    private List<(int Id, string Short, string Title)> _labCols = [];
+    private int _plagLab;
+    private bool _plagRunning, _plagChecked;
+    private List<PlagPair> _plagPairs = [];
+
+    private async Task RunPlagiarism()
+    {
+        if (_plagLab == 0) return;
+        _plagRunning = true; StateHasChanged();
+        try
+        {
+            _plagPairs = await Plagiarism.CheckLabAsync(_plagLab);
+            _plagChecked = true;
+        }
+        finally
+        {
+            _plagRunning = false; StateHasChanged();
+        }
+    }
+
     protected override async Task OnInitializedAsync()
     {
+        _labCols = await DataSvc.GetLabColumnsAsync();
         _stats = await DataSvc.GetStatsAsync();
         var roster = await DataSvc.GetRosterAsync();
         _topStudents = roster.Where(s => s.Avg.HasValue).OrderByDescending(s => s.Avg).Take(5).ToList();

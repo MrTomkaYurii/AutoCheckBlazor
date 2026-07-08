@@ -20,7 +20,9 @@ public class GradingService(
     IConfiguration cfg,
     IWebHostEnvironment env,
     ILogger<GradingService> log,
-    GeminiQuotaService quota) : IGradingService
+    GeminiQuotaService quota,
+    GradingQueueService queue,
+    PlagiarismService plagiarism) : IGradingService
 {
     private string ApiKey   => cfg["Gemini:ApiKey"]  ?? "";
     private string Model    => cfg["Gemini:Model"]   ?? "gemini-2.5-flash";
@@ -47,6 +49,11 @@ public class GradingService(
             throw new InvalidOperationException(
                 $"Ліміт спроб вичерпано ({sub.AttemptsMax} з {sub.AttemptsMax}). Зверніться до викладача.");
 
+        // Deadline is enforced server-side, not only by the disabled UI button
+        if (sub.LabDef.Deadline is DateTime deadline && DateTime.UtcNow > deadline)
+            throw new InvalidOperationException(
+                "Дедлайн минув — здача цієї лаби закрита. Зверніться до викладача.");
+
         if (quota.IsExhausted)
             throw new InvalidOperationException(
                 $"Денний ліміт перевірок вичерпано ({quota.DailyLimit} з {quota.DailyLimit} використано сьогодні). Спробуйте завтра.");
@@ -54,6 +61,9 @@ public class GradingService(
         if (string.IsNullOrEmpty(ApiKey))
             throw new InvalidOperationException(
                 "Система перевірки наразі недоступна. Зверніться до викладача.");
+
+        // One grading at a time — the rest wait in line
+        using var _queueSlot = await queue.EnterAsync(progress, ct);
 
         progress?.Report("Перевірка системи аналізу…");
         await CheckGeminiAsync(ct);
@@ -101,6 +111,50 @@ public class GradingService(
             return (Task: taskDef, Code: code, Checks: checks);
         }));
 
+        // ── 2.5 Plagiarism gate: identical to another student's checked work? ──
+        // Runs BEFORE Gemini (no quota wasted). Teacher can approve to bypass.
+        if (!sub.PlagiarismApproved)
+        {
+            progress?.Report("Перевірка на збіги з іншими роботами…");
+            // ParseDiff strips the +/- diff prefixes — the same form the stored
+            // DiffLines use, otherwise commit-mapped submissions never match
+            var candidateLines = taskInputs.SelectMany(t =>
+                ParseDiff(t.Code).Where(d => d.Type is "add" or "ctx").Select(d => d.Text));
+            var match = await plagiarism.FindExactMatchAsync(lab.Id, studentId, candidateLines);
+            if (match != null)
+            {
+                var idx = sub.AttemptsUsed;
+                if      (idx == 0) sub.Attempt1Score = 0;
+                else if (idx == 1) sub.Attempt2Score = 0;
+                else if (idx == 2) sub.Attempt3Score = 0;
+                // attempts beyond the 3 slots are tracked only via TaskResults/audit
+                sub.AttemptsUsed++;
+                sub.SubmittedAt = DateTime.UtcNow;
+                sub.Status = (int)LabStatus.Rejected;
+                sub.AutoScore = null;
+                sub.PlagiarismFlag = true;
+                sub.PlagiarismNote =
+                    $"Збіг {match.Containment:P0} з роботою: {match.StudentName} ({match.Group})";
+
+                db.GradeAudits.Add(new GradeAudit
+                {
+                    SubmissionId = sub.Id, Actor = "система", Action = "plagiarism",
+                    NewValue = sub.PlagiarismNote,
+                });
+                await db.SaveChangesAsync(ct);
+
+                await notif.SendAsync(studentId,
+                    $"Lab{lab.Number:D2}: здачу відхилено",
+                    "Автоперевірка виявила повний збіг вашого коду з роботою іншого студента. " +
+                    "Спробу витрачено. Зверніться до викладача.",
+                    "grading");
+
+                throw new InvalidOperationException(
+                    "Здачу відхилено: код повністю збігається з роботою іншого студента, " +
+                    "яка вже пройшла перевірку. Спробу витрачено. Зверніться до викладача.");
+            }
+        }
+
         // ── 3. Grade ALL tasks in ONE Gemini call ────────────────────────────────
         progress?.Report("Аналіз коду через Gemini…");
         var gradeResults = await GradeAllWithGeminiAsync(lab, taskInputs, ct);
@@ -109,7 +163,10 @@ public class GradingService(
             .ToArray();
 
         // ── 4. Persist results ────────────────────────────────────────────────
-        db.TaskResults.RemoveRange(sub.TaskResults);
+        // Results of previous attempts are kept (history); clean up only leftovers
+        // of the same attempt slot (e.g. after a teacher reset).
+        var attemptNo = sub.AttemptsUsed + 1;
+        db.TaskResults.RemoveRange(sub.TaskResults.Where(tr => tr.AttemptNo == attemptNo));
         await db.SaveChangesAsync(ct);
 
         foreach (var (taskDef, code, result) in graded)
@@ -118,6 +175,7 @@ public class GradingService(
             {
                 SubmissionId = sub.Id,
                 LabTaskId    = taskDef.Id,
+                AttemptNo    = attemptNo,
                 State        = result.State,
                 Score        = result.Score,
                 TestsPassed  = 0,
@@ -134,18 +192,26 @@ public class GradingService(
         }
 
         // ── 5. Finalise submission ────────────────────────────────────────────
-        int autoScore = graded.Length > 0
-            ? (int)Math.Round(graded.Average(g => (double)g.Result.Score))
-            : 0;
+        // Difficulty-weighted score, guarded against zero total weight
+        int autoScore = Scoring.Weighted(
+            graded.Select(g => (g.Result.Score, g.Task.Difficulty)).ToList());
 
-        // Store score in the corresponding attempt slot (AttemptsUsed = index before increment)
+        // Store score in the corresponding attempt slot (AttemptsUsed = index before increment).
+        // Attempts beyond the 3 slots (teacher raised the limit) must NOT overwrite
+        // slot 3 — their scores live in the per-attempt TaskResults.
         var attemptIdx = sub.AttemptsUsed;
         if      (attemptIdx == 0) sub.Attempt1Score = autoScore;
         else if (attemptIdx == 1) sub.Attempt2Score = autoScore;
-        else                      sub.Attempt3Score = autoScore;
+        else if (attemptIdx == 2) sub.Attempt3Score = autoScore;
 
-        // AutoScore = найкраща спроба серед усіх; статус залежить від порогу 50
-        var bestScore = new[] { sub.Attempt1Score ?? 0, sub.Attempt2Score ?? 0, sub.Attempt3Score ?? 0 }.Max();
+        // AutoScore = найкраща спроба серед усіх; статус залежить від порогу 50.
+        // Includes the current attempt and the previous best (covers attempts 4+
+        // that have no slot).
+        var bestScore = new[]
+        {
+            sub.Attempt1Score ?? 0, sub.Attempt2Score ?? 0, sub.Attempt3Score ?? 0,
+            autoScore, sub.AutoScore ?? 0,
+        }.Max();
         if (bestScore >= 50)
         {
             sub.AutoScore = bestScore;
@@ -160,6 +226,15 @@ public class GradingService(
         sub.AttemptsUsed++;
         sub.SubmittedAt = DateTime.UtcNow;
 
+        // Successfully re-graded after the teacher allowed it — clear the flag AND
+        // consume the approval (one-time pass; the next match triggers the gate again).
+        // The history stays in GradeAudits.
+        if (sub.PlagiarismApproved)
+        {
+            sub.PlagiarismFlag = false;
+            sub.PlagiarismApproved = false;
+        }
+
         await db.SaveChangesAsync(ct);
 
         await notif.SendAsync(studentId,
@@ -172,14 +247,21 @@ public class GradingService(
 
     // ── Gemini API — batch (all tasks in one request) ─────────────────────────
 
+    /// <summary>
+    /// Grades all tasks in one Gemini call. System failures (API down, malformed
+    /// response) THROW so the student's attempt is NOT consumed — only a real
+    /// grading result may burn an attempt.
+    /// </summary>
     private async Task<GradeResult[]> GradeAllWithGeminiAsync(
         LabDef lab,
         (LabTask Task, string Code, TaskCheckInfo? Checks)[] inputs,
         CancellationToken ct)
     {
-        GradeResult Fail(string msg) => new("fail", 0, [], [], msg);
-        var failAll = inputs.Select(_ => Fail("Помилка відповіді системи перевірки.")).ToArray();
-        if (inputs.Length == 0) return failAll;
+        if (inputs.Length == 0) return [];
+
+        static InvalidOperationException SystemFail(string detail) => new(
+            "Система перевірки не змогла обробити відповідь — спробу не витрачено. " +
+            "Повторіть за кілька хвилин. " + detail);
 
         var sb = new StringBuilder();
         sb.AppendLine("Ти — суворий, але справедливий перевірник коду C# для університетського курсу ООП.");
@@ -199,11 +281,11 @@ public class GradingService(
             if (!string.IsNullOrWhiteSpace(task.Brief))
                 sb.AppendLine(task.Brief);
             sb.AppendLine();
-            if (checks?.ExpectedOutputs.Length > 0)
+            if (checks?.Requirements.Length > 0)
             {
-                sb.AppendLine("Очікувані виводи:");
-                foreach (var exp in checks.ExpectedOutputs.Take(4))
-                    sb.AppendLine($"- `{exp}`");
+                sb.AppendLine("Обов'язкові вимоги (перевір кожну — вона має потрапити або в done, або в issues):");
+                foreach (var req in checks.Requirements)
+                    sb.AppendLine($"- {req}");
                 sb.AppendLine();
             }
             sb.AppendLine("Код студента:");
@@ -227,8 +309,10 @@ public class GradingService(
 ]
 """);
         sb.AppendLine("Правила:");
-        sb.AppendLine("• Перерахуй у done/issues ВСІ конкретні вимоги з умови — кожна має потрапити або в done, або в issues");
-        sb.AppendLine("• done/issues — лише конкретні вимоги з умови, не загальні фрази на кшталт 'код написаний' чи 'є помилки'");
+        sb.AppendLine("• Якщо для завдання наведено 'Обов'язкові вимоги' — перевіряй ТІЛЬКИ їх, не додавай своїх");
+        sb.AppendLine("• Якщо вимог немає — сам виведи конкретні вимоги з умови завдання");
+        sb.AppendLine("• done/issues — лише конкретні вимоги, не загальні фрази на кшталт 'код написаний' чи 'є помилки'");
+        sb.AppendLine("• Кожна вимога потрапляє або в done, або в issues — без пропусків");
         sb.AppendLine("• Оцінка буде розрахована автоматично: score = done.length / (done.length + issues.length) × 100");
         sb.AppendLine($"• Поверни масив рівно з {inputs.Length} елементами (n=1..{inputs.Length})");
 
@@ -262,7 +346,7 @@ public class GradingService(
             {
                 var err = await resp.Content.ReadAsStringAsync(ct);
                 log.LogWarning("Gemini batch {Status}: {Err}", resp.StatusCode, err.Length > 300 ? err[..300] : err);
-                return failAll;
+                throw SystemFail($"(Gemini {(int)resp.StatusCode})");
             }
 
             using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
@@ -277,7 +361,7 @@ public class GradingService(
             if (parsed.RootElement.ValueKind != JsonValueKind.Array)
             {
                 log.LogWarning("Gemini batch returned non-array");
-                return failAll;
+                throw SystemFail("(відповідь не є масивом)");
             }
 
             static string[] Arr(JsonElement r, string key) =>
@@ -305,15 +389,22 @@ public class GradingService(
                 byN[n] = new GradeResult(state, score, done, issues, analysis);
             }
 
-            return inputs
-                .Select(inp => byN.TryGetValue(inp.Task.Number, out var r) ? r
-                    : Fail("Gemini не повернув результат для цього завдання."))
-                .ToArray();
+            // Malformed response (missing tasks) is a system fault, not the student's
+            var missing = inputs.Where(inp => !byN.ContainsKey(inp.Task.Number))
+                                .Select(inp => inp.Task.Number).ToArray();
+            if (missing.Length > 0)
+            {
+                log.LogWarning("Gemini batch missing tasks: {Missing}", string.Join(",", missing));
+                throw SystemFail($"(немає результату для завдань: {string.Join(", ", missing)})");
+            }
+
+            return inputs.Select(inp => byN[inp.Task.Number]).ToArray();
         }
+        catch (InvalidOperationException) { throw; }
         catch (Exception ex)
         {
             log.LogWarning(ex, "Gemini batch call failed");
-            return failAll;
+            throw SystemFail($"({ex.Message})");
         }
     }
 
@@ -337,15 +428,11 @@ public class GradingService(
             {
                 if (!taskEl.TryGetProperty("n", out var nEl) || nEl.GetInt32() != taskNumber)
                     continue;
-                if (!taskEl.TryGetProperty("cases", out var casesEl)) return null;
+                string[] reqs = [];
+                if (taskEl.TryGetProperty("requirements", out var reqsEl) && reqsEl.ValueKind == JsonValueKind.Array)
+                    reqs = reqsEl.EnumerateArray().Select(x => x.GetString() ?? "").Where(s => s.Length > 0).ToArray();
 
-                var expects = casesEl.EnumerateArray()
-                    .Select(c => c.TryGetProperty("expect", out var e) ? e.GetString() : null)
-                    .Where(s => !string.IsNullOrWhiteSpace(s))
-                    .Distinct()
-                    .ToArray();
-
-                return new TaskCheckInfo(expects!);
+                return new TaskCheckInfo(reqs);
             }
         }
         catch (Exception ex)
@@ -355,7 +442,7 @@ public class GradingService(
         return null;
     }
 
-    private record TaskCheckInfo(string[] ExpectedOutputs);
+    private record TaskCheckInfo(string[] Requirements);
 
     private record GradeResult(string State, int Score, string[] Done, string[] Issues, string Analysis);
 

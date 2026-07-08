@@ -77,6 +77,50 @@
         </div>
     </section>
 
+    @* plagiarism notice *@
+    @if (LabInfo.PlagFlag)
+    {
+        <section class="glass" style="padding:14px 20px;margin-bottom:18px;border-color:rgba(232,128,107,0.4);display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <span style="width:32px;height:32px;border-radius:9px;flex:none;display:grid;place-items:center;background:rgba(232,128,107,0.14);border:1px solid rgba(232,128,107,0.3);color:var(--st-red)">
+                <Icon Name="warn" Size="16" Stroke="2.2" />
+            </span>
+            <div style="flex:1;min-width:240px;font-size:13px;line-height:1.5;color:var(--tx-1)">
+                @if (LabInfo.PlagApproved)
+                {
+                    <b style="color:var(--st-yellow)">Викладач дозволив повторну здачу.</b>
+                    <span style="color:var(--tx-2)"> Попередню здачу було відхилено через збіг з чужою роботою — здайте власний код.</span>
+                }
+                else
+                {
+                    <b style="color:var(--st-red)">Здачу відхилено:</b>
+                    <span style="color:var(--tx-2)"> виявлено повний збіг вашого коду з роботою іншого студента. Зверніться до викладача.</span>
+                }
+            </div>
+        </section>
+    }
+
+    @* attempt history switcher *@
+    @if (LabInfo.Attempts.Count > 1)
+    {
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap">
+            <span style="font-size:12px;font-weight:700;color:var(--tx-3);text-transform:uppercase;letter-spacing:0.05em">Результати спроби</span>
+            @foreach (var a in LabInfo.Attempts)
+            {
+                var on = a.No == LabInfo.SelectedAttempt;
+                var tone = on ? "var(--acc-bright)" : "var(--tx-3)";
+                <button @onclick="@(() => SelectAttempt(a.No))"
+                        style="display:flex;align-items:center;gap:8px;padding:7px 14px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:650;transition:all .18s;border:1px solid @(on ? "var(--glass-border-hover)" : "var(--line)");background:@(on ? "var(--acc-dim)" : "rgba(255,255,255,0.025)");color:@tone">
+                    Спроба @a.No
+                    <span class="mono tnum" style="font-size:12.5px;font-weight:750;color:@(a.Score is null ? "var(--tx-faint)" : on ? "var(--acc-bright)" : "var(--tx-2)")">@(a.Score?.ToString() ?? "—")</span>
+                    @if (a.IsBest && LabInfo.Attempts.Count > 1)
+                    {
+                        <span title="Найкраща спроба — зарахована як авто-оцінка" style="color:var(--st-yellow);display:grid;place-items:center"><Icon Name="trophy" Size="12" /></span>
+                    }
+                </button>
+            }
+        </div>
+    }
+
     @* master / detail *@
     <div style="display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start">
 
@@ -597,6 +641,8 @@
     private LabDetail LabInfo = new();
     private string _activeId = "task1";
     private int _studentId = 1;
+    private int? _selectedAttempt;   // null = latest attempt with results
+    private int _loadedLabId = -1;
 
     protected override async Task OnInitializedAsync()
     {
@@ -605,11 +651,30 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        var detail = await Data.GetLabDetailAsync(Id, _studentId);
+        // navigating to another lab reuses this component — drop the old selection
+        if (Id != _loadedLabId)
+        {
+            _selectedAttempt = null;
+            _loadedLabId = Id;
+        }
+        var detail = await Data.GetLabDetailAsync(Id, _studentId, _selectedAttempt);
         if (detail is not null)
         {
             LabInfo   = detail;
             _activeId = "task" + (detail.Tasks.FirstOrDefault()?.N ?? 1);
+        }
+    }
+
+    private async Task SelectAttempt(int no)
+    {
+        _selectedAttempt = no;
+        var detail = await Data.GetLabDetailAsync(Id, _studentId, no);
+        if (detail is not null)
+        {
+            LabInfo = detail;
+            // keep the same task selected if it still exists
+            if (LabInfo.Tasks.All(t => t.Id != _activeId))
+                _activeId = "task" + (LabInfo.Tasks.FirstOrDefault()?.N ?? 1);
         }
     }
 
@@ -624,22 +689,8 @@
     private string _gradingError = "";
     private GradingResultDto? _result;
 
-    private static (string[] Done, string[] Issues, string Analysis) ParseFeedback(string? raw)
-    {
-        if (string.IsNullOrEmpty(raw)) return ([], [], "");
-        try
-        {
-            using var doc = System.Text.Json.JsonDocument.Parse(raw);
-            var r = doc.RootElement;
-            static string[] Arr(System.Text.Json.JsonElement root, string key) =>
-                root.TryGetProperty(key, out var el) && el.ValueKind == System.Text.Json.JsonValueKind.Array
-                    ? el.EnumerateArray().Select(x => x.GetString() ?? "").Where(s => s.Length > 0).ToArray()
-                    : [];
-            var analysis = r.TryGetProperty("analysis", out var a) ? a.GetString() ?? "" : "";
-            return (Arr(r, "done"), Arr(r, "issues"), analysis);
-        }
-        catch { return ([], [], raw); }
-    }
+    private static (string[] Done, string[] Issues, string Analysis) ParseFeedback(string? raw) =>
+        FeedbackJson.Parse(raw);
     private int _oldScore;
 
     // Commit-mapping state
@@ -852,6 +903,7 @@
         try
         {
             _result = await Grader.RunAsync(sub.Id, _studentId, progress);
+            _selectedAttempt = null;   // show the attempt that was just graded
             var detail = await Data.GetLabDetailAsync(Id, _studentId);
             if (detail is not null) { LabInfo = detail; _activeId = "task" + (detail.Tasks.FirstOrDefault()?.N ?? 1); }
             _phase = "done";

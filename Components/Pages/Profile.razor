@@ -4,6 +4,7 @@
 @inject AppDbContext Db
 @inject UserManager<AppUser> UserManager
 @inject NavigationManager Nav
+@inject TokenProtector Tokens
 
 <TopBar Title="Профіль" Sub="Дані студента" />
 
@@ -230,6 +231,31 @@
                                      .FirstOrDefaultAsync(l => l.UserId == sub);
         if (link?.StudentId is int studentId)
         {
+            // Email is the login — keep the Identity account and the link in sync
+            var newEmail = _email.Trim();
+            var user = await UserManager.FindByIdAsync(sub);
+            if (user != null && !string.Equals(user.Email, newEmail, StringComparison.OrdinalIgnoreCase))
+            {
+                string? err = null;
+                if (!newEmail.Contains('@'))
+                    err = "Помилка: некоректний email";
+                else if (await UserManager.FindByEmailAsync(newEmail) is { } taken && taken.Id != user.Id)
+                    err = "Помилка: цей email вже використовується іншим акаунтом";
+
+                if (err != null)
+                {
+                    _msg = err; _saving = false; StateHasChanged();
+                    await Task.Delay(2500); _msg = ""; StateHasChanged();
+                    return;
+                }
+
+                user.Email = newEmail;
+                user.UserName = newEmail;
+                await UserManager.UpdateAsync(user);
+                await Db.UserLinks.Where(l => l.UserId == sub)
+                    .ExecuteUpdateAsync(l => l.SetProperty(x => x.Email, newEmail));
+            }
+
             var initials = (_firstName.Length > 0 ? _firstName[0].ToString() : "")
                          + (_lastName.Length  > 0 ? _lastName[0].ToString()  : "");
             await Db.Students
@@ -238,9 +264,10 @@
                         .SetProperty(x => x.FirstName,   _firstName.Trim())
                         .SetProperty(x => x.LastName,    _lastName.Trim())
                         .SetProperty(x => x.Initials,    initials)
-                        .SetProperty(x => x.Email,       _email.Trim())
+                        .SetProperty(x => x.Email,       newEmail)
                         .SetProperty(x => x.Github,      _github.Trim())
-                        .SetProperty(x => x.GithubToken, _githubToken.Trim()));
+                        // token is encrypted at rest (Data Protection)
+                        .SetProperty(x => x.GithubToken, Tokens.Protect(_githubToken.Trim())));
             await App.PreloadAsync(state.User);
             _msg = "Профіль оновлено";
         }

@@ -25,7 +25,22 @@
             </p>
         </div>
 
-        @if (_student == null)
+        @if (_sessionStale)
+        {
+            <div style="display:flex;flex-direction:column;gap:16px">
+                <div style="padding:12px 16px;background:rgba(255,80,80,0.08);border:1px solid rgba(255,80,80,0.25);border-radius:10px;color:var(--st-red);font-size:13px;line-height:1.5">
+                    Сесія застаріла — акаунт не знайдено (можливо, базу даних було скинуто). Увійдіть заново.
+                </div>
+                <form method="post" action="/account/logout">
+                    <AntiforgeryToken />
+                    <button type="submit"
+                            style="width:100%;display:flex;align-items:center;justify-content:center;gap:11px;height:48px;border:none;cursor:pointer;border-radius:13px;background:linear-gradient(160deg, var(--acc-bright), var(--acc));color:#08110d;font-weight:750;font-size:15px;box-shadow:0 8px 24px -10px rgba(118,199,173,0.8),inset 0 1px 0 rgba(255,255,255,0.25);font-family:inherit">
+                        <Icon Name="logout" Size="17" />Увійти заново
+                    </button>
+                </form>
+            </div>
+        }
+        else if (_student == null)
         {
             <div style="display:flex;align-items:center;justify-content:center;gap:12px;padding:20px 0;color:var(--tx-2)">
                 <span style="width:20px;height:20px;border-radius:50%;border:2.5px solid var(--acc-dim-2);border-top-color:var(--acc);animation:spin .8s linear infinite"></span>
@@ -75,7 +90,7 @@
     private StudentRecord? _student;
     private List<string> _groups = [];
     private string _firstName = "", _lastName = "", _group = "", _github = "", _error = "";
-    private bool _saving;
+    private bool _saving, _sessionStale;
 
     protected override async Task OnInitializedAsync()
     {
@@ -88,7 +103,12 @@
 
         await Auth.EnsureLinkedAsync(state.User);
         _student = await Auth.GetStudentRecordAsync(state.User);
-        if (_student == null) return;
+        if (_student == null)
+        {
+            // Auth cookie points to a user that no longer exists (e.g. DB was reset)
+            _sessionStale = true;
+            return;
+        }
 
         // Already onboarded → straight to the dashboard
         if (!string.IsNullOrEmpty(_student.Group))

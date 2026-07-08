@@ -156,12 +156,24 @@
             @* Grading subsection *@
             <div style="padding:16px 26px 20px">
                 <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--tx-3);margin-bottom:10px">Перевірка</div>
-                <div style="display:flex;align-items:center;padding:10px 0">
+                <div style="display:flex;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)">
                     <span style="width:140px;font-size:12.5px;color:var(--tx-3);font-weight:600">WorkRoot</span>
                     <span class="mono" style="font-size:12px;color:@(string.IsNullOrEmpty(Cfg["Grading:WorkRoot"]) ? "var(--tx-faint)" : "var(--tx-1)")">
                         @(string.IsNullOrEmpty(Cfg["Grading:WorkRoot"]) ? "тимчасова папка" : Cfg["Grading:WorkRoot"])
                     </span>
                 </div>
+                @* Backup row *@
+                <div style="display:flex;align-items:center;padding:10px 0;gap:10px">
+                    <span style="width:140px;font-size:12.5px;color:var(--tx-3);font-weight:600">Бекап БД</span>
+                    <span style="font-size:12px;color:var(--tx-3);flex:1">автоматично щодня · вручну:</span>
+                    <button class="btn btn-ghost btn-sm" @onclick="BackupNow" disabled="@_backingUp">
+                        <Icon Name="upload" Size="13" />@(_backingUp ? "Створення…" : "Створити зараз")
+                    </button>
+                </div>
+                @if (!string.IsNullOrEmpty(_backupMsg))
+                {
+                    @Feedback(_backupMsg)
+                }
             </div>
         }
         else
@@ -238,6 +250,66 @@
         }
     </section>
 
+    @* ── Викладачі курсу ───────────────────────────────────────────────────── *@
+    <section class="glass" style="padding:0;overflow:hidden;margin-top:20px">
+        <div style="display:flex;align-items:center;gap:11px;padding:18px 26px;border-bottom:1px solid var(--line)">
+            <Icon Name="users" Size="18" Style="color:var(--acc)" />
+            <h3 style="margin:0;font-size:15px;font-weight:720">Викладачі курсу</h3>
+            <button class="btn btn-ghost btn-sm" style="margin-left:auto" @onclick="@(() => { _teacherAddOpen = !_teacherAddOpen; _teacherMsg = ""; })">
+                <Icon Name="@(_teacherAddOpen ? "x" : "profile")" Size="14" />
+                @(_teacherAddOpen ? "Скасувати" : "Додати викладача")
+            </button>
+        </div>
+
+        <div style="padding:8px 26px 4px">
+            @foreach (var t in _teachers)
+            {
+                <div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)">
+                    <div style="width:36px;height:36px;border-radius:10px;flex:none;display:grid;place-items:center;font-weight:700;font-size:13px;background:linear-gradient(150deg, rgba(118,199,173,0.3), rgba(118,199,173,0.12));border:1px solid var(--glass-border-hover);color:var(--acc-bright)">@t.Initials</div>
+                    <div style="flex:1;min-width:0">
+                        <div style="font-size:13.5px;font-weight:640">@t.FirstName @t.LastName</div>
+                        <div class="mono" style="font-size:11.5px;color:var(--tx-3)">@(string.IsNullOrEmpty(t.Email) ? "—" : t.Email)</div>
+                    </div>
+                    @if (t.UserLink != null)
+                    {
+                        <span class="badge badge-green" style="height:22px"><span class="dot"></span>активний</span>
+                    }
+                    else
+                    {
+                        <span class="badge badge-grey" style="height:22px"><span class="dot"></span>без акаунта</span>
+                    }
+                </div>
+            }
+        </div>
+
+        @if (_teacherAddOpen)
+        {
+            <div style="padding:16px 26px 20px;display:flex;flex-direction:column;gap:14px;border-top:1px solid var(--line)">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                    <div class="field"><label>Ім'я</label><input class="input" @bind="_tFirst" placeholder="Іван" /></div>
+                    <div class="field"><label>Прізвище</label><input class="input" @bind="_tLast" placeholder="Петренко" /></div>
+                </div>
+                <div class="field">
+                    <label>Email <span style="color:var(--tx-faint);font-weight:400">(логін для входу)</span></label>
+                    <input class="input" type="email" @bind="_tEmail" placeholder="teacher2@example.com" />
+                </div>
+                @if (!string.IsNullOrEmpty(_teacherTempPw))
+                {
+                    <div style="padding:12px 16px;border-radius:11px;background:rgba(12,20,17,0.7);border:1px solid var(--glass-border-hover)">
+                        <div style="font-size:12px;color:var(--tx-3);margin-bottom:6px">Акаунт створено. Тимчасовий пароль (передайте колезі):</div>
+                        <code class="mono" style="font-size:16px;font-weight:700;color:var(--acc-bright);letter-spacing:0.04em">@_teacherTempPw</code>
+                    </div>
+                }
+                @Feedback(_teacherMsg)
+                <div style="display:flex;justify-content:flex-end">
+                    <button class="btn btn-primary btn-sm" @onclick="AddTeacher" disabled="@_savingTeacher">
+                        <Icon Name="check" Size="15" />@(_savingTeacher ? "Створення…" : "Створити акаунт")
+                    </button>
+                </div>
+            </div>
+        }
+    </section>
+
 </div>
 </div>
 
@@ -273,6 +345,77 @@
     private bool   _savingAttempts;
     private string _attemptsMsg = "";
 
+    // ── Manual DB backup ──────────────────────────────────────────────────────
+    private bool _backingUp;
+    private string _backupMsg = "";
+
+    private async Task BackupNow()
+    {
+        _backingUp = true; StateHasChanged();
+        try
+        {
+            var path = await BackupHelper.BackupNowAsync(Db, Env, Cfg);
+            _backupMsg = $"ok:Бекап створено: {Path.GetFileName(path)}";
+        }
+        catch (Exception ex)
+        {
+            _backupMsg = $"err:{ex.Message}";
+        }
+        _backingUp = false; StateHasChanged();
+        await Task.Delay(3000); _backupMsg = ""; StateHasChanged();
+    }
+
+    // ── Teachers management ───────────────────────────────────────────────────
+    private List<TeacherRecord> _teachers = [];
+    private bool _teacherAddOpen, _savingTeacher;
+    private string _tFirst = "", _tLast = "", _tEmail = "", _teacherMsg = "", _teacherTempPw = "";
+
+    private async Task LoadTeachersAsync() =>
+        _teachers = await Db.Teachers.AsNoTracking().Include(t => t.UserLink)
+                                     .OrderBy(t => t.Id).ToListAsync();
+
+    private async Task AddTeacher()
+    {
+        _teacherMsg = ""; _teacherTempPw = "";
+        var email = _tEmail.Trim();
+        if (string.IsNullOrWhiteSpace(_tFirst) || string.IsNullOrWhiteSpace(_tLast))
+        { _teacherMsg = "err:Вкажіть ім'я та прізвище."; return; }
+        if (!email.Contains('@'))
+        { _teacherMsg = "err:Вкажіть коректний email."; return; }
+        if (await UserManager.FindByEmailAsync(email) != null)
+        { _teacherMsg = "err:Користувач з таким email вже існує."; return; }
+
+        _savingTeacher = true; StateHasChanged();
+        try
+        {
+            var temp = "tc-" + Guid.NewGuid().ToString("N")[..8];
+            var user = new AppUser
+            {
+                UserName = email, Email = email, EmailConfirmed = true,
+                FirstName = _tFirst.Trim(), LastName = _tLast.Trim(),
+            };
+            var created = await UserManager.CreateAsync(user, temp);
+            if (!created.Succeeded)
+            {
+                _teacherMsg = "err:" + string.Join(" ", created.Errors.Select(e => e.Description));
+            }
+            else
+            {
+                await UserManager.AddToRoleAsync(user, "teacher");
+                await Auth.LinkTeacherAsync(user);
+                _teacherTempPw = temp;
+                _teacherMsg = "ok:Викладача додано";
+                _tFirst = _tLast = _tEmail = "";
+                await LoadTeachersAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _teacherMsg = $"err:{ex.Message}";
+        }
+        _savingTeacher = false; StateHasChanged();
+    }
+
     protected override async Task OnInitializedAsync()
     {
         _firstName = App.Teacher.FirstName;
@@ -294,6 +437,7 @@
         }
         LoadSettingsFields();
         await LoadLabAttemptsAsync();
+        await LoadTeachersAsync();
     }
 
     private async Task LoadLabAttemptsAsync()
@@ -329,9 +473,8 @@
             {
                 await Db.Labs.Where(l => l.Id == row.LabId)
                     .ExecuteUpdateAsync(l => l.SetProperty(x => x.AttemptsMax, row.Value));
-                // propagate to Locked submissions only (active grading not affected)
                 await Db.Submissions
-                    .Where(s => s.LabDefId == row.LabId && s.Status == (int)LabStatus.Locked)
+                    .Where(s => s.LabDefId == row.LabId)
                     .ExecuteUpdateAsync(s => s.SetProperty(x => x.AttemptsMax, row.Value));
                 row.Original = row.Value;
             }
@@ -419,16 +562,42 @@
         var link  = await Db.UserLinks.AsNoTracking().FirstOrDefaultAsync(l => l.UserId == sub);
         if (link?.TeacherId is int teacherId)
         {
+            // Email is the login — keep the Identity account and the link in sync
+            var newEmail = _email.Trim();
+            var user = await UserManager.FindByIdAsync(sub);
+            if (user != null && !string.IsNullOrEmpty(newEmail)
+                && !string.Equals(user.Email, newEmail, StringComparison.OrdinalIgnoreCase))
+            {
+                string? err = null;
+                if (!newEmail.Contains('@'))
+                    err = "err:Некоректний email";
+                else if (await UserManager.FindByEmailAsync(newEmail) is { } taken && taken.Id != user.Id)
+                    err = "err:Цей email вже використовується іншим акаунтом";
+
+                if (err != null)
+                {
+                    _profileMsg = err; _savingProfile = false; StateHasChanged();
+                    await Task.Delay(2500); _profileMsg = ""; StateHasChanged();
+                    return;
+                }
+
+                user.Email = newEmail;
+                user.UserName = newEmail;
+                await UserManager.UpdateAsync(user);
+                await Db.UserLinks.Where(l => l.UserId == sub)
+                    .ExecuteUpdateAsync(l => l.SetProperty(x => x.Email, newEmail));
+            }
+
             var initials = (_firstName.Length > 0 ? _firstName[0].ToString() : "")
                          + (_lastName.Length  > 0 ? _lastName[0].ToString()  : "");
             await Db.Teachers.Where(t => t.Id == teacherId).ExecuteUpdateAsync(t => t
                 .SetProperty(x => x.FirstName, _firstName.Trim())
                 .SetProperty(x => x.LastName,  _lastName.Trim())
                 .SetProperty(x => x.Initials,  initials)
-                .SetProperty(x => x.Email,     _email.Trim())
+                .SetProperty(x => x.Email,     newEmail)
                 .SetProperty(x => x.Title,     _posada.Trim())
                 .SetProperty(x => x.Course,    _course.Trim()));
-            _emailDisplay = _email.Trim();
+            _emailDisplay = newEmail;
             await App.PreloadAsync(state.User);
             _profileMsg = "ok:Профіль оновлено";
         }

@@ -3,6 +3,7 @@
 @inject IDataService Data
 @inject IDialogService Dialog
 @inject AppDbContext Db
+@inject UserManager<AppUser> UserManager
 
 <TopBar Title="Студенти" Sub="Прогрес та управління студентами курсу">
     <button class="btn btn-primary btn-sm" @onclick="AddStudent"><Icon Name="profile" Size="15" />Додати студента</button>
@@ -64,6 +65,7 @@
 
                 <div style="display:flex;gap:6px;margin-top:14px">
                     <button class="btn btn-ghost btn-block btn-sm" @onclick="@(() => Nav.NavigateTo("/teacher/journal"))"><Icon Name="grades" Size="14" />Журнал</button>
+                    <button class="btn btn-ghost btn-sm" title="Скинути пароль" @onclick="@(() => ResetPassword(s.Id))"><Icon Name="lock" Size="14" /></button>
                     <button class="btn btn-ghost btn-sm" @onclick="@(() => EditStudent(s.Id))"><Icon Name="settings" Size="14" /></button>
                     <button class="btn btn-ghost btn-sm" style="color:var(--st-red)" @onclick="@(() => DeleteStudent(s.Id))"><Icon Name="x" Size="14" /></button>
                 </div>
@@ -71,6 +73,35 @@
         }
     </div>
 </div>
+
+@* password-reset result overlay *@
+@if (_resetOpen)
+{
+    <div @onclick="@(() => _resetOpen = false)" style="position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:24px;background:rgba(6,12,10,0.72);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)">
+        <div @onclick:stopPropagation class="glass" style="width:100%;max-width:420px;padding:26px;animation:popIn .3s cubic-bezier(.22,1,.36,1) both;box-shadow:var(--shadow-pop)">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+                <Icon Name="lock" Size="18" Style="color:var(--acc)" />
+                <h3 style="margin:0;font-size:16px;font-weight:720">Скидання пароля</h3>
+            </div>
+            @if (_resetError != "")
+            {
+                <div style="padding:10px 14px;background:rgba(255,80,80,0.08);border:1px solid rgba(255,80,80,0.25);border-radius:10px;color:var(--st-red);font-size:13px;line-height:1.5">@_resetError</div>
+            }
+            else
+            {
+                <p style="margin:0 0 14px;font-size:13.5px;color:var(--tx-2);line-height:1.5">
+                    Пароль для <b style="color:var(--tx-1)">@_resetName</b> скинуто. Передайте студенту тимчасовий пароль — він зможе змінити його у профілі:
+                </p>
+                <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-radius:11px;background:rgba(12,20,17,0.7);border:1px solid var(--glass-border-hover)">
+                    <code class="mono" style="flex:1;font-size:17px;font-weight:700;color:var(--acc-bright);letter-spacing:0.04em">@_resetPassword</code>
+                </div>
+            }
+            <div style="display:flex;justify-content:flex-end;margin-top:18px">
+                <button class="btn btn-primary btn-sm" @onclick="@(() => _resetOpen = false)">Готово</button>
+            </div>
+        </div>
+    </div>
+}
 
 @code {
     private string _group = "Усі групи", _query = "";
@@ -116,5 +147,43 @@
         Db.Students.Remove(rec);
         await Db.SaveChangesAsync();
         await Reload();
+    }
+
+    // ── Password reset ────────────────────────────────────────────────────────
+    private bool _resetOpen;
+    private string _resetName = "", _resetPassword = "", _resetError = "";
+
+    private async Task ResetPassword(int studentId)
+    {
+        _resetName = _resetPassword = _resetError = "";
+
+        var rec  = await Db.Students.FindAsync(studentId);
+        var link = await Db.UserLinks.AsNoTracking().FirstOrDefaultAsync(l => l.StudentId == studentId);
+        var user = link is null ? null : await UserManager.FindByIdAsync(link.UserId);
+
+        if (rec is null || user is null)
+        {
+            _resetError = "Студент ще не має акаунта в системі (не реєструвався). Скидати нічого.";
+            _resetOpen = true;
+            return;
+        }
+
+        // 10 lowercase+digits chars — easy to dictate, satisfies the min-length policy
+        var temp = "st-" + Guid.NewGuid().ToString("N")[..8];
+
+        if (await UserManager.HasPasswordAsync(user))
+            await UserManager.RemovePasswordAsync(user);
+        var result = await UserManager.AddPasswordAsync(user, temp);
+
+        if (!result.Succeeded)
+        {
+            _resetError = string.Join(" ", result.Errors.Select(e => e.Description));
+        }
+        else
+        {
+            _resetName = $"{rec.LastName} {rec.FirstName} ({user.Email})";
+            _resetPassword = temp;
+        }
+        _resetOpen = true;
     }
 }

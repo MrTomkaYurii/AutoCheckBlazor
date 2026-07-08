@@ -114,6 +114,12 @@ public class Submission
     public int? Attempt2Score { get; set; }
     public int? Attempt3Score { get; set; }
 
+    // Plagiarism gate: submission matched another student's checked work
+    public bool PlagiarismFlag { get; set; }
+    public string? PlagiarismNote { get; set; }
+    /// <summary>Teacher explicitly allowed resubmission despite the match.</summary>
+    public bool PlagiarismApproved { get; set; }
+
     public List<TaskResult> TaskResults { get; set; } = [];
     public List<LabComment> Comments { get; set; } = [];
 }
@@ -125,6 +131,7 @@ public class TaskResult
     public Submission Submission { get; set; } = null!;
     public int LabTaskId { get; set; }
     public LabTask LabTask { get; set; } = null!;
+    public int AttemptNo { get; set; } = 1;   // 1..AttemptsMax — results are kept for every attempt
     public string State { get; set; } = "fail";
     public int Score { get; set; }
     public string? Feedback { get; set; }
@@ -168,6 +175,20 @@ public class LabComment
     public string AuthorName { get; set; } = "";
     public string Text { get; set; } = "";
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+// ── Grade audit ───────────────────────────────────────────────────────────────
+
+/// <summary>Who changed what in grading — for disputed-grade situations.</summary>
+public class GradeAudit
+{
+    public int Id { get; set; }
+    public int SubmissionId { get; set; }
+    public string Actor { get; set; } = "";      // teacher display name
+    public string Action { get; set; } = "";     // "grade" | "reject" | "extra-attempt"
+    public string? OldValue { get; set; }
+    public string? NewValue { get; set; }
+    public DateTime At { get; set; } = DateTime.UtcNow;
 }
 
 // ── Notifications ─────────────────────────────────────────────────────────────

@@ -3,6 +3,7 @@ using AutoCheck.Components;
 using AutoCheck.Data;
 using AutoCheck.Services;
 using Microsoft.AspNetCore.Authentication.Google;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
@@ -33,6 +34,11 @@ builder.Services.AddIdentity<AppUser, IdentityRole>(opt =>
 .AddEntityFrameworkStores<AppDbContext>()
 .AddDefaultTokenProviders();
 
+// Validate the security stamp on every request: cookies that survive a DB reset
+// (user no longer exists) get rejected and signed out instead of hanging the UI.
+builder.Services.Configure<SecurityStampValidatorOptions>(o =>
+    o.ValidationInterval = TimeSpan.Zero);
+
 builder.Services.ConfigureApplicationCookie(opt =>
 {
     opt.Cookie.HttpOnly = true;
@@ -57,6 +63,12 @@ if (!string.IsNullOrEmpty(googleCfg["ClientId"]))
 builder.Services.AddAuthorization();
 builder.Services.AddHttpContextAccessor();
 
+// Data Protection with a fixed key folder — encrypted GitHub tokens survive restarts
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(
+        Path.Combine(builder.Environment.ContentRootPath, "dp-keys")))
+    .SetApplicationName("AutoCheck");
+
 // ── App services ──────────────────────────────────────────────────────────────
 builder.Services.AddScoped<DatabaseSeeder>();
 builder.Services.AddScoped<IDataService,           DbDataService>();
@@ -66,6 +78,12 @@ builder.Services.AddScoped<IGradingService,        GradingService>();
 builder.Services.AddScoped<INotificationService,   NotificationService>();
 builder.Services.AddScoped<ICommentService,        CommentService>();
 builder.Services.AddSingleton<GeminiQuotaService>();
+builder.Services.AddSingleton<GradingQueueService>();
+builder.Services.AddSingleton<EmailService>();
+builder.Services.AddSingleton<TokenProtector>();
+builder.Services.AddScoped<PlagiarismService>();
+builder.Services.AddHostedService<DeadlineReminderService>();
+builder.Services.AddHostedService<BackupService>();
 builder.Services.AddSingleton<TeacherNotificationService>();
 builder.Services.AddScoped<AppState>();
 builder.Services.AddScoped<GitHubService>();

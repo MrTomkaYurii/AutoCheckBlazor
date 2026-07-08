@@ -69,7 +69,58 @@ public class LabDetail
     public string Intro = "";
     public List<TaskItem> Tasks = new();
 
+    /// <summary>Attempts that have stored grading results, with their scores.</summary>
+    public List<AttemptInfo> Attempts = new();
+    /// <summary>Which attempt's results are loaded into Tasks (0 = none yet).</summary>
+    public int SelectedAttempt;
+
+    // Plagiarism gate state
+    public bool PlagFlag;
+    public string? PlagNote;
+    public bool PlagApproved;
+
     public bool IsOverdue => DeadlineAt.HasValue && DateTime.UtcNow > DeadlineAt.Value;
+}
+
+public class AttemptInfo
+{
+    public int No;
+    public int? Score;
+    public bool IsBest;   // the attempt AutoScore was taken from
+}
+
+/// <summary>Single source of truth for the difficulty-weighted attempt score.</summary>
+public static class Scoring
+{
+    public static int Weighted(IReadOnlyCollection<(int Score, int Difficulty)> items)
+    {
+        if (items.Count == 0) return 0;
+        double totalWeight = items.Sum(i => (double)i.Difficulty);
+        if (totalWeight <= 0)   // difficulty not set — fall back to a plain average
+            return (int)Math.Round(items.Average(i => (double)i.Score));
+        return (int)Math.Round(items.Sum(i => i.Score * (double)i.Difficulty) / totalWeight);
+    }
+}
+
+/// <summary>Parses the Gemini feedback JSON ({done, issues, analysis}) stored in TaskResult.Feedback.</summary>
+public static class FeedbackJson
+{
+    public static (string[] Done, string[] Issues, string Analysis) Parse(string? raw)
+    {
+        if (string.IsNullOrEmpty(raw)) return ([], [], "");
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(raw);
+            var r = doc.RootElement;
+            static string[] Arr(System.Text.Json.JsonElement root, string key) =>
+                root.TryGetProperty(key, out var el) && el.ValueKind == System.Text.Json.JsonValueKind.Array
+                    ? el.EnumerateArray().Select(x => x.GetString() ?? "").Where(s => s.Length > 0).ToArray()
+                    : [];
+            var analysis = r.TryGetProperty("analysis", out var a) ? a.GetString() ?? "" : "";
+            return (Arr(r, "done"), Arr(r, "issues"), analysis);
+        }
+        catch { return ([], [], raw); }   // legacy plain-text feedback
+    }
 }
 
 public class TaskItem

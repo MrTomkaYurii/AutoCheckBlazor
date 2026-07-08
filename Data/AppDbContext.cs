@@ -16,6 +16,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<LabComment> Comments => Set<LabComment>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<GroupRecord> Groups => Set<GroupRecord>();
+    public DbSet<GradeAudit> GradeAudits => Set<GradeAudit>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {

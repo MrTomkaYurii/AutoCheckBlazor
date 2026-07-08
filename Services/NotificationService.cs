@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AutoCheck.Services;
 
-public class NotificationService(AppDbContext db) : INotificationService
+public class NotificationService(AppDbContext db, EmailService email) : INotificationService
 {
     public async Task SendAsync(int studentId, string title, string body, string type = "info")
     {
@@ -13,6 +13,15 @@ public class NotificationService(AppDbContext db) : INotificationService
             Type = type, IsRead = false, CreatedAt = DateTime.UtcNow,
         });
         await db.SaveChangesAsync();
+
+        // Duplicate to email when SMTP is configured (fire-and-forget, never blocks)
+        if (email.Enabled)
+        {
+            var to = await db.Students.Where(s => s.Id == studentId)
+                                      .Select(s => s.Email).FirstOrDefaultAsync();
+            if (!string.IsNullOrEmpty(to))
+                _ = email.SendAsync(to, $"AutoCheck · {title}", body);
+        }
     }
 
     public Task<List<Notification>> GetUnreadAsync(int studentId) =>

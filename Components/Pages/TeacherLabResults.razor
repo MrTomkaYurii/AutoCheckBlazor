@@ -1,0 +1,354 @@
+@page "/teacher/results/{StudentId:int}/{LabId:int}"
+@inject NavigationManager Nav
+@inject IDataService Data
+@inject IDialogService Dialog
+@inject AppState App
+@inject AppDbContext Db
+@inject INotificationService Notif
+
+<TopBar Title="@($"Lab{LabId:D2} · Результати автоперевірки")"
+        Crumbs="@(new[] { "Огляд", $"Lab{LabId:D2}" })" />
+
+<div class="screen-anim" style="padding:0 34px 40px;position:relative;z-index:1">
+
+    @* header: student + score + actions *@
+    <section class="glass" style="padding:20px 24px;margin-bottom:18px;display:flex;align-items:center;gap:18px;flex-wrap:wrap">
+        <div style="width:46px;height:46px;border-radius:13px;flex:none;display:grid;place-items:center;font-weight:700;font-size:15px;background:linear-gradient(150deg, rgba(118,199,173,0.3), rgba(118,199,173,0.12));border:1px solid var(--glass-border-hover);color:var(--acc-bright)">@_initials</div>
+        <div style="flex:1;min-width:220px">
+            <h2 style="margin:0;font-size:19px;font-weight:740;letter-spacing:-0.02em">@_name</h2>
+            <div style="display:flex;gap:9px;margin-top:5px;align-items:center;font-size:12.5px;color:var(--tx-3);flex-wrap:wrap">
+                <span class="badge badge-grey" style="height:22px"><span class="dot"></span>@_group</span>
+                <span class="mono">Lab@(LabId.ToString("D2"))</span>
+                <span>· @LabInfo.Title</span>
+                <span style="opacity:0.4">·</span>
+                <span>Спроб використано: @LabInfo.AttemptsUsed з @LabInfo.AttemptsMax</span>
+            </div>
+        </div>
+        <div style="text-align:right;flex:none">
+            <div style="font-size:11px;color:var(--tx-3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Авто-оцінка</div>
+            <div class="mono tnum" style="font-size:28px;font-weight:780;line-height:1;color:@(LabInfo.Auto >= 85 ? "var(--st-green)" : LabInfo.Auto >= 60 ? "var(--st-yellow)" : "var(--st-red)")">@LabInfo.Auto<span style="font-size:14px;opacity:0.5">/100</span></div>
+        </div>
+        <div style="display:flex;gap:8px;flex:none">
+            <button class="btn btn-ghost btn-sm" @onclick="@(() => Nav.NavigateTo("/teacher"))"><Icon Name="arrowR" Size="15" Style="transform:rotate(180deg)" />Назад</button>
+            <button class="btn btn-primary btn-sm" @onclick="OpenGrade"><Icon Name="check" Size="15" />Оцінити</button>
+        </div>
+    </section>
+
+    @* plagiarism flag *@
+    @if (LabInfo.PlagFlag)
+    {
+        <section class="glass" style="padding:16px 20px;margin-bottom:18px;border-color:rgba(232,128,107,0.4);display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+            <span style="width:36px;height:36px;border-radius:10px;flex:none;display:grid;place-items:center;background:rgba(232,128,107,0.14);border:1px solid rgba(232,128,107,0.3);color:var(--st-red)">
+                <Icon Name="warn" Size="18" Stroke="2.2" />
+            </span>
+            <div style="flex:1;min-width:240px">
+                <div style="font-size:14px;font-weight:720;color:var(--st-red)">Виявлено плагіат — здачу відхилено автоматично</div>
+                <div style="font-size:12.5px;color:var(--tx-2);margin-top:3px">@LabInfo.PlagNote</div>
+            </div>
+            @if (LabInfo.PlagApproved)
+            {
+                <span class="badge badge-yellow" style="height:24px"><span class="dot"></span>дозволено повторну здачу</span>
+            }
+            else
+            {
+                <button class="btn btn-outline btn-sm" style="flex:none" @onclick="ApprovePlagiarism" disabled="@_approving">
+                    <Icon Name="check" Size="14" />@(_approving ? "Збереження…" : "Дозволити здачу попри збіг")
+                </button>
+            }
+        </section>
+    }
+
+    @* attempt switcher *@
+    @if (LabInfo.Attempts.Count > 1)
+    {
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap">
+            <span style="font-size:12px;font-weight:700;color:var(--tx-3);text-transform:uppercase;letter-spacing:0.05em">Результати спроби</span>
+            @foreach (var a in LabInfo.Attempts)
+            {
+                var on = a.No == LabInfo.SelectedAttempt;
+                <button @onclick="@(() => SelectAttempt(a.No))"
+                        style="display:flex;align-items:center;gap:8px;padding:7px 14px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:650;transition:all .18s;border:1px solid @(on ? "var(--glass-border-hover)" : "var(--line)");background:@(on ? "var(--acc-dim)" : "rgba(255,255,255,0.025)");color:@(on ? "var(--acc-bright)" : "var(--tx-3)")">
+                    Спроба @a.No
+                    <span class="mono tnum" style="font-size:12.5px;font-weight:750;color:@(a.Score is null ? "var(--tx-faint)" : on ? "var(--acc-bright)" : "var(--tx-2)")">@(a.Score?.ToString() ?? "—")</span>
+                    @if (a.IsBest)
+                    {
+                        <span title="Найкраща спроба — зарахована як авто-оцінка" style="color:var(--st-yellow);display:grid;place-items:center"><Icon Name="trophy" Size="12" /></span>
+                    }
+                </button>
+            }
+        </div>
+    }
+
+    @* master / detail *@
+    <div style="display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start">
+
+        @* LEFT — task list *@
+        <div style="display:flex;flex-direction:column;gap:12px;position:sticky;top:90px">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:0 4px">
+                <span style="font-size:12.5px;font-weight:700;color:var(--tx-2);text-transform:uppercase;letter-spacing:0.05em">Завдання</span>
+                <span class="mono" style="font-size:12px;color:var(--tx-3)">@LabInfo.Tasks.Count</span>
+            </div>
+            @foreach (var t in LabInfo.Tasks)
+            {
+                var v = t.View();
+                var on = t.Id == _activeId;
+                <button @onclick="@(() => { _activeId = t.Id; _diffOpen = false; })" class="tasktab glass"
+                        style="text-align:left;padding:14px 15px;cursor:pointer;border:1px solid;border-color:@(on ? v.Tone : "var(--glass-border)");background:@(on ? $"linear-gradient(180deg, {v.Tone}14, var(--glass-bg))" : "var(--glass-bg)");transition:all .18s;position:relative;display:block;width:100%">
+                    @if (on)
+                    {
+                        <span style="position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:3px;background:@v.Tone;box-shadow:0 0 10px @v.Tone"></span>
+                    }
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:7px">
+                        <span style="width:24px;height:24px;border-radius:7px;flex:none;display:grid;place-items:center;background:@(v.Tone)22;color:@v.Tone;border:1px solid @(v.Tone)44"><Icon Name="@v.Icon" Size="14" Stroke="2.2" /></span>
+                        <span class="mono" style="font-size:12px;color:var(--tx-3);font-weight:600">task@(t.N)</span>
+                        <span class="mono tnum" style="margin-left:auto;font-size:13px;font-weight:700;color:@v.Tone">@t.Score</span>
+                    </div>
+                    <div style="font-size:14px;font-weight:640;letter-spacing:-0.01em;margin-bottom:8px;color:var(--tx-1)">@t.Title</div>
+                    <Progress Value="t.Score" Tone="@(t.State == "pass" ? "" : t.ColorClass)" />
+                </button>
+            }
+        </div>
+
+        @* RIGHT — feedback / analysis / diff (read-only) *@
+        <div @key="_activeId" class="screen-anim" style="display:flex;flex-direction:column;gap:16px;min-width:0">
+            @{
+                var task = LabInfo.Tasks.FirstOrDefault(x => x.Id == _activeId)
+                        ?? LabInfo.Tasks.FirstOrDefault();
+            }
+            @if (task is null)
+            {
+                <div class="glass" style="padding:40px;text-align:center;color:var(--tx-3)">Результатів для цієї спроби немає</div>
+            }
+            else
+            {
+            var tv = task.View();
+
+            <section class="glass" style="padding:22px 24px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:12px">
+                    <div style="display:flex;align-items:center;gap:12px">
+                        <span style="width:32px;height:32px;border-radius:9px;display:grid;place-items:center;background:@(tv.Tone)22;color:@tv.Tone;border:1px solid @(tv.Tone)44"><Icon Name="@tv.Icon" Size="18" Stroke="2.2" /></span>
+                        <div>
+                            <div style="display:flex;align-items:center;gap:9px">
+                                <span class="mono" style="font-size:12.5px;color:var(--tx-3)">task@(task.N)</span>
+                                <span class="badge badge-@task.ColorClass" style="height:22px"><span class="dot"></span>@tv.Label</span>
+                            </div>
+                            <h3 style="margin:4px 0 0;font-size:18px;font-weight:720;letter-spacing:-0.02em">@task.Title</h3>
+                        </div>
+                    </div>
+                    <ScorePill Value="task.Score" Size="lg" />
+                </div>
+                <div class="md" style="font-size:13.5px;line-height:1.7;color:var(--tx-2)"><MarkdownText Text="@task.Brief" /></div>
+            </section>
+
+            var (fbDone, fbIssues, fbAnalysis) = ParseFeedback(task.Feedback);
+            <section class="glass" style="padding:20px 24px;border-color:@(tv.Tone)33">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:9px">
+                        <Icon Name="spark" Size="17" Style="@($"color:{tv.Tone}")" />
+                        <h4 style="margin:0;font-size:14px;font-weight:700;letter-spacing:-0.01em">Фідбек перевірки</h4>
+                    </div>
+                    @if (fbDone.Length + fbIssues.Length > 0)
+                    {
+                        <span style="font-size:12px;color:var(--tx-3)">
+                            <span style="color:var(--st-green)">@fbDone.Length виконано</span>
+                            @if (fbIssues.Length > 0) { <span> · <span style="color:var(--st-red)">@fbIssues.Length з помилкою</span></span> }
+                            <span> · оцінка = @fbDone.Length/@(fbDone.Length + fbIssues.Length) × 100 = <b style="color:@tv.Tone">@task.Score</b></span>
+                        </span>
+                    }
+                </div>
+                @if (fbDone.Length > 0 || fbIssues.Length > 0)
+                {
+                    @if (fbDone.Length > 0)
+                    {
+                        <div style="display:flex;flex-direction:column;gap:6px;@(fbIssues.Length > 0 ? "margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--line)" : "")">
+                            @foreach (var d in fbDone)
+                            {
+                                <div style="display:flex;gap:10px;align-items:flex-start">
+                                    <span style="color:var(--st-green);flex:none;font-size:15px;line-height:1.4">✓</span>
+                                    <span style="font-size:13.5px;line-height:1.6;color:var(--tx-1)">@d</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                    @if (fbIssues.Length > 0)
+                    {
+                        <div style="display:flex;flex-direction:column;gap:6px">
+                            @foreach (var issue in fbIssues)
+                            {
+                                <div style="display:flex;gap:10px;align-items:flex-start">
+                                    <span style="color:var(--st-red);flex:none;font-size:15px;line-height:1.4">✗</span>
+                                    <span style="font-size:13.5px;line-height:1.6;color:var(--tx-1)">@issue</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+                else
+                {
+                    <p style="margin:0;font-size:13.5px;line-height:1.7;color:var(--tx-1)">@fbAnalysis</p>
+                }
+            </section>
+
+            <section class="glass" style="padding:0;overflow:hidden">
+                <div style="display:flex;align-items:center;gap:10px;padding:14px 20px;border-bottom:1px solid var(--line)">
+                    <Icon Name="doc" Size="16" Style="color:var(--acc)" />
+                    <h4 style="margin:0;font-size:14px;font-weight:700">Аналіз виконаного завдання</h4>
+                </div>
+                <div style="padding:16px 20px">
+                    @if (!string.IsNullOrEmpty(fbAnalysis))
+                    {
+                        <p style="margin:0;font-size:13.5px;line-height:1.7;color:var(--tx-1)">@fbAnalysis</p>
+                    }
+                    else
+                    {
+                        <p style="margin:0;font-size:13.5px;color:var(--tx-3)">Аналіз недоступний.</p>
+                    }
+                </div>
+            </section>
+
+            @if (task.Diff.Any(d => d.Type is "add" or "del"))
+            {
+                var adds = task.Diff.Count(d => d.Type == "add");
+                var dels = task.Diff.Count(d => d.Type == "del");
+                <section class="glass" style="padding:0;overflow:hidden">
+                    <button @onclick="@(() => _diffOpen = !_diffOpen)"
+                            style="width:100%;display:flex;align-items:center;gap:10px;padding:14px 20px;background:transparent;border:none;cursor:pointer;color:var(--tx-1)">
+                        <Icon Name="braces" Size="16" Style="color:var(--acc)" />
+                        <span style="font-size:14px;font-weight:700">Diff коміту</span>
+                        <span class="mono" style="font-size:12px;color:var(--st-green);background:rgba(118,199,173,0.1);padding:2px 8px;border-radius:5px">+@adds</span>
+                        <span class="mono" style="font-size:12px;color:var(--st-red);background:rgba(232,128,107,0.1);padding:2px 8px;border-radius:5px">-@dels</span>
+                        <span style="margin-left:auto;font-size:12px;color:var(--tx-3)">@(_diffOpen ? "сховати ↑" : "показати ↓")</span>
+                    </button>
+                    @if (_diffOpen)
+                    {
+                        <div style="border-top:1px solid var(--line);overflow-x:auto;max-height:600px;overflow-y:auto">
+                            <table style="border-collapse:collapse;width:100%">
+                                @foreach (var dl in task.Diff)
+                                {
+                                    string bg, fg, pfx, lnStr;
+                                    if (dl.Type == "add")
+                                    { bg = "rgba(118,199,173,0.10)"; fg = "var(--st-green)"; pfx = "+"; lnStr = dl.N2?.ToString() ?? ""; }
+                                    else if (dl.Type == "del")
+                                    { bg = "rgba(232,128,107,0.10)"; fg = "var(--st-red)"; pfx = "-"; lnStr = dl.N1?.ToString() ?? ""; }
+                                    else if (dl.Type == "hdr")
+                                    { bg = "rgba(255,255,255,0.035)"; fg = "var(--tx-3)"; pfx = ""; lnStr = ""; }
+                                    else
+                                    { bg = "transparent"; fg = "var(--tx-2)"; pfx = " "; lnStr = (dl.N2 ?? dl.N1)?.ToString() ?? ""; }
+                                    <tr style="background:@bg">
+                                        <td style="padding:1px 10px 1px 16px;font-family:var(--mono);font-size:11px;color:var(--tx-faint);text-align:right;user-select:none;white-space:nowrap;border-right:1px solid var(--line);min-width:38px">@lnStr</td>
+                                        <td style="padding:1px 8px;font-family:var(--mono);font-size:11.5px;color:@(dl.Type is "add" or "del" ? fg : "var(--tx-faint)");user-select:none;width:16px;text-align:center">@pfx</td>
+                                        <td style="padding:1px 20px 1px 0;font-family:var(--mono);font-size:12px;color:@fg;white-space:pre">@dl.Text</td>
+                                    </tr>
+                                }
+                            </table>
+                        </div>
+                    }
+                </section>
+            }
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int StudentId { get; set; }
+    [Parameter] public int LabId { get; set; }
+    [CascadingParameter] private Task<AuthenticationState> AuthStateTask { get; set; } = default!;
+
+    private LabDetail LabInfo = new();
+    private string _activeId = "task1";
+    private string _name = "", _initials = "", _group = "";
+    private bool _diffOpen;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthStateTask;
+        if (!App.IsTeacher(state.User))
+        {
+            Nav.NavigateTo("/student", replace: true);
+            return;
+        }
+
+        var student = await Db.Students.FindAsync(StudentId);
+        if (student is not null)
+        {
+            _name     = student.LastName + " " + student.FirstName;
+            _initials = student.Initials;
+            _group    = student.Group;
+        }
+        await LoadDetailAsync(null);
+    }
+
+    private async Task LoadDetailAsync(int? attemptNo)
+    {
+        // Teacher sees the best attempt by default — that's where AutoScore came from
+        var detail = await Data.GetLabDetailAsync(LabId, StudentId, attemptNo);
+        if (detail is null) return;
+
+        if (attemptNo is null && detail.Attempts.Count > 0)
+        {
+            var best = detail.Attempts.First(a => a.IsBest).No;
+            if (best != detail.SelectedAttempt)
+                detail = await Data.GetLabDetailAsync(LabId, StudentId, best) ?? detail;
+        }
+
+        LabInfo = detail;
+        if (LabInfo.Tasks.All(t => t.Id != _activeId))
+            _activeId = "task" + (LabInfo.Tasks.FirstOrDefault()?.N ?? 1);
+    }
+
+    private async Task SelectAttempt(int no)
+    {
+        await LoadDetailAsync(no);
+        _diffOpen = false;
+    }
+
+    private bool _approving;
+
+    // Teacher override: return the burned attempt and let the student resubmit —
+    // the next grading run skips the plagiarism gate for this submission.
+    private async Task ApprovePlagiarism()
+    {
+        _approving = true; StateHasChanged();
+
+        var sub = await Db.Submissions
+            .Include(s => s.LabDef)
+            .FirstOrDefaultAsync(s => s.StudentId == StudentId && s.LabDef.Number == LabId);
+        if (sub != null && sub.PlagiarismFlag && !sub.PlagiarismApproved)
+        {
+            sub.PlagiarismApproved = true;
+            sub.AttemptsUsed = Math.Max(0, sub.AttemptsUsed - 1);   // refund the attempt
+
+            Db.GradeAudits.Add(new GradeAudit
+            {
+                SubmissionId = sub.Id,
+                Actor  = $"{App.Teacher.LastName} {App.Teacher.FirstName}".Trim(),
+                Action = "plagiarism-approve",
+                OldValue = sub.PlagiarismNote,
+                NewValue = "дозволено повторну здачу, спробу повернено",
+            });
+            await Db.SaveChangesAsync();
+
+            await Notif.SendAsync(StudentId,
+                $"Lab{LabId:D2}: дозволено повторну здачу",
+                "Викладач розглянув збіг коду і дозволив здати роботу ще раз. Спробу повернено.",
+                "info");
+
+            await LoadDetailAsync(LabInfo.SelectedAttempt == 0 ? null : LabInfo.SelectedAttempt);
+        }
+        _approving = false; StateHasChanged();
+    }
+
+    private async Task OpenGrade()
+    {
+        var p = new DialogParameters { ["StudentId"] = StudentId, ["LabId"] = LabId };
+        var opt = new DialogOptions { BackdropClick = true, NoHeader = true };
+        var dlg = await Dialog.ShowAsync<AutoCheck.Components.Dialogs.GradeDialog>("", p, opt);
+        var result = await dlg.Result;
+        if (result?.Canceled == false)
+            Nav.NavigateTo("/teacher");
+    }
+
+    private static (string[] Done, string[] Issues, string Analysis) ParseFeedback(string? raw) =>
+        FeedbackJson.Parse(raw);
+}

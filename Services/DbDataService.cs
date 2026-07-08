@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AutoCheck.Services;
 
-public class DbDataService(AppDbContext db) : IDataService
+public class DbDataService(AppDbContext db, TokenProtector tokens) : IDataService
 {
     private static readonly string[] Whens = ["щойно", "12 хв тому", "годину тому", "сьогодні, 09:14", "вчора, 18:40"];
 
@@ -40,7 +40,7 @@ public class DbDataService(AppDbContext db) : IDataService
         }).ToList();
     }
 
-    public async Task<LabDetail?> GetLabDetailAsync(int labNumber, int studentId = 1)
+    public async Task<LabDetail?> GetLabDetailAsync(int labNumber, int studentId = 1, int? attemptNo = null)
     {
         var sub = await db.Submissions
             .Include(x => x.LabDef).ThenInclude(l => l.Tasks)
@@ -60,11 +60,35 @@ public class DbDataService(AppDbContext db) : IDataService
             AttemptsUsed = sub.AttemptsUsed,
             AttemptsMax  = sub.AttemptsMax,
             Intro        = sub.LabDef.Goal ?? "",
+            PlagFlag     = sub.PlagiarismFlag,
+            PlagNote     = sub.PlagiarismNote,
+            PlagApproved = sub.PlagiarismApproved,
         };
+
+        // Attempts that have stored results; each attempt's score is recomputed
+        // from its own TaskResults (works for attempts 4+ that have no slot column)
+        var attemptScores = sub.TaskResults
+            .GroupBy(r => r.AttemptNo)
+            .ToDictionary(
+                g => g.Key,
+                g => Scoring.Weighted(g.Select(r => (r.Score, r.LabTask.Difficulty)).ToList()));
+        var attemptNos = attemptScores.Keys.OrderBy(n => n).ToList();
+        var bestNo = attemptNos.Count > 0
+            ? attemptNos.OrderByDescending(n => attemptScores[n]).ThenByDescending(n => n).First()
+            : 0;
+        detail.Attempts = attemptNos
+            .Select(n => new AttemptInfo { No = n, Score = attemptScores[n], IsBest = n == bestNo })
+            .ToList();
+
+        // Selected attempt: requested → latest with results → none
+        var selected = attemptNo.HasValue && attemptNos.Contains(attemptNo.Value)
+            ? attemptNo.Value
+            : attemptNos.Count > 0 ? attemptNos.Max() : 0;
+        detail.SelectedAttempt = selected;
 
         foreach (var taskDef in sub.LabDef.Tasks.OrderBy(t => t.Number))
         {
-            var res = sub.TaskResults.FirstOrDefault(r => r.LabTaskId == taskDef.Id);
+            var res = sub.TaskResults.FirstOrDefault(r => r.LabTaskId == taskDef.Id && r.AttemptNo == selected);
             detail.Tasks.Add(new TaskItem
             {
                 Id          = "task" + taskDef.Number,
@@ -241,6 +265,6 @@ public class DbDataService(AppDbContext db) : IDataService
         return $"вчора, {dt.ToLocalTime():HH:mm}";
     }
 
-    private static Student Map(StudentRecord s) =>
-        new() { FirstName = s.FirstName, LastName = s.LastName, Group = s.Group, Email = s.Email, Github = s.Github, GithubToken = s.GithubToken, Initials = s.Initials };
+    private Student Map(StudentRecord s) =>
+        new() { FirstName = s.FirstName, LastName = s.LastName, Group = s.Group, Email = s.Email, Github = s.Github, GithubToken = tokens.Unprotect(s.GithubToken), Initials = s.Initials };
 }

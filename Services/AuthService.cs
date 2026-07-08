@@ -61,7 +61,12 @@ public class AuthService(AppDbContext db, UserManager<AppUser> userManager) : IA
         if (await db.UserLinks.AnyAsync(l => l.UserId == user.Id)) return;
 
         var email = user.Email ?? "";
-        var teacher = await db.Teachers.FirstOrDefaultAsync()
+        // Match the teacher record by email (multi-teacher support);
+        // fall back to the single unlinked record on legacy installs, else create one.
+        var teacher = (!string.IsNullOrEmpty(email)
+                ? await db.Teachers.FirstOrDefaultAsync(t => t.Email == email)
+                : null)
+            ?? await db.Teachers.FirstOrDefaultAsync(t => t.UserLink == null)
             ?? await CreateTeacherAsync(user.FirstName, user.LastName);
 
         if (!string.IsNullOrEmpty(email) && string.IsNullOrEmpty(teacher.Email))

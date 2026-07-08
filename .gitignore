@@ -53,3 +53,7 @@ packages/
 # ── Publish output ────────────────────────────────────────────────────────────
 publish/
 /out/
+
+# ── Data Protection keys + DB backups ──
+dp-keys/
+backups/
