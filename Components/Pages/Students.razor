@@ -5,6 +5,7 @@
 @inject IDialogService Dialog
 @inject AppDbContext Db
 @inject UserManager<AppUser> UserManager
+@inject IJSRuntime JS
 
 <TopBar Title="Студенти" Sub="Прогрес та управління студентами курсу">
     <button class="btn btn-primary btn-sm" @onclick="AddStudent"><Icon Name="profile" Size="15" />Додати студента</button>
@@ -145,6 +146,11 @@
     {
         var rec = await Db.Students.FindAsync(id);
         if (rec is null) return;
+
+        var ok = await JS.InvokeAsync<bool>("confirm",
+            $"Видалити студента {rec.LastName} {rec.FirstName}? " +
+            "Усі його здачі, оцінки та акаунт для входу буде видалено безповоротно.");
+        if (!ok) return;
 
         // Also remove the login account and link — otherwise the orphaned account
         // still signs in and dead-ends on the onboarding screen

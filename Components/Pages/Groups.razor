@@ -1,6 +1,7 @@
 @page "/teacher/groups"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "teacher")]
 @inject AppDbContext Db
+@inject IJSRuntime JS
 
 <TopBar Title="Групи" Sub="Управління академічними групами" />
 
@@ -171,6 +172,13 @@
 
     private async Task Delete(GroupRecord g)
     {
+        var count = await Db.Students.CountAsync(s => s.Group == g.Name);
+        var warn = count > 0
+            ? $" У ній {count} студент(ів) — вони залишаться, але без прив'язки до групи зі списку."
+            : "";
+        var ok = await JS.InvokeAsync<bool>("confirm", $"Видалити групу «{g.Name}»?{warn}");
+        if (!ok) return;
+
         Db.Groups.Remove(g);
         await Db.SaveChangesAsync();
         await Reload();

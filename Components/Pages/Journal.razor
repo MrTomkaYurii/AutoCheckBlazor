@@ -82,7 +82,7 @@
                                 <div style="display:flex;align-items:center;gap:11px">
                                     <div style="@SmAvatar">@s.Initials</div>
                                     <div style="min-width:0">
-                                        <div style="font-size:13.5px;font-weight:620;white-space:nowrap">@s.Last @(s.First.Substring(0, 1)).</div>
+                                        <div style="font-size:13.5px;font-weight:620;white-space:nowrap">@s.Last @FirstInitial(s.First)</div>
                                         <div style="font-size:11px;color:var(--tx-3)">@s.Group</div>
                                     </div>
                                 </div>
@@ -131,6 +131,9 @@
         _labCols     = await Data.GetLabColumnsAsync();
         _allStudents = await Data.GetRosterAsync();
     }
+
+    private static string FirstInitial(string first) =>
+        first.Length > 0 ? first[..1] + "." : "";
 
     private List<RosterStudent> Filtered => _allStudents.Where(s =>
         (_group == "Усі групи" || s.Group == _group) &&
@@ -195,7 +198,10 @@
         var p = new DialogParameters { ["StudentId"] = studentId, ["LabId"] = labId };
         var opt = new DialogOptions { BackdropClick = true, NoHeader = true };
         var dlg = await Dialog.ShowAsync<AutoCheck.Components.Dialogs.GradeDialog>("", p, opt);
-        await dlg.Result;
+        var result = await dlg.Result;
+        // reload so a just-entered grade/rejection shows in the matrix immediately
+        if (result?.Canceled == false)
+            _allStudents = await Data.GetRosterAsync();
         StateHasChanged();
     }
 }

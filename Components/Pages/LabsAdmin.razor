@@ -4,6 +4,7 @@
 @inject IDialogService Dialog
 @inject IDataService DataSvc
 @inject AppDbContext Db
+@inject IJSRuntime JS
 
 <TopBar Title="Лабораторні" Sub="Управління лабами та завданнями" />
 
@@ -194,7 +195,17 @@
 
     private async Task DeleteLab(LabDef lab)
     {
-        // simple confirm via js
+        // deleting a lab cascade-removes every student's submissions, results and
+        // comments for it — must be confirmed, there is no undo
+        var stat = _stats.FirstOrDefault(s => s.Id == lab.Number);
+        var submitted = stat?.Submitted ?? 0;
+        var warn = submitted > 0
+            ? $"\n\nУВАГА: буде втрачено здачі та оцінки {submitted} студент(ів) по цій лабі."
+            : "";
+        var ok = await JS.InvokeAsync<bool>("confirm",
+            $"Видалити Lab{lab.Number:D2} «{lab.Title}»?{warn}");
+        if (!ok) return;
+
         await LabSvc.DeleteAsync(lab.Id);
         await Reload();
     }
@@ -221,6 +232,11 @@
 
     private async Task DeleteTask(LabTask t)
     {
+        // task deletion cascades to every student's TaskResults for it
+        var ok = await JS.InvokeAsync<bool>("confirm",
+            $"Видалити завдання {t.Number} «{t.Title}»? Результати перевірок цього завдання буде втрачено.");
+        if (!ok) return;
+
         await LabSvc.DeleteTaskAsync(t.Id);
         await Reload();
     }
