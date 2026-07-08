@@ -445,64 +445,53 @@
                             @* ── Graph / list column ── *@
                             @if (graphMode && gr != null)
                             {
-                                @* CSS git graph: one 22px column per lane *@
+                                @* SVG git graph: connectors span lanes precisely; the
+                                   node dot is a separate unscaled element so it stays round *@
                                 var lanes = Math.Max(1, _graphMaxLanes);
-                                <div style="display:flex;flex:none;padding:0 4px;min-width:@(lanes * 22 + 8)px">
-                                    @for (int l = 0; l < lanes; l++)
-                                    {
-                                        var lane     = l;
-                                        var isNode   = lane == gr.Lane;
-                                        var hasTop   = gr.InLanes.Contains(lane);
-                                        var hasBot   = gr.OutLanes.Contains(lane);
-                                        var color    = LC(lane);
-                                        var dotSize  = isMerge && isNode ? "13px" : "10px";
-                                        var dotBorder= isSelected && isNode
-                                            ? $"2px solid rgba(255,255,255,0.9)"
-                                            : "1.5px solid rgba(255,255,255,0.3)";
-                                        var glow     = isSelected && isNode
-                                            ? $"box-shadow:0 0 8px {color};" : "";
-                                        <div style="width:22px;flex:none;display:flex;flex-direction:column;align-items:center">
-                                            @* top line — hide for lanes freshly spawned by a fork *@
-                                            @{ var isForkSpawn = !isNode && gr.Forks.Values.Any(ft => ft == lane) && !gr.InLanes.Contains(lane); }
-                                            <div style="width:2px;flex:none;height:20px;background:@(hasTop && !isForkSpawn ? color : "transparent")"></div>
-                                            @* node dot or spacer *@
-                                            @if (isNode)
+                                var gw    = lanes * 22;
+                                @* width == viewBox width and margin (not padding) → 1:1 horizontal mapping *@
+                                <div style="position:relative;flex:none;width:@(gw)px;align-self:stretch;margin:0 4px">
+                                    <svg width="100%" height="100%" viewBox="0 0 @gw 100" preserveAspectRatio="none"
+                                         style="position:absolute;inset:0;display:block">
+                                        @for (int l = 0; l < lanes; l++)
+                                        {
+                                            var lane   = l;
+                                            var x      = lane * 22 + 11;
+                                            var col    = LC(lane);
+                                            var isNode = lane == gr.Lane;
+                                            var hasTop = gr.InLanes.Contains(lane);
+                                            var hasBot = gr.OutLanes.Contains(lane);
+
+                                            @if (hasTop)
                                             {
-                                                <div style="width:@dotSize;height:@dotSize;border-radius:50%;background:@color;flex:none;border:@dotBorder;@glow"></div>
+                                                <line x1="@x" y1="0" x2="@x" y2="50" stroke="@col" stroke-width="2" vector-effect="non-scaling-stroke" />
                                             }
-                                            else
+                                            @if (hasBot)
                                             {
-                                                <div style="width:10px;height:10px;flex:none"></div>
+                                                <line x1="@x" y1="50" x2="@x" y2="100" stroke="@col" stroke-width="2" vector-effect="non-scaling-stroke" />
                                             }
-                                            @* bottom: straight, converge arc, or fork arc *@
-                                            @if (!hasBot && gr.Converges.TryGetValue(lane, out var convTo))
+                                            @* converge: this node's lane merges down into an existing parent lane *@
+                                            @if (gr.Converges.TryGetValue(lane, out var convTo))
                                             {
-                                                @* converge: branch merges back into main *@
-                                                @if (convTo < lane)
-                                                {
-                                                    <div style="width:11px;flex:1;min-height:12px;margin-right:auto;border-left:2px solid @color;border-bottom:2px solid @color;border-bottom-left-radius:9px"></div>
-                                                }
-                                                else
-                                                {
-                                                    <div style="width:11px;flex:1;min-height:12px;margin-left:auto;border-right:2px solid @color;border-bottom:2px solid @color;border-bottom-right-radius:9px"></div>
-                                                }
+                                                var cx = convTo * 22 + 11;
+                                                <path d="M @x 50 C @x 80 @cx 70 @cx 100" stroke="@col" stroke-width="2" fill="none" vector-effect="non-scaling-stroke" />
                                             }
-                                            else if (isNode && gr.Forks.TryGetValue(lane, out var forkTo) && forkTo > lane)
+                                            @* fork: a second parent spawns a new lane, diagonal down to it *@
+                                            @if (isNode && gr.Forks.TryGetValue(lane, out var forkTo))
                                             {
-                                                @* fork: straight center line (first parent) + right arc (second parent) *@
-                                                <div style="flex:1;min-height:12px;width:100%;position:relative">
-                                                    <div style="position:absolute;inset:0;display:flex;justify-content:center">
-                                                        <div style="width:2px;background:@(hasBot ? color : "transparent")"></div>
-                                                    </div>
-                                                    <div style="position:absolute;right:0;top:0;bottom:0;width:11px;border-right:2px solid @LC(forkTo);border-bottom:2px solid @LC(forkTo);border-bottom-right-radius:9px"></div>
-                                                </div>
+                                                var fx = forkTo * 22 + 11;
+                                                <path d="M @x 50 C @x 80 @fx 70 @fx 100" stroke="@LC(forkTo)" stroke-width="2" fill="none" vector-effect="non-scaling-stroke" />
                                             }
-                                            else
-                                            {
-                                                <div style="width:2px;flex:1;min-height:12px;background:@(hasBot ? color : "transparent")"></div>
-                                            }
-                                        </div>
+                                        }
+                                    </svg>
+                                    @{
+                                        var nodeX   = gr.Lane * 22 + 11;
+                                        var nodeCol = LC(gr.Lane);
+                                        var dsz     = isMerge ? 13 : 10;
+                                        var brd     = isSelected ? "2px solid rgba(255,255,255,0.9)" : "1.5px solid rgba(255,255,255,0.3)";
+                                        var gl      = isSelected ? $"box-shadow:0 0 8px {nodeCol};" : "";
                                     }
+                                    <div style="position:absolute;left:@(nodeX)px;top:50%;transform:translate(-50%,-50%);width:@(dsz)px;height:@(dsz)px;border-radius:50%;background:@nodeCol;border:@brd;@gl"></div>
                                 </div>
                             }
                             else
