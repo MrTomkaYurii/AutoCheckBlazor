@@ -2,6 +2,8 @@ using AutoCheck.Data;
 using AutoCheck.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace AutoCheck.Tests.Services;
@@ -17,7 +19,9 @@ public class NotificationServiceTests : IDisposable
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         _db = new AppDbContext(opts);
-        _svc = new NotificationService(_db);
+        // empty config → EmailService disabled (no SMTP host), notifications stay in-app only
+        var email = new EmailService(new ConfigurationBuilder().Build(), NullLogger<EmailService>.Instance);
+        _svc = new NotificationService(_db, email);
 
         // Seed one student
         _db.Students.Add(new StudentRecord

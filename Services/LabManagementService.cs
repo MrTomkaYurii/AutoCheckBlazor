@@ -142,7 +142,32 @@ public class LabManagementService(AppDbContext db, IWebHostEnvironment env) : IL
                 existing.Title = parsed.Title; existing.Goal = parsed.Goal;
                 existing.BranchName = parsed.BranchName; existing.MergesMain = parsed.MergesMain;
                 existing.FullMarkdown = md;
-                db.LabTasks.RemoveRange(existing.Tasks);
+
+                // Upsert tasks BY NUMBER. Deleting them (RemoveRange) would
+                // cascade-delete every student's TaskResults for this lab.
+                var byNumber = existing.Tasks
+                    .GroupBy(t => t.Number)
+                    .ToDictionary(g => g.Key, g => g.First());
+                var parsedNumbers = parsed.Tasks.Select(t => t.Number).ToHashSet();
+
+                foreach (var t in parsed.Tasks)
+                {
+                    if (byNumber.TryGetValue(t.Number, out var et))
+                    {
+                        et.Title = t.Title; et.Brief = t.Brief; et.Difficulty = t.Difficulty;
+                    }
+                    else
+                    {
+                        db.LabTasks.Add(new LabTask
+                        {
+                            LabDefId = existing.Id, Number = t.Number,
+                            Title = t.Title, Brief = t.Brief, Difficulty = t.Difficulty,
+                        });
+                    }
+                    taskCount++;
+                }
+                // tasks that disappeared from the MD are removed (their results go with them)
+                db.LabTasks.RemoveRange(existing.Tasks.Where(t => !parsedNumbers.Contains(t.Number)));
             }
             else
             {
@@ -158,19 +183,18 @@ public class LabManagementService(AppDbContext db, IWebHostEnvironment env) : IL
 
                 foreach (var sid in studentIds)
                     db.Submissions.Add(new Submission { StudentId = sid, LabDefId = existing.Id, Status = (int)LabStatus.Locked, AttemptsMax = existing.AttemptsMax });
-            }
 
-            await db.SaveChangesAsync();
-
-            foreach (var t in parsed.Tasks)
-            {
-                db.LabTasks.Add(new LabTask
+                foreach (var t in parsed.Tasks)
                 {
-                    LabDefId = existing.Id, Number = t.Number,
-                    Title = t.Title, Brief = t.Brief, Difficulty = t.Difficulty,
-                });
-                taskCount++;
+                    db.LabTasks.Add(new LabTask
+                    {
+                        LabDefId = existing.Id, Number = t.Number,
+                        Title = t.Title, Brief = t.Brief, Difficulty = t.Difficulty,
+                    });
+                    taskCount++;
+                }
             }
+
             await db.SaveChangesAsync();
             labCount++;
         }

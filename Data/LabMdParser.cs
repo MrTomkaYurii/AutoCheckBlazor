@@ -57,7 +57,12 @@ public static class LabMdParser
             int end = i + 1 < hits.Count ? hits[i + 1].Index : md.Length;
             string section = md[start..end].Trim();
 
-            string? brief = section.Length > 0 ? section.Trim() : null;
+            // Prefer the "### Умова" subsection when present — hints/solutions
+            // must not leak into the brief (students see it, Gemini grades by it)
+            var umova = Regex.Match(section, @"###\s+Умова\s*\n([\s\S]*?)(?=\n###|\z)");
+            string? brief = umova.Success
+                ? umova.Groups[1].Value.Trim()
+                : section.Length > 0 ? section : null;
 
             tasks.Add(new(num, taskTitle, brief, diff));
         }

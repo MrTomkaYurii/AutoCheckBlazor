@@ -16,7 +16,7 @@ public class DbDataService(AppDbContext db, TokenProtector tokens) : IDataServic
         return Map(s);
     }
 
-    public async Task<List<Lab>> GetStudentLabsAsync(int studentId = 1)
+    public async Task<List<Lab>> GetStudentLabsAsync(int studentId)
     {
         var subs = await db.Submissions
             .Include(x => x.LabDef)
@@ -40,7 +40,7 @@ public class DbDataService(AppDbContext db, TokenProtector tokens) : IDataServic
         }).ToList();
     }
 
-    public async Task<LabDetail?> GetLabDetailAsync(int labNumber, int studentId = 1, int? attemptNo = null)
+    public async Task<LabDetail?> GetLabDetailAsync(int labNumber, int studentId, int? attemptNo = null)
     {
         var sub = await db.Submissions
             .Include(x => x.LabDef).ThenInclude(l => l.Tasks)

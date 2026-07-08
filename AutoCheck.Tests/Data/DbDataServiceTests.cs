@@ -2,6 +2,7 @@ using AutoCheck.Data;
 using AutoCheck.Models;
 using AutoCheck.Services;
 using FluentAssertions;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
@@ -19,7 +20,7 @@ public class DbDataServiceTests : IDisposable
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         _db = new AppDbContext(opts);
-        _svc = new DbDataService(_db);
+        _svc = new DbDataService(_db, new TokenProtector(new EphemeralDataProtectionProvider()));
         SeedData();
     }
 

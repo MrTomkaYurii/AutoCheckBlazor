@@ -6,9 +6,11 @@ public interface IDataService
 {
     // ── Student view ──────────────────────────────────────────────────────
     Task<Student> GetCurrentStudentAsync();
-    Task<List<Lab>> GetStudentLabsAsync(int studentId = 1);
+    // studentId is intentionally NOT defaulted — a forgotten argument used to
+    // silently show student #1's data to everyone
+    Task<List<Lab>> GetStudentLabsAsync(int studentId);
     /// <param name="attemptNo">Which attempt's results to load; null = latest attempt with results.</param>
-    Task<LabDetail?> GetLabDetailAsync(int labNumber, int studentId = 1, int? attemptNo = null);
+    Task<LabDetail?> GetLabDetailAsync(int labNumber, int studentId, int? attemptNo = null);
 
     // ── Teacher view ──────────────────────────────────────────────────────
     Task<Teacher> GetTeacherAsync();
