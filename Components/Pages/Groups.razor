@@ -1,4 +1,5 @@
 @page "/teacher/groups"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "teacher")]
 @inject AppDbContext Db
 
 <TopBar Title="Групи" Sub="Управління академічними групами" />
@@ -144,9 +145,18 @@
         if (string.IsNullOrWhiteSpace(_editName)) return;
         var g = await Db.Groups.FindAsync(_editId);
         if (g is null) return;
-        g.Name = _editName.Trim();
+
+        var oldName = g.Name;
+        var newName = _editName.Trim();
+        g.Name = newName;
         g.Description = _editDesc.Trim().Length > 0 ? _editDesc.Trim() : null;
         await Db.SaveChangesAsync();
+
+        // students reference the group by name — move them along with the rename
+        if (oldName != newName)
+            await Db.Students.Where(s => s.Group == oldName)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.Group, newName));
+
         await Reload();
         CancelEdit();
     }

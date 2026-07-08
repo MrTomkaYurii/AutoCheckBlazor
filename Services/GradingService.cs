@@ -22,7 +22,8 @@ public class GradingService(
     ILogger<GradingService> log,
     GeminiQuotaService quota,
     GradingQueueService queue,
-    PlagiarismService plagiarism) : IGradingService
+    PlagiarismService plagiarism,
+    TokenProtector tokens) : IGradingService
 {
     private string ApiKey   => cfg["Gemini:ApiKey"]  ?? "";
     private string Model    => cfg["Gemini:Model"]   ?? "gemini-2.5-flash";
@@ -65,6 +66,13 @@ public class GradingService(
         // One grading at a time — the rest wait in line
         using var _queueSlot = await queue.EnterAsync(progress, ct);
 
+        // Re-check the attempt limit after waiting: a parallel submit (second tab)
+        // may have consumed the last attempt while we were queued
+        await db.Entry(sub).ReloadAsync(ct);
+        if (sub.AttemptsUsed >= sub.AttemptsMax)
+            throw new InvalidOperationException(
+                $"Ліміт спроб вичерпано ({sub.AttemptsMax} з {sub.AttemptsMax}). Зверніться до викладача.");
+
         progress?.Report("Перевірка системи аналізу…");
         await CheckGeminiAsync(ct);
 
@@ -85,7 +93,9 @@ public class GradingService(
 
         // ── 1. Prepare repo ──────────────────────────────────────────────────
         progress?.Report("Клонування репозиторію…");
-        var workDir = await PrepareRepoAsync(student.Github, branch, ct)
+        // the student's token (decrypted) lets us clone private repos
+        var ghToken = tokens.Unprotect(student.GithubToken);
+        var workDir = await PrepareRepoAsync(student.Github, branch, ghToken, ct)
             ?? throw new InvalidOperationException(
                 "Не вдалося отримати репозиторій. Перевірте URL та права доступу.");
 
@@ -448,12 +458,18 @@ public class GradingService(
 
     // ── Git ───────────────────────────────────────────────────────────────────
 
-    private async Task<string?> PrepareRepoAsync(string rawUrl, string branch, CancellationToken ct)
+    private async Task<string?> PrepareRepoAsync(string rawUrl, string branch, string? token, CancellationToken ct)
     {
         var repoUrl = NormalizeGitUrl(rawUrl);
         var slug    = Convert.ToHexString(
             System.Security.Cryptography.MD5.HashData(Encoding.UTF8.GetBytes(repoUrl)))[..10];
         var dir = Path.Combine(WorkRoot, slug);
+
+        // Private repos: embed the student's token into the fetch URL.
+        // Never log authUrl — log repoUrl instead.
+        var authUrl = string.IsNullOrEmpty(token)
+            ? repoUrl
+            : repoUrl.Replace("https://", $"https://x-access-token:{token}@");
 
         try
         {
@@ -462,10 +478,12 @@ public class GradingService(
             if (!Directory.Exists(dir))
             {
                 // Full clone — we need full history so git show works for any mapped commit
-                await Git(".", $"clone --no-single-branch {repoUrl} {dir}", ct);
+                await Git(".", $"clone --no-single-branch {authUrl} {dir}", ct);
             }
             else
             {
+                // Refresh the remote URL (token may have been added or rotated)
+                await RunProcessAsync("git", $"remote set-url origin {authUrl}", dir, ct);
                 // Unshallow if previously cloned with --depth; ignore error if already full
                 await RunProcessAsync("git", "fetch --unshallow --all --prune", dir, ct);
                 await Git(dir, "fetch --all --prune", ct);
@@ -477,7 +495,9 @@ public class GradingService(
         }
         catch (Exception ex)
         {
-            log.LogWarning("Git prepare failed {Url}/{Branch}: {Msg}", repoUrl, branch, ex.Message);
+            // git error text may echo the fetch URL — mask the token before logging
+            var msg = string.IsNullOrEmpty(token) ? ex.Message : ex.Message.Replace(token, "***");
+            log.LogWarning("Git prepare failed {Url}/{Branch}: {Msg}", repoUrl, branch, msg);
             return null;
         }
     }

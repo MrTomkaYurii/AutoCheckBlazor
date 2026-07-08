@@ -147,7 +147,8 @@ app.MapPost("/account/login", async (HttpContext ctx,
 
 // Student self-registration (plain form POST from /register)
 app.MapPost("/account/register", async (HttpContext ctx,
-    SignInManager<AppUser> signIn, UserManager<AppUser> users, IAuthService auth) =>
+    SignInManager<AppUser> signIn, UserManager<AppUser> users, IAuthService auth,
+    AppDbContext db) =>
 {
     var form      = await ctx.Request.ReadFormAsync();
     var firstName = form["firstName"].ToString().Trim();
@@ -166,8 +167,8 @@ app.MapPost("/account/register", async (HttpContext ctx,
         return Results.Redirect(Fail("Вкажіть ім'я та прізвище."));
     if (string.IsNullOrEmpty(email) || !email.Contains('@'))
         return Results.Redirect(Fail("Вкажіть коректний email."));
-    if (string.IsNullOrEmpty(group))
-        return Results.Redirect(Fail("Оберіть групу."));
+    if (string.IsNullOrEmpty(group) || !await db.Groups.AnyAsync(g => g.Name == group))
+        return Results.Redirect(Fail("Оберіть групу зі списку."));
     if (password.Length < 6)
         return Results.Redirect(Fail("Пароль має містити щонайменше 6 символів."));
     if (password != confirm)

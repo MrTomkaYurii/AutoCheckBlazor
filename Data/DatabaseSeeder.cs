@@ -97,8 +97,21 @@ public class DatabaseSeeder(
             if (!await roleManager.RoleExistsAsync(role))
                 await roleManager.CreateAsync(new IdentityRole(role));
 
-        await EnsureAccountAsync("teacher@test.com", "Test1234!", "teacher", "Олена", "Ковальчук");
-        await EnsureAccountAsync("student@test.com", "Test1234!", "student", "Петро", "Іваненко");
+        if (env.IsDevelopment())
+        {
+            // well-known test accounts — dev only, they are shown on the login page
+            await EnsureAccountAsync("teacher@test.com", "Test1234!", "teacher", "Олена", "Ковальчук");
+            await EnsureAccountAsync("student@test.com", "Test1234!", "student", "Петро", "Іваненко");
+        }
+        else if ((await userManager.GetUsersInRoleAsync("teacher")).Count == 0)
+        {
+            // production bootstrap: one teacher with a random password, printed once
+            var password = "adm-" + Guid.NewGuid().ToString("N")[..10];
+            await EnsureAccountAsync("teacher@test.com", password, "teacher", "Олена", "Ковальчук");
+            log.LogWarning(
+                "Створено початковий акаунт викладача: teacher@test.com / {Password} — " +
+                "увійдіть і одразу змініть email та пароль у Кабінеті.", password);
+        }
     }
 
     private async Task EnsureAccountAsync(string email, string password, string role,

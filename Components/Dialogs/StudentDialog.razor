@@ -75,6 +75,7 @@
 
 @inject AppDbContext Db
 @inject IDataService DataSvc
+@inject UserManager<AppUser> UserManager
 
 @code {
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
@@ -109,6 +110,14 @@
 
         try
         {
+            // A brand-new group must also exist in the Groups table,
+            // otherwise the registration page never offers it
+            if (!await Db.Groups.AnyAsync(g => g.Name == finalGroup))
+            {
+                var maxOrder = await Db.Groups.MaxAsync(g => (int?)g.OrderIndex) ?? -1;
+                Db.Groups.Add(new GroupRecord { Name = finalGroup, OrderIndex = maxOrder + 1 });
+            }
+
             if (IsNew)
             {
                 var s = new StudentRecord { FirstName = _first.Trim(), LastName = _last.Trim(), Group = finalGroup, Email = _email.Trim(), Github = _github.Trim(), Initials = initials };
@@ -122,8 +131,27 @@
             }
             else
             {
-                Existing!.FirstName = _first.Trim(); Existing.LastName = _last.Trim(); Existing.Group = finalGroup;
-                Existing.Email = _email.Trim(); Existing.Github = _github.Trim(); Existing.Initials = initials;
+                // Email is the login — keep the Identity account and link in sync
+                var newEmail = _email.Trim();
+                if (!string.Equals(Existing!.Email, newEmail, StringComparison.OrdinalIgnoreCase))
+                {
+                    var link = await Db.UserLinks.FirstOrDefaultAsync(l => l.StudentId == Existing.Id);
+                    if (link is not null && await UserManager.FindByIdAsync(link.UserId) is { } user)
+                    {
+                        if (!newEmail.Contains('@'))
+                        { _error = "Некоректний email"; _saving = false; return; }
+                        if (await UserManager.FindByEmailAsync(newEmail) is { } taken && taken.Id != user.Id)
+                        { _error = "Цей email вже використовується іншим акаунтом"; _saving = false; return; }
+
+                        user.Email = newEmail;
+                        user.UserName = newEmail;
+                        await UserManager.UpdateAsync(user);
+                        link.Email = newEmail;
+                    }
+                }
+
+                Existing.FirstName = _first.Trim(); Existing.LastName = _last.Trim(); Existing.Group = finalGroup;
+                Existing.Email = newEmail; Existing.Github = _github.Trim(); Existing.Initials = initials;
                 await Db.SaveChangesAsync();
             }
             MudDialog.Close(DialogResult.Ok(true));

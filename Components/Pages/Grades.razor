@@ -1,6 +1,8 @@
 @page "/student/grades"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "student")]
 @inject IDataService Data
 @inject NavigationManager Nav
+@inject AppState App
 
 <TopBar Title="Журнал оцінок" Sub="Усі твої оцінки за семестр" />
 
@@ -141,7 +143,8 @@
 
     protected override async Task OnInitializedAsync()
     {
-        Rows = await Data.GetStudentLabsAsync();
+        // default parameter = student #1 — must pass the logged-in student's id
+        Rows = await Data.GetStudentLabsAsync(App.StudentDbId ?? 1);
     }
 
     private List<int> Finals => Rows.Where(r => r.Final.HasValue).Select(r => r.Final!.Value).ToList();

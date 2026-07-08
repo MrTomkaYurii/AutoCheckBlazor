@@ -325,12 +325,15 @@
 
         if (sub is not null)
         {
-            var old = $"статус: {(LabStatus)sub.Status}";
+            var old = $"захист: {(sub.DefenseScore?.ToString() ?? "—")}, фінал: {(sub.FinalScore?.ToString() ?? "—")}, статус: {(LabStatus)sub.Status}";
             sub.Status = (int)LabStatus.Rejected;
+            // a rejected lab must not keep a stale defense/final grade in the journal
+            sub.DefenseScore = null;
+            sub.FinalScore   = null;
             Db.GradeAudits.Add(new GradeAudit
             {
                 SubmissionId = sub.Id, Actor = Actor, Action = "reject",
-                OldValue = old, NewValue = "статус: Rejected",
+                OldValue = old, NewValue = "статус: Rejected, оцінки знято",
             });
             await Db.SaveChangesAsync();
 

@@ -236,8 +236,7 @@
 
     private static readonly PageEntry[] StudentPages =
     [
-        new("Мій дашборд",   "/student",          "target", "головна огляд"),
-        new("Мої лаби",      "/student/labs",     "braces", "лабораторні список здати"),
+        new("Мій дашборд",   "/student",          "target", "головна огляд лабораторні список здати"),
         new("Журнал оцінок", "/student/grades",   "grades", "журнал оцінки бали"),
         new("Профіль",       "/student/profile",  "user",   "профіль github налаштування"),
     ];
@@ -302,6 +301,7 @@
         else
         {
             _notifications = await NotifSvc.GetUnreadAsync(App.StudentDbId ?? 1);
+            _unreadCount   = _notifications.Count;
         }
         StateHasChanged();
     }
@@ -327,7 +327,12 @@
 
     private static string FormatTime(DateTime dt)
     {
-        var diff = DateTime.UtcNow - dt.ToUniversalTime();
+        // DB timestamps come back with Kind=Unspecified but ARE UTC —
+        // ToUniversalTime() would wrongly assume local and shift by the TZ offset
+        var utc = dt.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(dt, DateTimeKind.Utc)
+            : dt.ToUniversalTime();
+        var diff = DateTime.UtcNow - utc;
         if (diff.TotalMinutes < 1)  return "щойно";
         if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes} хв тому";
         if (diff.TotalHours   < 24) return $"{(int)diff.TotalHours} год тому";

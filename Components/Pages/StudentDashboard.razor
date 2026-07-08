@@ -1,4 +1,5 @@
 @page "/student"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "student")]
 @inject NavigationManager Nav
 @inject IDataService Data
 @inject INotificationService NotifSvc
@@ -117,7 +118,9 @@
     protected override async Task OnInitializedAsync()
     {
         var sid = App.StudentDbId ?? 1;
-        Student = await Data.GetCurrentStudentAsync();
+        // AppState holds the LOGGED-IN student; GetCurrentStudentAsync() would
+        // always return the first student in the table (Петро for everyone)
+        Student = App.Student;
         Labs    = await Data.GetStudentLabsAsync(sid);
         _unread = await NotifSvc.GetUnreadCountAsync(sid);
     }

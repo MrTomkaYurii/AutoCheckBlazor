@@ -8,15 +8,29 @@
 <MudDialogProvider Position="DialogPosition.Center" CloseButton="false" />
 <MudSnackbarProvider />
 
-<div style="display:flex;height:100%;position:relative;z-index:1">
-    <Sidebar />
-    <main class="scroll-area" style="flex:1;height:100%;overflow-y:auto;min-width:0">
-        @Body
-    </main>
-</div>
+@if (_ready)
+{
+    <div style="display:flex;height:100%;position:relative;z-index:1">
+        <Sidebar />
+        <main class="scroll-area" style="flex:1;height:100%;overflow-y:auto;min-width:0">
+            @Body
+        </main>
+    </div>
+}
+else
+{
+    <div style="display:grid;place-items:center;height:100vh;color:var(--tx-3);gap:12px">
+        <span style="width:22px;height:22px;border-radius:50%;border:2.5px solid var(--acc-dim-2);border-top-color:var(--acc);animation:spin .8s linear infinite"></span>
+    </div>
+}
 
 @code {
     [CascadingParameter] private Task<AuthenticationState> AuthStateTask { get; set; } = default!;
+
+    // Pages read App.Student / App.StudentDbId in their own OnInitializedAsync.
+    // Rendering @Body before PreloadAsync completes would race and silently
+    // fall back to student #1 — so the body waits for _ready.
+    private bool _ready;
 
     protected override async Task OnInitializedAsync()
     {
@@ -34,7 +48,10 @@
         if (!Auth.IsTeacher(state.User) && string.IsNullOrEmpty(App.Student.Group))
         {
             Nav.NavigateTo("/onboarding", replace: true);
+            return;
         }
+
+        _ready = true;
     }
 
     private readonly MudTheme _theme = new()

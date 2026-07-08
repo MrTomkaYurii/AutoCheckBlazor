@@ -262,7 +262,8 @@ public class DbDataService(AppDbContext db, TokenProtector tokens) : IDataServic
         if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes} хв тому";
         if (diff.TotalHours < 2)    return "годину тому";
         if (diff.TotalHours < 24)   return $"сьогодні, {dt.ToLocalTime():HH:mm}";
-        return $"вчора, {dt.ToLocalTime():HH:mm}";
+        if (diff.TotalHours < 48)   return $"вчора, {dt.ToLocalTime():HH:mm}";
+        return dt.ToLocalTime().ToString("dd.MM, HH:mm");
     }
 
     private Student Map(StudentRecord s) =>
