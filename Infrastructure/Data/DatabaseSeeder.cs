@@ -146,8 +146,13 @@ public class DatabaseSeeder(
     {
         try
         {
+            // table/column/type are hardcoded literals from the soft-migration list below,
+            // never user input — and identifiers/DDL cannot be bound as SQL parameters,
+            // so EF1002 (SQL-injection) does not apply.
+#pragma warning disable EF1002
             await db.Database.ExecuteSqlRawAsync(
                 $"ALTER TABLE \"{table}\" ADD COLUMN \"{column}\" {type}");
+#pragma warning restore EF1002
             log.LogInformation("Soft-migrated: added {Column} to {Table}", column, table);
         }
         catch { /* column already exists — that's fine */ }

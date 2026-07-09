@@ -12,10 +12,11 @@ public record PlagPair(
 /// Cross-checks students' submissions of one lab for copied code:
 /// Jaccard similarity over normalized added-code lines from stored diffs.
 /// </summary>
-public class PlagiarismService(AppDbContext db)
+public class PlagiarismService(IDbContextFactory<AppDbContext> dbf)
 {
     public async Task<List<PlagPair>> CheckLabAsync(int labNumber, double threshold = 0.5)
     {
+        await using var db = await dbf.CreateDbContextAsync();
         var rawSubs = await db.Submissions.AsNoTracking()
             .Where(s => s.LabDef.Number == labNumber && s.TaskResults.Any())
             .Select(s => new
@@ -94,6 +95,7 @@ public class PlagiarismService(AppDbContext db)
             .ToHashSet();
         if (candidate.Count < 10) return null;   // too little code to judge
 
+        await using var db = await dbf.CreateDbContextAsync();
         var rawOthers = await db.Submissions.AsNoTracking()
             .Where(s => s.LabDefId == labDefId && s.StudentId != studentId && s.TaskResults.Any())
             .Select(s => new

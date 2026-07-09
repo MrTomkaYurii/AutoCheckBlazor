@@ -2,7 +2,7 @@
 @layout LoginLayout
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @inject NavigationManager Nav
-@inject AppDbContext Db
+@inject IDbContextFactory<AppDbContext> DbFactory
 @inject IAuthService Auth
 @inject AppState App
 @using Microsoft.EntityFrameworkCore
@@ -118,6 +118,7 @@
         _firstName = _student.FirstName == "Новий"   ? "" : _student.FirstName;
         _lastName  = _student.LastName  == "Студент" ? "" : _student.LastName;
         _github    = _student.Github;
+        await using var Db = await DbFactory.CreateDbContextAsync();
         _groups    = await Db.Groups.OrderBy(g => g.OrderIndex).ThenBy(g => g.Name)
                                     .Select(g => g.Name).ToListAsync();
     }
@@ -132,6 +133,7 @@
         _saving = true; _error = ""; StateHasChanged();
 
         var initials = _firstName.Trim()[0].ToString() + _lastName.Trim()[0];
+        await using var Db = await DbFactory.CreateDbContextAsync();
         await Db.Students.Where(s => s.Id == _student!.Id).ExecuteUpdateAsync(s => s
             .SetProperty(x => x.FirstName, _firstName.Trim())
             .SetProperty(x => x.LastName,  _lastName.Trim())

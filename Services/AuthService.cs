@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AutoCheck.Services;
 
-public class AuthService(AppDbContext db, UserManager<AppUser> userManager) : IAuthService
+public class AuthService(IDbContextFactory<AppDbContext> dbf, UserManager<AppUser> userManager) : IAuthService
 {
     public bool IsTeacher(ClaimsPrincipal user) =>
         user.IsInRole("teacher");
@@ -27,6 +27,7 @@ public class AuthService(AppDbContext db, UserManager<AppUser> userManager) : IA
     {
         var sub = GetSub(user);
         if (string.IsNullOrEmpty(sub)) return null;
+        await using var db = await dbf.CreateDbContextAsync();
         var link = await db.UserLinks.AsNoTracking().Include(l => l.Student)
                                      .FirstOrDefaultAsync(l => l.UserId == sub);
         return link?.Student;
@@ -36,6 +37,7 @@ public class AuthService(AppDbContext db, UserManager<AppUser> userManager) : IA
     {
         var sub = GetSub(user);
         if (string.IsNullOrEmpty(sub)) return null;
+        await using var db = await dbf.CreateDbContextAsync();
         var link = await db.UserLinks.AsNoTracking().Include(l => l.Teacher)
                                      .FirstOrDefaultAsync(l => l.UserId == sub);
         return link?.Teacher;
@@ -47,7 +49,8 @@ public class AuthService(AppDbContext db, UserManager<AppUser> userManager) : IA
         if (string.IsNullOrEmpty(sub)) return;
 
         // Already linked
-        if (await db.UserLinks.AnyAsync(l => l.UserId == sub)) return;
+        await using (var db = await dbf.CreateDbContextAsync())
+            if (await db.UserLinks.AnyAsync(l => l.UserId == sub)) return;
 
         var appUser = await userManager.FindByIdAsync(sub);
         if (appUser == null) return;
@@ -58,6 +61,7 @@ public class AuthService(AppDbContext db, UserManager<AppUser> userManager) : IA
 
     public async Task LinkTeacherAsync(AppUser user)
     {
+        await using var db = await dbf.CreateDbContextAsync();
         if (await db.UserLinks.AnyAsync(l => l.UserId == user.Id)) return;
 
         var email = user.Email ?? "";
@@ -67,7 +71,7 @@ public class AuthService(AppDbContext db, UserManager<AppUser> userManager) : IA
                 ? await db.Teachers.FirstOrDefaultAsync(t => t.Email == email)
                 : null)
             ?? await db.Teachers.FirstOrDefaultAsync(t => t.UserLink == null)
-            ?? await CreateTeacherAsync(user.FirstName, user.LastName);
+            ?? await CreateTeacherAsync(db, user.FirstName, user.LastName);
 
         if (!string.IsNullOrEmpty(email) && string.IsNullOrEmpty(teacher.Email))
         {
@@ -89,18 +93,19 @@ public class AuthService(AppDbContext db, UserManager<AppUser> userManager) : IA
         {
             UserId = user.Id, Email = email, Role = "teacher", TeacherId = teacher.Id,
         });
-        await SaveLinkAsync();
+        await SaveLinkAsync(db);
     }
 
     public async Task LinkStudentAsync(AppUser user, string group)
     {
+        await using var db = await dbf.CreateDbContextAsync();
         if (await db.UserLinks.AnyAsync(l => l.UserId == user.Id)) return;
 
         var email = user.Email ?? "";
         var student = !string.IsNullOrEmpty(email)
             ? await db.Students.FirstOrDefaultAsync(s => s.Email == email)
             : null;
-        student ??= await CreateStudentAsync(user.FirstName, user.LastName, email, group);
+        student ??= await CreateStudentAsync(db, user.FirstName, user.LastName, email, group);
 
         // Student record may already be linked to a stale user — reuse the link
         var existing = await db.UserLinks.FirstOrDefaultAsync(l => l.StudentId == student.Id);
@@ -116,10 +121,10 @@ public class AuthService(AppDbContext db, UserManager<AppUser> userManager) : IA
         {
             UserId = user.Id, Email = email, Role = "student", StudentId = student.Id,
         });
-        await SaveLinkAsync();
+        await SaveLinkAsync(db);
     }
 
-    private async Task SaveLinkAsync()
+    private static async Task SaveLinkAsync(AppDbContext db)
     {
         try
         {
@@ -132,7 +137,7 @@ public class AuthService(AppDbContext db, UserManager<AppUser> userManager) : IA
         }
     }
 
-    private async Task<StudentRecord> CreateStudentAsync(string first, string last, string email, string group)
+    private static async Task<StudentRecord> CreateStudentAsync(AppDbContext db, string first, string last, string email, string group)
     {
         var initials = (first.Length > 0 ? first[0].ToString() : "") +
                        (last.Length > 0  ? last[0].ToString()  : "");
@@ -154,7 +159,7 @@ public class AuthService(AppDbContext db, UserManager<AppUser> userManager) : IA
         return s;
     }
 
-    private async Task<TeacherRecord> CreateTeacherAsync(string first, string last)
+    private static async Task<TeacherRecord> CreateTeacherAsync(AppDbContext db, string first, string last)
     {
         var t = new TeacherRecord
         {

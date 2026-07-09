@@ -19,11 +19,12 @@ public class LabManagementServiceTests : IDisposable
         var opts = new DbContextOptionsBuilder<AppDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
-        _db = new AppDbContext(opts);
+        var factory = new TestDbContextFactory(opts);
+        _db = factory.CreateDbContext();
 
         var envMock = new Mock<IWebHostEnvironment>();
         envMock.Setup(e => e.ContentRootPath).Returns(Path.GetTempPath());
-        _svc = new LabManagementService(_db, envMock.Object);
+        _svc = new LabManagementService(factory, envMock.Object);
     }
 
     // ── Lab CRUD ─────────────────────────────────────────────────────────────
@@ -51,6 +52,7 @@ public class LabManagementServiceTests : IDisposable
 
         await _svc.UpdateAsync(lab.Id, new CreateLabDto(1, "Новий заголовок", null, null, false, null));
 
+        _db.ChangeTracker.Clear();   // service saved via its own context — re-read from store
         var updated = await _db.Labs.FindAsync(lab.Id);
         updated!.Title.Should().Be("Новий заголовок");
     }
@@ -116,6 +118,7 @@ public class LabManagementServiceTests : IDisposable
 
         await _svc.UpdateTaskAsync(taskId, new CreateTaskDto(1, "Нове", "Новий brief", 3));
 
+        _db.ChangeTracker.Clear();   // service saved via its own context — re-read from store
         var t = await _db.LabTasks.FindAsync(taskId);
         t!.Title.Should().Be("Нове");
         t.Difficulty.Should().Be(3);

@@ -12,6 +12,8 @@ public class TeacherNotif
 
 public sealed class TeacherNotificationService
 {
+    private const int MaxItems = 200;   // in-memory only — cap so a long uptime can't grow it unbounded
+
     private readonly object _lock  = new();
     private readonly List<TeacherNotif> _list = [];
     private int _nextId = 1;
@@ -19,7 +21,12 @@ public sealed class TeacherNotificationService
     public void Add(string title, string body, string type = "comment")
     {
         lock (_lock)
+        {
             _list.Add(new TeacherNotif { Id = _nextId++, Title = title, Body = body, Type = type });
+            // Drop the oldest entries once over the cap (list is append-order = oldest first).
+            if (_list.Count > MaxItems)
+                _list.RemoveRange(0, _list.Count - MaxItems);
+        }
     }
 
     public List<TeacherNotif> GetAll()

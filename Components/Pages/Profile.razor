@@ -2,7 +2,7 @@
 @attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "student")]
 @inject AppState App
 @inject IAuthService Auth
-@inject AppDbContext Db
+@inject IDbContextFactory<AppDbContext> DbFactory
 @inject UserManager<AppUser> UserManager
 @inject NavigationManager Nav
 @inject TokenProtector Tokens
@@ -228,6 +228,7 @@
         _saving = true; StateHasChanged();
         var state = await AuthStateTask;
         var sub = Auth.GetSub(state.User);
+        await using var Db = await DbFactory.CreateDbContextAsync();
         var link = await Db.UserLinks.AsNoTracking()
                                      .FirstOrDefaultAsync(l => l.UserId == sub);
         if (link?.StudentId is int studentId)

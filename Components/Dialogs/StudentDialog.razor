@@ -73,7 +73,7 @@
     </DialogContent>
 </MudDialog>
 
-@inject AppDbContext Db
+@inject IDbContextFactory<AppDbContext> DbFactory
 @inject IDataService DataSvc
 @inject UserManager<AppUser> UserManager
 
@@ -110,6 +110,7 @@
 
         try
         {
+            await using var Db = await DbFactory.CreateDbContextAsync();
             // A brand-new group must also exist in the Groups table,
             // otherwise the registration page never offers it
             if (!await Db.Groups.AnyAsync(g => g.Name == finalGroup))
@@ -152,6 +153,9 @@
 
                 Existing.FirstName = _first.Trim(); Existing.LastName = _last.Trim(); Existing.Group = finalGroup;
                 Existing.Email = newEmail; Existing.Github = _github.Trim(); Existing.Initials = initials;
+                // Existing was loaded on the parent page's (now-disposed) context — attach it
+                // so this fresh context actually persists the edits.
+                Db.Students.Update(Existing);
                 await Db.SaveChangesAsync();
             }
             MudDialog.Close(DialogResult.Ok(true));

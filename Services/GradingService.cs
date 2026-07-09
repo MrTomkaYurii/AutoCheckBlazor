@@ -15,7 +15,7 @@ namespace AutoCheck.Services;
 ///   3. Gemini API   → ONE batch request for all tasks → state / score / feedback
 /// </summary>
 public class GradingService(
-    AppDbContext db,
+    IDbContextFactory<AppDbContext> dbf,
     INotificationService notif,
     IConfiguration cfg,
     IWebHostEnvironment env,
@@ -23,7 +23,8 @@ public class GradingService(
     GeminiQuotaService quota,
     GradingQueueService queue,
     PlagiarismService plagiarism,
-    TokenProtector tokens) : IGradingService
+    TokenProtector tokens,
+    IHttpClientFactory httpFactory) : IGradingService
 {
     private string ApiKey   => cfg["Gemini:ApiKey"]  ?? "";
     private string Model    => cfg["Gemini:Model"]   ?? "gemini-2.5-flash";
@@ -38,6 +39,10 @@ public class GradingService(
         int submissionId, int studentId,
         IProgress<string>? progress = null, CancellationToken ct = default)
     {
+        // Dedicated context for the whole grading run — not shared with the Blazor
+        // circuit, so the minutes-long clone + Gemini work can't collide with UI reads.
+        await using var db = await dbf.CreateDbContextAsync(ct);
+
         var sub = await db.Submissions
             .Include(x => x.LabDef).ThenInclude(l => l.Tasks)
             .Include(x => x.TaskResults).ThenInclude(tr => tr.DiffLines)
@@ -338,7 +343,7 @@ public class GradingService(
         try
         {
             quota.RecordCall();
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(120) };
+            var http = httpFactory.CreateClient("gemini");
 
             var body = JsonSerializer.Serialize(new
             {
@@ -349,16 +354,17 @@ public class GradingService(
                 generationConfig = new { responseMimeType = "application/json", temperature = 0.1 }
             });
 
-            var url = $"https://generativelanguage.googleapis.com/v1beta/models/{Model}:generateContent?key={ApiKey}";
+            // API key travels in the x-goog-api-key header, never in the URL/query
+            // (query strings leak into proxy and access logs).
+            var url = $"https://generativelanguage.googleapis.com/v1beta/models/{Model}:generateContent";
 
-            var content = new StringContent(body, Encoding.UTF8, "application/json");
-            var resp    = await http.PostAsync(url, content, ct);
+            var resp = await PostGeminiAsync(http, url, body, ct);
             if ((int)resp.StatusCode == 429)
             {
                 log.LogInformation("Gemini 429 on batch, waiting 30s");
                 await Task.Delay(TimeSpan.FromSeconds(30), ct);
-                content = new StringContent(body, Encoding.UTF8, "application/json");
-                resp    = await http.PostAsync(url, content, ct);
+                quota.RecordCall();   // the retry is a second real API call — count it
+                resp = await PostGeminiAsync(http, url, body, ct);
             }
 
             if (!resp.IsSuccessStatusCode)
@@ -718,14 +724,27 @@ public class GradingService(
 
     // ── Gemini health check ───────────────────────────────────────────────────
 
+    /// <summary>POSTs a JSON body to Gemini with the API key in the x-goog-api-key header.</summary>
+    private async Task<HttpResponseMessage> PostGeminiAsync(
+        HttpClient http, string url, string jsonBody, CancellationToken ct)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, url)
+        {
+            Content = new StringContent(jsonBody, Encoding.UTF8, "application/json"),
+        };
+        req.Headers.Add("x-goog-api-key", ApiKey);
+        return await http.SendAsync(req, ct);
+    }
+
     private async Task CheckGeminiAsync(CancellationToken ct)
     {
         try
         {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            var http = httpFactory.CreateClient("gemini-health");
             var body = """{"contents":[{"role":"user","parts":[{"text":"ping"}]}],"generationConfig":{"maxOutputTokens":1}}""";
-            var url  = $"https://generativelanguage.googleapis.com/v1beta/models/{Model}:generateContent?key={ApiKey}";
-            var resp = await http.PostAsync(url, new StringContent(body, Encoding.UTF8, "application/json"), ct);
+            var url  = $"https://generativelanguage.googleapis.com/v1beta/models/{Model}:generateContent";
+            quota.RecordCall();   // the health ping is a real API call — count it against the daily quota
+            var resp = await PostGeminiAsync(http, url, body, ct);
             if (!resp.IsSuccessStatusCode)
             {
                 var err = await resp.Content.ReadAsStringAsync(ct);

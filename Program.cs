@@ -16,8 +16,16 @@ builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddMudServices();
 
 // ── EF Core — SQLite ──────────────────────────────────────────────────────────
-builder.Services.AddDbContext<AppDbContext>(opt =>
+// Blazor Server keeps a DI scope alive for the whole circuit, so a single scoped
+// DbContext would be shared across concurrent renders, background timers and long
+// grading runs → "A second operation started on this context" crashes. Use a
+// factory so every logical operation gets its own short-lived context, and expose
+// a scoped shim resolved from that factory purely so ASP.NET Identity (which needs
+// a scoped AppDbContext) keeps working inside the per-request auth endpoints.
+builder.Services.AddDbContextFactory<AppDbContext>(opt =>
     opt.UseSqlite(builder.Configuration.GetConnectionString("Default")));
+builder.Services.AddScoped<AppDbContext>(sp =>
+    sp.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContext());
 
 // ── Auth — ASP.NET Core Identity (+ optional Google) ─────────────────────────
 builder.Services.AddIdentity<AppUser, IdentityRole>(opt =>
@@ -56,11 +64,30 @@ builder.Services.ConfigureApplicationCookie(opt =>
 
 // Trust X-Forwarded-For/-Proto from the reverse proxy (Nginx/Caddy/Traefik) so
 // the app sees the real client scheme/IP instead of the proxy's local connection.
+// SECURITY: only trust the proxy network(s) listed in ForwardedHeaders:KnownNetworks
+// (CIDR, comma/space separated) — otherwise any client could spoof its IP/scheme.
+// If none are configured we fall back to trusting all proxies (single-host Docker
+// default) but log a warning so production deployments tighten it.
 builder.Services.Configure<ForwardedHeadersOptions>(opt =>
 {
     opt.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
     opt.KnownIPNetworks.Clear();
     opt.KnownProxies.Clear();
+
+    var cidrs = (builder.Configuration["ForwardedHeaders:KnownNetworks"] ?? "")
+        .Split([',', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    foreach (var cidr in cidrs)
+    {
+        var parts = cidr.Split('/');
+        if (parts.Length == 2
+            && System.Net.IPAddress.TryParse(parts[0], out var prefix)
+            && int.TryParse(parts[1], out var len))
+            opt.KnownIPNetworks.Add(new System.Net.IPNetwork(prefix, len));
+    }
+    if (opt.KnownIPNetworks.Count == 0)
+        Console.Error.WriteLine(
+            "[warn] ForwardedHeaders: no KnownNetworks configured — trusting X-Forwarded-* " +
+            "from any source. Set ForwardedHeaders:KnownNetworks to your proxy subnet in production.");
 });
 
 // Google login is optional — enabled only when ClientId is configured
@@ -103,6 +130,9 @@ builder.Services.AddSingleton<TeacherNotificationService>();
 builder.Services.AddScoped<AppState>();
 builder.Services.AddScoped<GitHubService>();
 builder.Services.AddHttpClient("github");
+// Pooled clients for Gemini — avoids socket exhaustion from `new HttpClient()` per grade.
+builder.Services.AddHttpClient("gemini", c => c.Timeout = TimeSpan.FromSeconds(120));
+builder.Services.AddHttpClient("gemini-health", c => c.Timeout = TimeSpan.FromSeconds(10));
 
 // ── Build ─────────────────────────────────────────────────────────────────────
 var app = builder.Build();
@@ -262,7 +292,16 @@ app.MapGet("/account/google-callback", async (
         await auth.LinkStudentAsync(user, "");   // group is chosen at /onboarding
     }
 
-    await users.AddLoginAsync(user, info);
+    // Link the Google login to the account. A failure here means the external login
+    // wasn't attached, so a later ExternalLoginSignInAsync would keep missing — surface
+    // it instead of silently signing in a half-linked account (existing users can still
+    // fall back to password login).
+    var linked = await users.AddLoginAsync(user, info);
+    if (!linked.Succeeded)
+        return Results.Redirect(Fail(isNew
+            ? "Не вдалося звʼязати акаунт Google. Спробуйте ще раз."
+            : "Цей email уже має акаунт. Увійдіть з паролем, потім привʼяжіть Google у профілі."));
+
     await signIn.SignInAsync(user, isPersistent: true);
     return Results.Redirect(isNew ? "/onboarding" : dest);
 }).AllowAnonymous();

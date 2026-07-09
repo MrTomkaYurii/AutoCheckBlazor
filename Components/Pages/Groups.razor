@@ -1,6 +1,6 @@
 @page "/teacher/groups"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "teacher")]
-@inject AppDbContext Db
+@inject IDbContextFactory<AppDbContext> DbFactory
 @inject IJSRuntime JS
 
 <TopBar Title="Групи" Sub="Управління академічними групами" />
@@ -112,8 +112,11 @@
         _loading = false;
     }
 
-    private async Task Reload() =>
+    private async Task Reload()
+    {
+        await using var Db = await DbFactory.CreateDbContextAsync();
         _groups = await Db.Groups.OrderBy(g => g.OrderIndex).ThenBy(g => g.Name).ToListAsync();
+    }
 
     // ── Add ──────────────────────────────────────────────────────────────────
 
@@ -124,6 +127,7 @@
     {
         if (string.IsNullOrWhiteSpace(_newName)) return;
         var maxOrder = _groups.Count > 0 ? _groups.Max(g => g.OrderIndex) + 1 : 0;
+        await using var Db = await DbFactory.CreateDbContextAsync();
         Db.Groups.Add(new GroupRecord { Name = _newName.Trim(), Description = _newDesc.Trim().Length > 0 ? _newDesc.Trim() : null, OrderIndex = maxOrder });
         await Db.SaveChangesAsync();
         await Reload();
@@ -144,6 +148,7 @@
     private async Task SaveEdit()
     {
         if (string.IsNullOrWhiteSpace(_editName)) return;
+        await using var Db = await DbFactory.CreateDbContextAsync();
         var g = await Db.Groups.FindAsync(_editId);
         if (g is null) return;
 
@@ -172,6 +177,7 @@
 
     private async Task Delete(GroupRecord g)
     {
+        await using var Db = await DbFactory.CreateDbContextAsync();
         var count = await Db.Students.CountAsync(s => s.Group == g.Name);
         var warn = count > 0
             ? $" У ній {count} студент(ів) — вони залишаться, але без прив'язки до групи зі списку."

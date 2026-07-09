@@ -2,7 +2,7 @@
 @layout LoginLayout
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthProvider
-@inject AppDbContext Db
+@inject IDbContextFactory<AppDbContext> DbFactory
 @inject IConfiguration Cfg
 @using Microsoft.EntityFrameworkCore
 
@@ -103,6 +103,7 @@
     protected override async Task OnInitializedAsync()
     {
         _googleEnabled = !string.IsNullOrEmpty(Cfg["Authentication:Google:ClientId"]);
+        await using var Db = await DbFactory.CreateDbContextAsync();
         _groups = await Db.Groups.OrderBy(g => g.OrderIndex).ThenBy(g => g.Name)
                                  .Select(g => g.Name).ToListAsync();
     }

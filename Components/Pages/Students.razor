@@ -3,7 +3,7 @@
 @inject NavigationManager Nav
 @inject IDataService Data
 @inject IDialogService Dialog
-@inject AppDbContext Db
+@inject IDbContextFactory<AppDbContext> DbFactory
 @inject UserManager<AppUser> UserManager
 @inject IJSRuntime JS
 
@@ -133,6 +133,7 @@
 
     private async Task EditStudent(int id)
     {
+        await using var Db = await DbFactory.CreateDbContextAsync();
         var rec = await Db.Students.FindAsync(id);
         if (rec is null) return;
         var p = new DialogParameters { ["Existing"] = rec };
@@ -142,6 +143,7 @@
 
     private async Task DeleteStudent(int id)
     {
+        await using var Db = await DbFactory.CreateDbContextAsync();
         var rec = await Db.Students.FindAsync(id);
         if (rec is null) return;
 
@@ -173,6 +175,7 @@
     {
         _resetName = _resetPassword = _resetError = "";
 
+        await using var Db = await DbFactory.CreateDbContextAsync();
         var rec  = await Db.Students.FindAsync(studentId);
         var link = await Db.UserLinks.AsNoTracking().FirstOrDefaultAsync(l => l.StudentId == studentId);
         var user = link is null ? null : await UserManager.FindByIdAsync(link.UserId);

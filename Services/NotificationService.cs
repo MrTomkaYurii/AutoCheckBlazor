@@ -3,10 +3,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AutoCheck.Services;
 
-public class NotificationService(AppDbContext db, EmailService email) : INotificationService
+public class NotificationService(IDbContextFactory<AppDbContext> dbf, EmailService email) : INotificationService
 {
     public async Task SendAsync(int studentId, string title, string body, string type = "info")
     {
+        await using var db = await dbf.CreateDbContextAsync();
         db.Notifications.Add(new Notification
         {
             StudentId = studentId, Title = title, Body = body,
@@ -24,17 +25,24 @@ public class NotificationService(AppDbContext db, EmailService email) : INotific
         }
     }
 
-    public Task<List<Notification>> GetUnreadAsync(int studentId) =>
-        db.Notifications
+    public async Task<List<Notification>> GetUnreadAsync(int studentId)
+    {
+        await using var db = await dbf.CreateDbContextAsync();
+        return await db.Notifications
           .Where(n => n.StudentId == studentId && !n.IsRead)
           .OrderByDescending(n => n.CreatedAt)
           .ToListAsync();
+    }
 
-    public Task<int> GetUnreadCountAsync(int studentId) =>
-        db.Notifications.CountAsync(n => n.StudentId == studentId && !n.IsRead);
+    public async Task<int> GetUnreadCountAsync(int studentId)
+    {
+        await using var db = await dbf.CreateDbContextAsync();
+        return await db.Notifications.CountAsync(n => n.StudentId == studentId && !n.IsRead);
+    }
 
     public async Task MarkReadAsync(int id)
     {
+        await using var db = await dbf.CreateDbContextAsync();
         var n = await db.Notifications.FindAsync(id);
         if (n is null) return;
         n.IsRead = true;
@@ -43,6 +51,7 @@ public class NotificationService(AppDbContext db, EmailService email) : INotific
 
     public async Task MarkAllReadAsync(int studentId)
     {
+        await using var db = await dbf.CreateDbContextAsync();
         var unread = await db.Notifications
             .Where(n => n.StudentId == studentId && !n.IsRead)
             .ToListAsync();

@@ -12,14 +12,18 @@
 
   <ItemGroup>
     <PackageReference Include="MudBlazor" Version="9.5.0" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.0" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0">
+    <!-- 9.0.11 pulls in SQLitePCLRaw >= 2.1.11, patching the NU1903 advisory (GHSA-2m69-gcr7-jv3q). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.11" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.11">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="9.0.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="9.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="9.0.11" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="9.0.11" />
     <PackageReference Include="Markdig" Version="0.38.0" />
+    <!-- Force the patched native SQLite bundle — transitive resolution otherwise pins the
+         vulnerable 2.1.10 (NU1903 / GHSA-2m69-gcr7-jv3q); 3.x ships the fixed e_sqlite3. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
   </ItemGroup>
 
   <ItemGroup>

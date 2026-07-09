@@ -4,18 +4,25 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AutoCheck.Services;
 
-public class LabManagementService(AppDbContext db, IWebHostEnvironment env) : ILabManagementService
+public class LabManagementService(IDbContextFactory<AppDbContext> dbf, IWebHostEnvironment env) : ILabManagementService
 {
     // ── Lab CRUD ──────────────────────────────────────────────────────────────
 
-    public Task<List<LabDef>> GetAllAsync() =>
-        db.Labs.Include(l => l.Tasks).OrderBy(l => l.Number).ToListAsync();
+    public async Task<List<LabDef>> GetAllAsync()
+    {
+        await using var db = await dbf.CreateDbContextAsync();
+        return await db.Labs.Include(l => l.Tasks).OrderBy(l => l.Number).ToListAsync();
+    }
 
-    public Task<LabDef?> GetAsync(int id) =>
-        db.Labs.Include(l => l.Tasks).FirstOrDefaultAsync(l => l.Id == id);
+    public async Task<LabDef?> GetAsync(int id)
+    {
+        await using var db = await dbf.CreateDbContextAsync();
+        return await db.Labs.Include(l => l.Tasks).FirstOrDefaultAsync(l => l.Id == id);
+    }
 
     public async Task<LabDef> CreateAsync(CreateLabDto dto)
     {
+        await using var db = await dbf.CreateDbContextAsync();
         var lab = new LabDef
         {
             Number = dto.Number, Title = dto.Title, Goal = dto.Goal,
@@ -37,6 +44,7 @@ public class LabManagementService(AppDbContext db, IWebHostEnvironment env) : IL
 
     public async Task UpdateAsync(int id, CreateLabDto dto)
     {
+        await using var db = await dbf.CreateDbContextAsync();
         var lab = await db.Labs.FindAsync(id) ?? throw new KeyNotFoundException();
         lab.Number = dto.Number; lab.Title = dto.Title; lab.Goal = dto.Goal;
         lab.BranchName = dto.BranchName; lab.MergesMain = dto.MergesMain;
@@ -46,6 +54,7 @@ public class LabManagementService(AppDbContext db, IWebHostEnvironment env) : IL
 
     public async Task DeleteAsync(int id)
     {
+        await using var db = await dbf.CreateDbContextAsync();
         var lab = await db.Labs.FindAsync(id) ?? throw new KeyNotFoundException();
         db.Labs.Remove(lab);
         await db.SaveChangesAsync();
@@ -53,11 +62,15 @@ public class LabManagementService(AppDbContext db, IWebHostEnvironment env) : IL
 
     // ── Task CRUD ─────────────────────────────────────────────────────────────
 
-    public Task<List<LabTask>> GetTasksAsync(int labId) =>
-        db.LabTasks.Where(t => t.LabDefId == labId).OrderBy(t => t.Number).ToListAsync();
+    public async Task<List<LabTask>> GetTasksAsync(int labId)
+    {
+        await using var db = await dbf.CreateDbContextAsync();
+        return await db.LabTasks.Where(t => t.LabDefId == labId).OrderBy(t => t.Number).ToListAsync();
+    }
 
     public async Task<LabTask> CreateTaskAsync(int labId, CreateTaskDto dto)
     {
+        await using var db = await dbf.CreateDbContextAsync();
         var t = new LabTask
         {
             LabDefId = labId, Number = dto.Number, Title = dto.Title,
@@ -70,6 +83,7 @@ public class LabManagementService(AppDbContext db, IWebHostEnvironment env) : IL
 
     public async Task UpdateTaskAsync(int id, CreateTaskDto dto)
     {
+        await using var db = await dbf.CreateDbContextAsync();
         var t = await db.LabTasks.FindAsync(id) ?? throw new KeyNotFoundException();
         t.Number = dto.Number; t.Title = dto.Title; t.Brief = dto.Brief; t.Difficulty = dto.Difficulty;
         await db.SaveChangesAsync();
@@ -77,6 +91,7 @@ public class LabManagementService(AppDbContext db, IWebHostEnvironment env) : IL
 
     public async Task DeleteTaskAsync(int id)
     {
+        await using var db = await dbf.CreateDbContextAsync();
         var t = await db.LabTasks.FindAsync(id) ?? throw new KeyNotFoundException();
         db.LabTasks.Remove(t);
         await db.SaveChangesAsync();
@@ -89,6 +104,7 @@ public class LabManagementService(AppDbContext db, IWebHostEnvironment env) : IL
         var dir = Path.Combine(env.ContentRootPath, "content", "labs");
         if (!Directory.Exists(dir)) return [];
 
+        await using var db = await dbf.CreateDbContextAsync();
         var existingNumbers = await db.Labs.Select(l => l.Number).ToHashSetAsync();
         var result = new List<MdImportPreviewItem>();
 
@@ -114,6 +130,7 @@ public class LabManagementService(AppDbContext db, IWebHostEnvironment env) : IL
         var dir = Path.Combine(env.ContentRootPath, "content", "labs");
         if (!Directory.Exists(dir)) return (0, 0);
 
+        await using var db = await dbf.CreateDbContextAsync();
         var set = new HashSet<int>(labNumbers);
         int labCount = 0, taskCount = 0;
 

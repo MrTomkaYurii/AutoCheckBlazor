@@ -62,7 +62,7 @@ public class DeadlineReminderService(
             {
                 await notif.SendAsync(studentId, title,
                     $"Нагадування: дедлайн здачі «{lab.Title}» — " +
-                    $"{lab.Deadline!.Value.ToLocalTime():dd.MM.yyyy HH:mm}. " +
+                    $"{KyivTime.FromUtc(lab.Deadline!.Value):dd.MM.yyyy HH:mm}. " +
                     "Не забудьте здати роботу на авто-перевірку.",
                     "deadline");
             }

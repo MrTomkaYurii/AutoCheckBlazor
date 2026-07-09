@@ -17,8 +17,9 @@ public class CommentServiceTests : IDisposable
         var opts = new DbContextOptionsBuilder<AppDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
-        _db = new AppDbContext(opts);
-        _svc = new CommentService(_db);
+        var factory = new TestDbContextFactory(opts);
+        _db = factory.CreateDbContext();
+        _svc = new CommentService(factory);
 
         // Seed minimal required data
         var student = new StudentRecord { FirstName = "Test", LastName = "User", Group = "КН-31", Initials = "TU" };

@@ -163,7 +163,7 @@
     </DialogContent>
 </MudDialog>
 
-@inject AppDbContext Db
+@inject IDbContextFactory<AppDbContext> DbFactory
 @inject INotificationService Notif
 @inject AppState App
 
@@ -192,6 +192,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await using var Db = await DbFactory.CreateDbContextAsync();
         var student = await Db.Students.FindAsync(StudentId);
         if (student is null) return;
         _name     = student.LastName + " " + student.FirstName;
@@ -253,6 +254,7 @@
 
     private async Task AddAttempt()
     {
+        await using var Db = await DbFactory.CreateDbContextAsync();
         var sub = await Db.Submissions
             .Include(s => s.LabDef)
             .FirstOrDefaultAsync(s => s.StudentId == StudentId && s.LabDef.Number == LabId);
@@ -282,6 +284,7 @@
         if (_defNum is null) return;
         _saving = true; StateHasChanged();
 
+        await using var Db = await DbFactory.CreateDbContextAsync();
         var sub = await Db.Submissions
             .Include(s => s.LabDef)
             .FirstOrDefaultAsync(s => s.StudentId == StudentId && s.LabDef.Number == LabId);
@@ -315,6 +318,7 @@
     {
         _saving = true; StateHasChanged();
 
+        await using var Db = await DbFactory.CreateDbContextAsync();
         var sub = await Db.Submissions
             .Include(s => s.LabDef)
             .FirstOrDefaultAsync(s => s.StudentId == StudentId && s.LabDef.Number == LabId);

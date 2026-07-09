@@ -8,6 +8,7 @@ obj/
 _design/
 _instructions/
 backups/
+backup-repo/
 dp-keys/
 autocheck.db
 autocheck.db-shm

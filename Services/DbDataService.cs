@@ -4,20 +4,22 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AutoCheck.Services;
 
-public class DbDataService(AppDbContext db, TokenProtector tokens) : IDataService
+public class DbDataService(IDbContextFactory<AppDbContext> dbf, TokenProtector tokens) : IDataService
 {
-    private static readonly string[] Whens = ["щойно", "12 хв тому", "годину тому", "сьогодні, 09:14", "вчора, 18:40"];
-
     // ── Student ───────────────────────────────────────────────────────────────
 
+    // NOTE: seeding/tests only — returns an arbitrary first student, NOT the
+    // logged-in one. Request-scoped identity comes from AppState/AuthService.
     public async Task<Student> GetCurrentStudentAsync()
     {
+        await using var db = await dbf.CreateDbContextAsync();
         var s = await db.Students.FirstAsync();
         return Map(s);
     }
 
     public async Task<List<Lab>> GetStudentLabsAsync(int studentId)
     {
+        await using var db = await dbf.CreateDbContextAsync();
         var subs = await db.Submissions
             .Include(x => x.LabDef)
             .Where(x => x.StudentId == studentId)
@@ -42,6 +44,7 @@ public class DbDataService(AppDbContext db, TokenProtector tokens) : IDataServic
 
     public async Task<LabDetail?> GetLabDetailAsync(int labNumber, int studentId, int? attemptNo = null)
     {
+        await using var db = await dbf.CreateDbContextAsync();
         var sub = await db.Submissions
             .Include(x => x.LabDef).ThenInclude(l => l.Tasks)
             .Include(x => x.TaskResults).ThenInclude(tr => tr.LabTask)
@@ -111,35 +114,45 @@ public class DbDataService(AppDbContext db, TokenProtector tokens) : IDataServic
 
     // ── Teacher ───────────────────────────────────────────────────────────────
 
+    // NOTE: seeding/tests only — returns an arbitrary first teacher. The logged-in
+    // teacher comes from AppState/AuthService, not this method.
     public async Task<Teacher> GetTeacherAsync()
     {
+        await using var db = await dbf.CreateDbContextAsync();
         var t = await db.Teachers.FirstAsync();
         return new Teacher { FirstName = t.FirstName, LastName = t.LastName, Initials = t.Initials, Title = t.Title, Course = t.Course };
     }
 
     public async Task<string[]> GetTeacherGroupsAsync()
     {
+        await using var db = await dbf.CreateDbContextAsync();
         var groups = await db.Students.Select(s => s.Group).Distinct().OrderBy(g => g).ToListAsync();
         return ["Усі групи", .. groups];
     }
 
     public async Task<List<(int Id, string Short, string Title)>> GetLabColumnsAsync()
     {
+        await using var db = await dbf.CreateDbContextAsync();
         var rows = await db.Labs.OrderBy(l => l.Number).Select(l => new { l.Number, l.Title }).ToListAsync();
         return rows.Select(r => (r.Number, "L" + r.Number.ToString("D2"), r.Title)).ToList();
     }
 
     public async Task<List<RosterStudent>> GetRosterAsync()
     {
+        await using var db = await dbf.CreateDbContextAsync();
         var students = await db.Students.OrderBy(s => s.Id).ToListAsync();
         var labs     = await db.Labs.OrderBy(l => l.Number).ToListAsync();
         var allSubs  = await db.Submissions.ToListAsync();
+
+        // Index submissions by (student, lab) so the per-cell lookup is O(1) instead
+        // of scanning the whole list for every student × lab combination.
+        var subIndex = allSubs.ToDictionary(x => (x.StudentId, x.LabDefId));
 
         return students.Select(s =>
         {
             var cells = labs.Select(lab =>
             {
-                var sub = allSubs.FirstOrDefault(x => x.StudentId == s.Id && x.LabDefId == lab.Id);
+                var sub = subIndex.GetValueOrDefault((s.Id, lab.Id));
                 return sub is null
                     ? new Cell { Status = LabStatus.Locked }
                     : new Cell
@@ -163,6 +176,7 @@ public class DbDataService(AppDbContext db, TokenProtector tokens) : IDataServic
 
     public async Task<TeacherStats> GetStatsAsync()
     {
+        await using var db = await dbf.CreateDbContextAsync();
         var subs = await db.Submissions.ToListAsync();
         var done = subs.Where(x => x.Status == (int)LabStatus.Done).ToList();
         var nonLocked = subs.Where(x => x.Status != (int)LabStatus.Locked).ToList();
@@ -182,6 +196,7 @@ public class DbDataService(AppDbContext db, TokenProtector tokens) : IDataServic
 
     public async Task<List<LabStat>> GetLabStatsAsync()
     {
+        await using var db = await dbf.CreateDbContextAsync();
         var labs    = await db.Labs.OrderBy(l => l.Number).ToListAsync();
         var allSubs = await db.Submissions.ToListAsync();
         int total   = await db.Students.CountAsync();
@@ -209,6 +224,7 @@ public class DbDataService(AppDbContext db, TokenProtector tokens) : IDataServic
 
     public async Task<List<ReviewItem>> GetReviewQueueAsync()
     {
+        await using var db = await dbf.CreateDbContextAsync();
         var subs = await db.Submissions
             .Include(x => x.Student).Include(x => x.LabDef)
             .Where(x => x.Status == (int)LabStatus.Review)
@@ -226,12 +242,13 @@ public class DbDataService(AppDbContext db, TokenProtector tokens) : IDataServic
             LabTitle    = s.LabDef.Title,
             Auto        = s.AutoScore ?? 0,
             SubmittedAt = s.SubmittedAt,
-            When        = s.SubmittedAt.HasValue ? FormatWhen(s.SubmittedAt.Value) : Whens[s.StudentId % 5],
+            When        = s.SubmittedAt.HasValue ? FormatWhen(s.SubmittedAt.Value) : "—",
         }).ToList();
     }
 
     public async Task<List<ReviewItem>> GetRejectedQueueAsync()
     {
+        await using var db = await dbf.CreateDbContextAsync();
         var subs = await db.Submissions
             .Include(x => x.Student).Include(x => x.LabDef)
             .Where(x => x.Status == (int)LabStatus.Rejected)
@@ -258,12 +275,13 @@ public class DbDataService(AppDbContext db, TokenProtector tokens) : IDataServic
     private static string FormatWhen(DateTime dt)
     {
         var diff = DateTime.UtcNow - dt;
+        var kyiv = KyivTime.FromUtc(dt);
         if (diff.TotalMinutes < 2)  return "щойно";
         if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes} хв тому";
         if (diff.TotalHours < 2)    return "годину тому";
-        if (diff.TotalHours < 24)   return $"сьогодні, {dt.ToLocalTime():HH:mm}";
-        if (diff.TotalHours < 48)   return $"вчора, {dt.ToLocalTime():HH:mm}";
-        return dt.ToLocalTime().ToString("dd.MM, HH:mm");
+        if (diff.TotalHours < 24)   return $"сьогодні, {kyiv:HH:mm}";
+        if (diff.TotalHours < 48)   return $"вчора, {kyiv:HH:mm}";
+        return kyiv.ToString("dd.MM, HH:mm");
     }
 
     private Student Map(StudentRecord s) =>

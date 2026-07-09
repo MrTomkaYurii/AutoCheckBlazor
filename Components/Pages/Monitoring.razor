@@ -1,6 +1,6 @@
 @page "/teacher/monitoring"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "teacher")]
-@inject AppDbContext Db
+@inject IDbContextFactory<AppDbContext> DbFactory
 @inject IDataService DataSvc
 @inject ICommentService CommentSvc
 @inject IDialogService Dialog
@@ -314,6 +314,7 @@
         _labStats = await DataSvc.GetLabStatsAsync();
         _threads  = await CommentSvc.GetAllThreadsAsync();
 
+        await using var Db = await DbFactory.CreateDbContextAsync();
         _finals      = await Db.Submissions.Where(s => s.FinalScore.HasValue).Select(s => s.FinalScore!.Value).ToListAsync();
         _totalFinals = _finals.Count;
     }

@@ -18,10 +18,11 @@ public class NotificationServiceTests : IDisposable
         var opts = new DbContextOptionsBuilder<AppDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
-        _db = new AppDbContext(opts);
+        var factory = new TestDbContextFactory(opts);
+        _db = factory.CreateDbContext();
         // empty config → EmailService disabled (no SMTP host), notifications stay in-app only
         var email = new EmailService(new ConfigurationBuilder().Build(), NullLogger<EmailService>.Instance);
-        _svc = new NotificationService(_db, email);
+        _svc = new NotificationService(factory, email);
 
         // Seed one student
         _db.Students.Add(new StudentRecord
@@ -80,6 +81,7 @@ public class NotificationServiceTests : IDisposable
 
         await _svc.MarkReadAsync(id);
 
+        _db.ChangeTracker.Clear();   // service saved via its own context — re-read from store
         _db.Notifications.First().IsRead.Should().BeTrue();
     }
 

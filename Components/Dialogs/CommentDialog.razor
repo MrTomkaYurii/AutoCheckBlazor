@@ -57,7 +57,7 @@
 @inject ICommentService CommentSvc
 @inject INotificationService NotifSvc
 @inject TeacherNotificationService TeacherNotif
-@inject AppDbContext Db
+@inject IDbContextFactory<AppDbContext> DbFactory
 @inject AppState App
 
 @code {
@@ -94,6 +94,7 @@
         if (_isTeacher)
         {
             // Викладач коментує → сповіщення студенту
+            await using var Db = await DbFactory.CreateDbContextAsync();
             var sub = await Db.Submissions.FindAsync(SubmissionId);
             if (sub is not null)
                 await NotifSvc.SendAsync(

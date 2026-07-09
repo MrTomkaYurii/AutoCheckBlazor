@@ -2,7 +2,7 @@
 @attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "teacher")]
 @inject AppState App
 @inject IAuthService Auth
-@inject AppDbContext Db
+@inject IDbContextFactory<AppDbContext> DbFactory
 @inject IConfiguration Cfg
 @inject IWebHostEnvironment Env
 @inject GeminiQuotaService Quota
@@ -353,6 +353,7 @@
         _backingUp = true; StateHasChanged();
         try
         {
+            await using var Db = await DbFactory.CreateDbContextAsync();
             var path = await BackupHelper.BackupNowAsync(Db, Env, Cfg);
             _backupMsg = $"ok:Бекап створено: {Path.GetFileName(path)}";
         }
@@ -369,9 +370,12 @@
     private bool _teacherAddOpen, _savingTeacher;
     private string _tFirst = "", _tLast = "", _tEmail = "", _teacherMsg = "", _teacherTempPw = "";
 
-    private async Task LoadTeachersAsync() =>
+    private async Task LoadTeachersAsync()
+    {
+        await using var Db = await DbFactory.CreateDbContextAsync();
         _teachers = await Db.Teachers.AsNoTracking().Include(t => t.UserLink)
                                      .OrderBy(t => t.Id).ToListAsync();
+    }
 
     private async Task AddTeacher()
     {
@@ -424,6 +428,7 @@
         // load email from DB (TeacherRecord.Email)
         var state = await AuthStateTask;
         var sub   = Auth.GetSub(state.User);
+        await using var Db = await DbFactory.CreateDbContextAsync();
         var link  = await Db.UserLinks.AsNoTracking().FirstOrDefaultAsync(l => l.UserId == sub);
         if (link?.TeacherId is int tid)
         {
@@ -441,6 +446,7 @@
 
     private async Task LoadLabAttemptsAsync()
     {
+        await using var Db = await DbFactory.CreateDbContextAsync();
         var labs = await Db.Labs.OrderBy(l => l.Number).Select(l => new { l.Id, l.Number, l.Title, l.AttemptsMax }).ToListAsync();
         _labAttempts = labs.Select(l => new LabAttemptsRow
         {
@@ -468,6 +474,7 @@
         _savingAttempts = true; StateHasChanged();
         try
         {
+            await using var Db = await DbFactory.CreateDbContextAsync();
             foreach (var row in _labAttempts.Where(r => r.Changed))
             {
                 await Db.Labs.Where(l => l.Id == row.LabId)
@@ -558,6 +565,7 @@
         _savingProfile = true; StateHasChanged();
         var state = await AuthStateTask;
         var sub   = Auth.GetSub(state.User);
+        await using var Db = await DbFactory.CreateDbContextAsync();
         var link  = await Db.UserLinks.AsNoTracking().FirstOrDefaultAsync(l => l.UserId == sub);
         if (link?.TeacherId is int teacherId)
         {

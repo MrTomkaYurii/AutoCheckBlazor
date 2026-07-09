@@ -19,8 +19,9 @@ public class DbDataServiceTests : IDisposable
         var opts = new DbContextOptionsBuilder<AppDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
-        _db = new AppDbContext(opts);
-        _svc = new DbDataService(_db, new TokenProtector(new EphemeralDataProtectionProvider()));
+        var factory = new TestDbContextFactory(opts);
+        _db = factory.CreateDbContext();
+        _svc = new DbDataService(factory, new TokenProtector(new EphemeralDataProtectionProvider()));
         SeedData();
     }
 

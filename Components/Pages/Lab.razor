@@ -6,7 +6,7 @@
 @inject IGradingService Grader
 @inject IDialogService Dialog
 @inject AppState App
-@inject AppDbContext Db
+@inject IDbContextFactory<AppDbContext> DbFactory
 @inject GitHubService GitHub
 @inject GeminiQuotaService Quota
 
@@ -567,7 +567,7 @@
                         <div class="summary-chip" style="border-color:@(mapped ? "var(--st-green)" : "var(--line)");background:@(mapped ? "rgba(118,199,173,0.1)" : "transparent");color:@(mapped ? "var(--st-green)" : "var(--tx-3)")">
                             <Icon Name="@(mapped ? "check" : "x")" Size="11" />
                             Task@(t.Number)
-                            @if (mapped) { <span class="mono summary-chip-sha">@assignedSha[..7]</span> }
+                            @if (assignedSha is not null) { <span class="mono summary-chip-sha">@assignedSha[..7]</span> }
                         </div>
                     }
                 </div>
@@ -846,6 +846,7 @@
         StateHasChanged();
         try
         {
+            await using var Db = await DbFactory.CreateDbContextAsync();
             var labDef = await Db.Labs
                 .Include(l => l.Tasks)
                 .FirstOrDefaultAsync(l => l.Number == Id);
@@ -874,6 +875,7 @@
         _phase = "running";
         StateHasChanged();
 
+        await using var Db = await DbFactory.CreateDbContextAsync();
         var sub = await Db.Submissions
             .Include(s => s.LabDef)
             .FirstOrDefaultAsync(s => s.StudentId == _studentId && s.LabDef.Number == Id);
@@ -910,6 +912,7 @@
     // ── Comments ──────────────────────────────────────────────────────────────
     private async Task OpenComments()
     {
+        await using var Db = await DbFactory.CreateDbContextAsync();
         var sub = await Db.Submissions.Include(s => s.LabDef)
             .FirstOrDefaultAsync(s => s.StudentId == _studentId && s.LabDef.Number == Id);
         if (sub is null) return;
