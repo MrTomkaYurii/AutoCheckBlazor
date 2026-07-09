@@ -1,0 +1,65 @@
+# Production compose that runs on the VPS.
+# The app image is built + pushed by GitHub Actions (see .github/workflows/deploy.yml);
+# here we only PULL it. Caddy terminates TLS (auto Let's Encrypt) and proxies to the app
+# over the internal Docker network — the app itself is never exposed to the host.
+#
+# Values come from the .env file the deploy workflow writes next to this file.
+
+services:
+  autocheck:
+    image: ghcr.io/mrtomkayurii/autocheckblazor:latest
+    restart: unless-stopped
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      # Only Caddy (on the pinned subnet below) may set X-Forwarded-Proto/-For.
+      - ForwardedHeaders__KnownNetworks=172.28.0.0/16
+      - Gemini__ApiKey=${GEMINI_API_KEY}
+      - Gemini__Model=${GEMINI_MODEL:-gemini-2.5-flash}
+      - Gemini__DailyLimit=${GEMINI_DAILY_LIMIT:-50}
+      - Authentication__Google__ClientId=${GOOGLE_CLIENT_ID:-}
+      - Authentication__Google__ClientSecret=${GOOGLE_CLIENT_SECRET:-}
+      - Email__SmtpHost=${SMTP_HOST:-}
+      - Email__SmtpPort=${SMTP_PORT:-587}
+      - Email__SmtpUser=${SMTP_USER:-}
+      - Email__SmtpPassword=${SMTP_PASSWORD:-}
+      - Email__From=${SMTP_FROM:-}
+      - Email__FromName=${SMTP_FROM_NAME:-AutoCheck}
+      - Backup__Git__RemoteUrl=${BACKUP_GIT_REMOTE_URL:-}
+      - Backup__Git__Token=${BACKUP_GIT_TOKEN:-}
+      - Backup__Git__KeepLast=${BACKUP_GIT_KEEP_LAST:-14}
+    volumes:
+      - autocheck-data:/app/data
+      - autocheck-backups:/app/backups
+      - autocheck-dpkeys:/app/dp-keys
+      - autocheck-backup-repo:/app/backup-repo
+    networks: [autonet]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - APP_DOMAIN=${APP_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data      # persisted certificates — survives restarts
+      - caddy-config:/config
+    depends_on:
+      - autocheck
+    networks: [autonet]
+
+networks:
+  autonet:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  autocheck-data:
+  autocheck-backups:
+  autocheck-dpkeys:
+  autocheck-backup-repo:
+  caddy-data:
+  caddy-config:

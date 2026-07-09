@@ -4,7 +4,9 @@ obj/
 .vscode/
 .idea/
 .git/
+.github/
 .claude/
+deploy/
 _design/
 _instructions/
 backups/
