@@ -17,8 +17,9 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends git curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Persistent data lives under /app/data — mount this as a volume
-RUN mkdir -p /app/data /app/backups /app/dp-keys \
+# Persistent data lives under /app/data — mount these as volumes.
+# /app/backup-repo is the local clone used to mirror backups into a private git repo.
+RUN mkdir -p /app/data /app/backups /app/dp-keys /app/backup-repo \
     && groupadd -r autocheck && useradd -r -g autocheck -d /app autocheck \
     && chown -R autocheck:autocheck /app
 

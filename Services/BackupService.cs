@@ -20,7 +20,7 @@ public class BackupService(
             {
                 using var scope = scopeFactory.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                var path = await BackupHelper.BackupNowAsync(db, env, cfg);
+                var path = await BackupHelper.BackupNowAsync(db, env, cfg, log);
                 log.LogInformation("DB backup created: {Path}", path);
             }
             catch (Exception ex)

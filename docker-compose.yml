@@ -18,12 +18,20 @@ services:
       - Email__SmtpPassword=${SMTP_PASSWORD:-}
       - Email__From=${SMTP_FROM:-}
       - Email__FromName=${SMTP_FROM_NAME:-AutoCheck}
+      # Off-host backup mirror — leave empty to disable
+      - Backup__Git__RemoteUrl=${BACKUP_GIT_REMOTE_URL:-}
+      - Backup__Git__Token=${BACKUP_GIT_TOKEN:-}
+      - Backup__Git__KeepLast=${BACKUP_GIT_KEEP_LAST:-14}
+      - Backup__Git__UserName=${BACKUP_GIT_USER_NAME:-AutoCheck Backup}
+      - Backup__Git__UserEmail=${BACKUP_GIT_USER_EMAIL:-backup@autocheck.local}
     volumes:
       - autocheck-data:/app/data
       - autocheck-backups:/app/backups
       - autocheck-dpkeys:/app/dp-keys
+      - autocheck-backup-repo:/app/backup-repo
 
 volumes:
   autocheck-data:
   autocheck-backups:
   autocheck-dpkeys:
+  autocheck-backup-repo:

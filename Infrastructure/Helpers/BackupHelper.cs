@@ -1,5 +1,6 @@
 using AutoCheck.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace AutoCheck.Services;
 
@@ -7,7 +8,7 @@ namespace AutoCheck.Services;
 public static class BackupHelper
 {
     public static async Task<string> BackupNowAsync(
-        AppDbContext db, IWebHostEnvironment env, IConfiguration cfg)
+        AppDbContext db, IWebHostEnvironment env, IConfiguration cfg, ILogger? log = null)
     {
         var dir = cfg["Backup:Dir"];
         if (string.IsNullOrEmpty(dir)) dir = Path.Combine(env.ContentRootPath, "backups");
@@ -22,6 +23,9 @@ public static class BackupHelper
                                      .OrderByDescending(f => f, StringComparer.Ordinal)
                                      .Skip(keep))
             File.Delete(old);
+
+        // Off-host mirror — no-op unless Backup:Git:RemoteUrl/Token are configured
+        await GitBackupSync.SyncAsync(path, cfg, log ?? NullLogger.Instance);
 
         return path;
     }
