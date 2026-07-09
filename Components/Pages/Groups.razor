@@ -5,50 +5,50 @@
 
 <TopBar Title="Групи" Sub="Управління академічними групами" />
 
-<div class="screen-anim" style="padding:0 34px 40px;position:relative;z-index:1">
+<div class="screen-anim page">
 
     @* Toolbar *@
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
-        <div class="input-wrap" style="flex:1 1 240px;max-width:300px">
+    <div class="toolbar">
+        <div class="input-wrap search-wrap">
             <span class="lead"><Icon Name="search" Size="16" /></span>
-            <input class="input" placeholder="Пошук групи…" @bind="_query" @bind:event="oninput" style="height:40px" />
+            <input class="input search-input" placeholder="Пошук групи…" @bind="_query" @bind:event="oninput" />
         </div>
-        <button class="btn btn-primary btn-sm" style="margin-left:auto" @onclick="StartAdd">
+        <button class="btn btn-primary btn-sm add-btn" @onclick="StartAdd">
             <Icon Name="braces" Size="15" />Нова група
         </button>
     </div>
 
-    <section class="glass" style="padding:0;overflow:hidden">
-        <div style="display:flex;align-items:center;gap:11px;padding:16px 22px;border-bottom:1px solid var(--line)">
+    <section class="glass card">
+        <div class="card-head">
             <Icon Name="users" Size="18" Style="color:var(--acc)" />
-            <h3 style="margin:0;font-size:16px;font-weight:720">Академічні групи</h3>
+            <h3 class="card-title">Академічні групи</h3>
             <span class="badge badge-grey"><span class="dot"></span>@Filtered.Count груп</span>
         </div>
 
         @if (_loading)
         {
-            <div style="padding:40px;text-align:center;color:var(--tx-3)">Завантаження…</div>
+            <div class="state-msg">Завантаження…</div>
         }
         else if (Filtered.Count == 0)
         {
-            <div style="padding:40px;text-align:center;color:var(--tx-3)">Груп не знайдено.</div>
+            <div class="state-msg">Груп не знайдено.</div>
         }
         else
         {
             @foreach (var g in Filtered)
             {
                 var isEditing = _editId == g.Id;
-                <div style="display:flex;align-items:center;gap:16px;padding:14px 22px;border-bottom:1px solid var(--line)">
+                <div class="row">
 
                     @if (isEditing)
                     {
                         @* Inline edit row *@
-                        <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
-                            <input class="input" style="height:38px;max-width:160px;font-family:var(--mono);font-weight:650"
+                        <div class="edit-inputs">
+                            <input class="input name-input"
                                    @bind="_editName" @bind:event="oninput" @onkeydown="OnEditKey" placeholder="Назва групи" autofocus />
-                            <input class="input" style="height:38px;flex:1" @bind="_editDesc" placeholder="Опис (необов'язково)" />
+                            <input class="input desc-input" @bind="_editDesc" placeholder="Опис (необов'язково)" />
                         </div>
-                        <div style="display:flex;gap:6px;flex:none">
+                        <div class="row-actions">
                             <button class="btn btn-primary btn-sm" @onclick="SaveEdit" disabled="@string.IsNullOrWhiteSpace(_editName)">
                                 <Icon Name="check" Size="14" />Зберегти
                             </button>
@@ -58,11 +58,11 @@
                     else
                     {
                         @* Normal row *@
-                        <span class="mono" style="font-size:15px;font-weight:750;color:var(--acc-bright);background:var(--acc-dim);padding:5px 14px;border-radius:8px;border:1px solid var(--glass-border);flex:none">@g.Name</span>
-                        <span style="flex:1;font-size:13px;color:var(--tx-3)">@(g.Description ?? "")</span>
-                        <div style="display:flex;gap:6px;flex:none">
+                        <span class="mono group-name">@g.Name</span>
+                        <span class="group-desc">@(g.Description ?? "")</span>
+                        <div class="row-actions">
                             <button class="btn btn-ghost btn-sm" @onclick="@(() => StartEdit(g))"><Icon Name="settings" Size="14" /></button>
-                            <button class="btn btn-ghost btn-sm" style="color:var(--st-red)" @onclick="@(() => Delete(g))"><Icon Name="x" Size="14" /></button>
+                            <button class="btn btn-ghost btn-sm delete-btn" @onclick="@(() => Delete(g))"><Icon Name="x" Size="14" /></button>
                         </div>
                     }
                 </div>
@@ -72,13 +72,13 @@
         @* Add new row *@
         @if (_adding)
         {
-            <div style="display:flex;align-items:center;gap:16px;padding:14px 22px;border-top:1px solid var(--line);background:rgba(118,199,173,0.04)">
-                <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
-                    <input class="input" style="height:38px;max-width:160px;font-family:var(--mono);font-weight:650"
+            <div class="add-row">
+                <div class="edit-inputs">
+                    <input class="input name-input"
                            @bind="_newName" @bind:event="oninput" @onkeydown="OnAddKey" placeholder="КІ-31" autofocus />
-                    <input class="input" style="height:38px;flex:1" @bind="_newDesc" placeholder="Опис (необов'язково)" />
+                    <input class="input desc-input" @bind="_newDesc" placeholder="Опис (необов'язково)" />
                 </div>
-                <div style="display:flex;gap:6px;flex:none">
+                <div class="row-actions">
                     <button class="btn btn-primary btn-sm" @onclick="ConfirmAdd" disabled="@string.IsNullOrWhiteSpace(_newName)">
                         <Icon Name="check" Size="14" />Додати
                     </button>

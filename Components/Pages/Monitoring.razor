@@ -9,10 +9,10 @@
 
 <TopBar Title="Моніторинг" Sub="Детальна аналітика курсу" />
 
-<div class="screen-anim" style="padding:0 34px 40px;position:relative;z-index:1">
+<div class="screen-anim page">
 
     @* Stat strip *@
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px">
+    <div class="stat-strip">
         <TStat Icon="users"   Tone="var(--acc)"       Value="@_stats.Students.ToString()"     Label="Студентів" />
         <TStat Icon="upload"  Tone="var(--st-blue)"   Value="@_stats.Submissions.ToString()"  Label="Здач всього" />
         <TStat Icon="target"  Tone="var(--st-green)"  Value="@($"{_stats.PassRate}%")"         Label="Успішність" />
@@ -20,136 +20,136 @@
     </div>
 
     @* Lab activity *@
-    <section class="glass" style="padding:20px 24px;margin-bottom:18px">
-        <div style="display:flex;align-items:center;gap:11px;margin-bottom:18px">
+    <section class="glass section">
+        <div class="section-head">
             <Icon Name="grades" Size="18" Style="color:var(--acc)" />
-            <h3 style="margin:0;font-size:16px;font-weight:720;letter-spacing:-0.02em">Активність по лабах</h3>
-            <button class="btn btn-ghost btn-sm" style="margin-left:auto" @onclick="@(() => Nav.NavigateTo("/teacher/labs"))">Керувати лабами<Icon Name="settings" Size="15" /></button>
+            <h3 class="section-title">Активність по лабах</h3>
+            <button class="btn btn-ghost btn-sm manage-btn" @onclick="@(() => Nav.NavigateTo("/teacher/labs"))">Керувати лабами<Icon Name="settings" Size="15" /></button>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:13px 48px">
+        <div class="lab-activity-grid">
             @foreach (var l in _labStats)
             {
                 var pct = l.Total > 0 ? (int)Math.Round(100.0 * l.Submitted / l.Total) : 0;
                 var fill = pct >= 70 ? "linear-gradient(90deg,var(--acc),var(--acc-bright))" : pct >= 40 ? "linear-gradient(90deg,#c9a52f,var(--st-yellow))" : "linear-gradient(90deg,#cf6650,var(--st-red))";
-                <div style="display:flex;align-items:center;gap:12px">
-                    <span class="mono" style="width:30px;font-size:12px;color:var(--tx-3);font-weight:600">@l.Short</span>
-                    <div style="flex:1;min-width:0">
-                        <div style="display:flex;justify-content:space-between;margin-bottom:5px">
-                            <span style="font-size:12.5px;color:var(--tx-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">@l.Title</span>
-                            <span class="mono tnum" style="font-size:12px;color:var(--tx-3)">@l.Submitted/@l.Total</span>
+                <div class="lab-activity-row">
+                    <span class="mono lab-short">@l.Short</span>
+                    <div class="lab-activity-body">
+                        <div class="lab-activity-head">
+                            <span class="lab-activity-title">@l.Title</span>
+                            <span class="mono tnum lab-activity-count">@l.Submitted/@l.Total</span>
                         </div>
                         <div class="prog" style="height:6px"><span style="width:@pct%;background:@fill;box-shadow:none"></span></div>
                     </div>
                     @if (l.Avg is not null)
                     {
-                        <span class="mono tnum" style="width:28px;text-align:right;font-size:12.5px;font-weight:700;color:var(--tx-2)">@l.Avg</span>
+                        <span class="mono tnum lab-activity-avg">@l.Avg</span>
                     }
                 </div>
             }
         </div>
     </section>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start;margin-bottom:18px">
+    <div class="two-col">
 
         @* Score distribution *@
-        <section class="glass" style="padding:20px 24px">
-            <h4 style="margin:0 0 18px;font-size:14px;font-weight:720;display:flex;align-items:center;gap:8px">
+        <section class="glass panel">
+            <h4 class="panel-title">
                 <Icon Name="target" Size="16" Style="color:var(--acc)" />Розподіл фінальних оцінок
             </h4>
             @{ var bands = GetBands(); }
             @foreach (var (label, count, color) in bands)
             {
                 var pct = _totalFinals > 0 ? (int)Math.Round(100.0 * count / _totalFinals) : 0;
-                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-                    <span class="mono" style="width:58px;font-size:12px;color:var(--tx-3)">@label</span>
-                    <div class="prog" style="flex:1;height:10px;border-radius:5px">
+                <div class="band-row">
+                    <span class="mono band-label">@label</span>
+                    <div class="prog band-bar">
                         <span style="width:@pct%;background:@color;border-radius:5px;box-shadow:none"></span>
                     </div>
-                    <span class="mono tnum" style="width:28px;text-align:right;font-size:12.5px;font-weight:700;color:var(--tx-2)">@count</span>
+                    <span class="mono tnum band-count">@count</span>
                 </div>
             }
         </section>
 
         @* Top students *@
-        <section class="glass" style="padding:20px 24px">
-            <h4 style="margin:0 0 16px;font-size:14px;font-weight:720;display:flex;align-items:center;gap:8px">
+        <section class="glass panel">
+            <h4 class="panel-title">
                 <Icon Name="spark" Size="16" Style="color:var(--st-yellow)" />Топ студентів
             </h4>
             @foreach (var (s, rank) in _topStudents.Select((s, i) => (s, i + 1)))
             {
-                <div style="display:flex;align-items:center;gap:11px;margin-bottom:10px">
-                    <span class="mono" style="width:20px;font-size:12px;color:var(--tx-faint)">@rank.</span>
-                    <div style="@SmAvatar">@s.Initials</div>
-                    <div style="flex:1;min-width:0">
-                        <div style="font-size:13.5px;font-weight:620">@s.Last @(s.First.Length > 0 ? s.First[0] + "." : "")</div>
-                        <div style="font-size:11px;color:var(--tx-3)">@s.Group · @s.DoneCount зараховано</div>
+                <div class="top-student-row">
+                    <span class="mono rank">@rank.</span>
+                    <div class="avatar">@s.Initials</div>
+                    <div class="top-student-info">
+                        <div class="top-student-name">@s.Last @(s.First.Length > 0 ? s.First[0] + "." : "")</div>
+                        <div class="top-student-meta">@s.Group · @s.DoneCount зараховано</div>
                     </div>
-                    <span class="mono tnum" style="font-size:17px;font-weight:780;color:var(--acc-bright)">@s.Avg</span>
+                    <span class="mono tnum top-student-avg">@s.Avg</span>
                 </div>
             }
         </section>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+    <div class="two-col-list">
 
         @* Recent submissions *@
-        <section class="glass" style="padding:0;overflow:hidden">
-            <div style="padding:16px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px">
+        <section class="glass list-card">
+            <div class="list-head">
                 <Icon Name="clock" Size="16" Style="color:var(--tx-3)" />
-                <h4 style="margin:0;font-size:14px;font-weight:720">Останні здачі</h4>
+                <h4 class="list-title">Останні здачі</h4>
             </div>
             @foreach (var r in _recent)
             {
-                <div style="display:flex;align-items:center;gap:12px;padding:12px 22px;border-bottom:1px solid var(--line)">
-                    <div style="@SmAvatar">@r.Initials</div>
-                    <div style="flex:1;min-width:0">
-                        <div style="font-size:13.5px;font-weight:620">@r.Name</div>
-                        <div style="font-size:11.5px;color:var(--tx-3)">@r.LabShort · @r.LabTitle</div>
+                <div class="list-row">
+                    <div class="avatar">@r.Initials</div>
+                    <div class="list-row-info">
+                        <div class="list-row-name">@r.Name</div>
+                        <div class="list-row-sub">@r.LabShort · @r.LabTitle</div>
                     </div>
-                    <div style="text-align:right">
-                        <span class="mono tnum" style="font-size:14px;font-weight:750;color:@(r.Auto >= 85 ? "var(--st-green)" : r.Auto >= 60 ? "var(--st-yellow)" : "var(--st-red)")">@r.Auto</span>
-                        <div style="font-size:10.5px;color:var(--tx-faint)">@r.When</div>
+                    <div class="list-row-meta">
+                        <span class="mono tnum list-row-score" style="color:@(r.Auto >= 85 ? "var(--st-green)" : r.Auto >= 60 ? "var(--st-yellow)" : "var(--st-red)")">@r.Auto</span>
+                        <div class="list-row-time">@r.When</div>
                     </div>
                 </div>
             }
             @if (_recent.Count == 0)
             {
-                <div style="padding:24px;text-align:center;color:var(--tx-faint);font-size:13px">Здач поки немає</div>
+                <div class="list-empty">Здач поки немає</div>
             }
         </section>
 
         @* Problematic students *@
-        <section class="glass" style="padding:0;overflow:hidden">
-            <div style="padding:16px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px">
+        <section class="glass list-card">
+            <div class="list-head">
                 <Icon Name="warn" Size="16" Style="color:var(--st-yellow)" />
-                <h4 style="margin:0;font-size:14px;font-weight:720">Найбільше відхилень</h4>
+                <h4 class="list-title">Найбільше відхилень</h4>
             </div>
             @foreach (var s in _problematic)
             {
-                <div style="display:flex;align-items:center;gap:12px;padding:12px 22px;border-bottom:1px solid var(--line)">
-                    <div style="@SmAvatar">@s.Initials</div>
-                    <div style="flex:1;min-width:0">
-                        <div style="font-size:13.5px;font-weight:620">@s.Last @(s.First.Length > 0 ? s.First[0] + "." : "")</div>
-                        <div style="font-size:11.5px;color:var(--tx-3)">@s.Group</div>
+                <div class="list-row">
+                    <div class="avatar">@s.Initials</div>
+                    <div class="list-row-info">
+                        <div class="list-row-name">@s.Last @(s.First.Length > 0 ? s.First[0] + "." : "")</div>
+                        <div class="list-row-sub">@s.Group</div>
                     </div>
-                    <div style="text-align:right">
-                        <span style="font-size:12px;color:var(--st-red);font-weight:650">@s.Labs.Count(c => c.Kind == "rejected") відхилено</span>
-                        <div style="font-size:10.5px;color:var(--tx-faint)">@s.DoneCount зараховано</div>
+                    <div class="list-row-meta">
+                        <span class="rejected-count">@s.Labs.Count(c => c.Kind == "rejected") відхилено</span>
+                        <div class="list-row-time">@s.DoneCount зараховано</div>
                     </div>
                 </div>
             }
             @if (_problematic.Count == 0)
             {
-                <div style="padding:24px;text-align:center;color:var(--tx-faint);font-size:13px">Немає відхилених здач</div>
+                <div class="list-empty">Немає відхилених здач</div>
             }
         </section>
     </div>
 
     @* ── Журнал переписки ────────────────────────────────────────────────────── *@
-    <section class="glass" style="padding:0;overflow:hidden;margin-top:18px">
-        <div style="display:flex;align-items:center;gap:11px;padding:18px 22px;border-bottom:1px solid var(--line)">
+    <section class="glass threads-card">
+        <div class="threads-head">
             <Icon Name="spark" Size="18" Style="color:var(--acc)" />
-            <h3 style="margin:0;font-size:16px;font-weight:720;letter-spacing:-0.02em">Журнал переписки</h3>
+            <h3 class="section-title">Журнал переписки</h3>
             @{
                 var needReply = _threads.Count(t => t.NeedsReply);
                 var totalThreads = _threads.Count;
@@ -164,7 +164,7 @@
 
         @if (_threads.Count == 0)
         {
-            <div style="padding:40px;text-align:center;color:var(--tx-faint);font-size:13.5px">
+            <div class="threads-empty">
                 Переписок поки немає
             </div>
         }
@@ -176,38 +176,38 @@
                 var last = i == _threads.Count - 1;
                 var roleIcon  = t.LastAuthorRole == "teacher" ? "var(--acc)" : "var(--st-yellow)";
                 var roleLabel = t.LastAuthorRole == "teacher" ? "Викладач" : "Студент";
-                <div class="grow" @onclick="@(() => OpenThread(t))"
-                     style="display:flex;align-items:center;gap:14px;padding:14px 22px;cursor:pointer;border-bottom:@(last ? "none" : "1px solid var(--line)");background:@(t.NeedsReply ? "rgba(231,193,75,0.03)" : "transparent")">
+                <div class="grow thread-row" @onclick="@(() => OpenThread(t))"
+                     style="border-bottom:@(last ? "none" : "1px solid var(--line)");background:@(t.NeedsReply ? "rgba(231,193,75,0.03)" : "transparent")">
 
                     @* Avatar with unread dot *@
-                    <div style="position:relative;flex:none">
-                        <div style="@SmAvatar">@t.Initials</div>
+                    <div class="thread-avatar-wrap">
+                        <div class="avatar">@t.Initials</div>
                         @if (t.NeedsReply)
                         {
-                            <span style="position:absolute;top:-3px;right:-3px;width:9px;height:9px;border-radius:50%;background:var(--st-yellow);border:2px solid var(--bg-2);box-shadow:0 0 6px var(--st-yellow)"></span>
+                            <span class="thread-unread-dot"></span>
                         }
                     </div>
 
                     @* Info *@
-                    <div style="min-width:0;flex:1">
-                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-                            <span style="font-size:14px;font-weight:@(t.NeedsReply ? "680" : "600");color:var(--tx-1)">@t.StudentName</span>
-                            <span style="font-size:11px;color:var(--tx-faint)">@t.Group</span>
-                            <span class="mono" style="font-size:11.5px;color:var(--acc);background:var(--acc-dim);padding:2px 7px;border-radius:5px;border:1px solid var(--glass-border)">@t.LabShort</span>
+                    <div class="thread-info">
+                        <div class="thread-info-head">
+                            <span class="thread-student-name" style="font-weight:@(t.NeedsReply ? "680" : "600")">@t.StudentName</span>
+                            <span class="thread-group">@t.Group</span>
+                            <span class="mono thread-lab-badge">@t.LabShort</span>
                         </div>
-                        <div style="display:flex;align-items:center;gap:6px">
-                            <span style="font-size:11.5px;font-weight:600;color:@roleIcon">@roleLabel:</span>
-                            <span style="font-size:12.5px;color:var(--tx-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:460px">@t.LastPreview</span>
+                        <div class="thread-preview-row">
+                            <span class="thread-role-label" style="color:@roleIcon">@roleLabel:</span>
+                            <span class="thread-preview-text">@t.LastPreview</span>
                         </div>
                     </div>
 
                     @* Meta *@
-                    <div style="flex:none;text-align:right;min-width:80px">
-                        <div style="font-size:11.5px;color:var(--tx-faint);margin-bottom:4px">@FormatWhen(t.LastAt)</div>
-                        <span class="badge badge-grey" style="font-size:10.5px">@t.TotalComments повід.</span>
+                    <div class="thread-meta">
+                        <div class="thread-meta-time">@FormatWhen(t.LastAt)</div>
+                        <span class="badge badge-grey thread-meta-count">@t.TotalComments повід.</span>
                     </div>
 
-                    <button class="btn btn-outline btn-sm" style="flex:none" @onclick:stopPropagation @onclick="@(() => OpenThread(t))">
+                    <button class="btn btn-outline btn-sm thread-action" @onclick:stopPropagation @onclick="@(() => OpenThread(t))">
                         @(t.NeedsReply ? "Відповісти" : "Переглянути")
                     </button>
                 </div>
@@ -216,13 +216,13 @@
     </section>
 
     @* ── Перевірка на плагіат ─────────────────────────────────────────────── *@
-    <section class="glass" style="padding:20px 24px;margin-top:18px">
-        <div style="display:flex;align-items:center;gap:11px;margin-bottom:16px;flex-wrap:wrap">
+    <section class="glass section" style="margin-top:18px">
+        <div class="plag-head">
             <Icon Name="search" Size="18" Style="color:var(--st-red)" />
-            <h3 style="margin:0;font-size:16px;font-weight:720;letter-spacing:-0.02em">Перевірка на плагіат</h3>
-            <span style="font-size:12px;color:var(--tx-3)">— порівняння коду здач між студентами</span>
-            <div style="display:flex;gap:8px;align-items:center;margin-left:auto">
-                <select class="input" @bind="_plagLab" style="height:34px;width:220px;appearance:auto">
+            <h3 class="section-title">Перевірка на плагіат</h3>
+            <span class="plag-hint">— порівняння коду здач між студентами</span>
+            <div class="plag-controls">
+                <select class="input plag-select" @bind="_plagLab">
                     <option value="0" disabled>Оберіть лабу…</option>
                     @foreach (var (id, sh, title) in _labCols)
                     {
@@ -239,25 +239,25 @@
         {
             @if (_plagPairs.Count == 0)
             {
-                <div style="padding:18px;text-align:center;color:var(--tx-faint);font-size:13px">
+                <div class="plag-state">
                     Підозрілих збігів не знайдено (поріг 50% спільного коду) ✓
                 </div>
             }
             else
             {
-                <div style="display:flex;flex-direction:column;gap:8px">
+                <div class="plag-list">
                     @foreach (var p in _plagPairs)
                     {
                         var pct = (int)Math.Round(p.Similarity * 100);
                         var tone = pct >= 80 ? "var(--st-red)" : "var(--st-yellow)";
-                        <div style="display:flex;align-items:center;gap:14px;padding:12px 16px;border-radius:11px;background:rgba(255,255,255,0.025);border:1px solid @(tone)33">
-                            <span class="mono tnum" style="font-size:17px;font-weight:780;color:@tone;width:52px;text-align:center;flex:none">@pct%</span>
-                            <div style="flex:1;min-width:0;font-size:13.5px">
-                                <b>@p.StudentA</b> <span style="color:var(--tx-faint)">(@p.GroupA)</span>
-                                <span style="color:var(--tx-3)"> ↔ </span>
-                                <b>@p.StudentB</b> <span style="color:var(--tx-faint)">(@p.GroupB)</span>
+                        <div class="plag-pair-row" style="border:1px solid @(tone)33">
+                            <span class="mono tnum plag-pct" style="color:@tone">@pct%</span>
+                            <div class="plag-names">
+                                <b>@p.StudentA</b> <span class="plag-group">(@p.GroupA)</span>
+                                <span class="plag-arrow"> ↔ </span>
+                                <b>@p.StudentB</b> <span class="plag-group">(@p.GroupB)</span>
                             </div>
-                            <span style="font-size:12px;color:var(--tx-3);flex:none">@p.SharedLines спільних рядків коду</span>
+                            <span class="plag-shared">@p.SharedLines спільних рядків коду</span>
                         </div>
                     }
                 </div>
@@ -265,7 +265,7 @@
         }
         else
         {
-            <div style="padding:14px;text-align:center;color:var(--tx-faint);font-size:12.5px">
+            <div class="plag-state-idle">
                 Оберіть лабу і натисніть «Перевірити» — система порівняє код усіх зданих робіт попарно.
             </div>
         }
@@ -281,8 +281,6 @@
     private List<CommentThread> _threads = [];
     private int _totalFinals;
     private List<int> _finals = [];
-
-    private const string SmAvatar = "width:34px;height:34px;border-radius:9px;flex:none;display:grid;place-items:center;font-weight:700;font-size:12px;background:linear-gradient(150deg, rgba(118,199,173,0.3), rgba(118,199,173,0.12));border:1px solid var(--glass-border-hover);color:var(--acc-bright)";
 
     // ── Plagiarism ────────────────────────────────────────────────────────────
     private List<(int Id, string Short, string Title)> _labCols = [];

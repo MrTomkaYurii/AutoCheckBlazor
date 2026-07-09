@@ -1,0 +1,114 @@
+.page {
+    padding: 0 34px 40px;
+    position: relative;
+    z-index: 1;
+}
+
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.search-wrap {
+    flex: 1 1 240px;
+    max-width: 300px;
+}
+
+.search-input {
+    height: 40px;
+}
+
+.add-btn {
+    margin-left: auto;
+}
+
+.card {
+    padding: 0;
+    overflow: hidden;
+}
+
+.card-head {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 16px 22px;
+    border-bottom: 1px solid var(--line);
+}
+
+.card-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 720;
+}
+
+.state-msg {
+    padding: 40px;
+    text-align: center;
+    color: var(--tx-3);
+}
+
+.row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 22px;
+    border-bottom: 1px solid var(--line);
+}
+
+.edit-inputs {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+}
+
+.name-input {
+    height: 38px;
+    max-width: 160px;
+    font-family: var(--mono);
+    font-weight: 650;
+}
+
+.desc-input {
+    height: 38px;
+    flex: 1;
+}
+
+.row-actions {
+    display: flex;
+    gap: 6px;
+    flex: none;
+}
+
+.group-name {
+    font-size: 15px;
+    font-weight: 750;
+    color: var(--acc-bright);
+    background: var(--acc-dim);
+    padding: 5px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--glass-border);
+    flex: none;
+}
+
+.group-desc {
+    flex: 1;
+    font-size: 13px;
+    color: var(--tx-3);
+}
+
+.delete-btn {
+    color: var(--st-red);
+}
+
+.add-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 22px;
+    border-top: 1px solid var(--line);
+    background: rgba(118, 199, 173, 0.04);
+}

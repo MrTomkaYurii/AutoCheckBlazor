@@ -1,0 +1,462 @@
+.page {
+    padding: 0 34px 40px;
+    position: relative;
+    z-index: 1;
+}
+
+.stat-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 18px;
+}
+
+.section {
+    padding: 20px 24px;
+    margin-bottom: 18px;
+}
+
+.section-head {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    margin-bottom: 18px;
+}
+
+.section-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 720;
+    letter-spacing: -0.02em;
+}
+
+.manage-btn {
+    margin-left: auto;
+}
+
+.lab-activity-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 13px 48px;
+}
+
+.lab-activity-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.lab-short {
+    width: 30px;
+    font-size: 12px;
+    color: var(--tx-3);
+    font-weight: 600;
+}
+
+.lab-activity-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.lab-activity-head {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+}
+
+.lab-activity-title {
+    font-size: 12.5px;
+    color: var(--tx-2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 160px;
+}
+
+.lab-activity-count {
+    font-size: 12px;
+    color: var(--tx-3);
+}
+
+.lab-activity-avg {
+    width: 28px;
+    text-align: right;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--tx-2);
+}
+
+.two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    align-items: start;
+    margin-bottom: 18px;
+}
+
+.panel {
+    padding: 20px 24px;
+}
+
+.panel-title {
+    margin: 0 0 18px;
+    font-size: 14px;
+    font-weight: 720;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.band-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.band-label {
+    width: 58px;
+    font-size: 12px;
+    color: var(--tx-3);
+}
+
+.band-bar {
+    flex: 1;
+    height: 10px;
+    border-radius: 5px;
+}
+
+.band-count {
+    width: 28px;
+    text-align: right;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--tx-2);
+}
+
+.top-student-row {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    margin-bottom: 10px;
+}
+
+.rank {
+    width: 20px;
+    font-size: 12px;
+    color: var(--tx-faint);
+}
+
+.avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+    font-size: 12px;
+    background: linear-gradient(150deg, rgba(118, 199, 173, 0.3), rgba(118, 199, 173, 0.12));
+    border: 1px solid var(--glass-border-hover);
+    color: var(--acc-bright);
+}
+
+.top-student-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.top-student-name {
+    font-size: 13.5px;
+    font-weight: 620;
+}
+
+.top-student-meta {
+    font-size: 11px;
+    color: var(--tx-3);
+}
+
+.top-student-avg {
+    font-size: 17px;
+    font-weight: 780;
+    color: var(--acc-bright);
+}
+
+.two-col-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+}
+
+.list-card {
+    padding: 0;
+    overflow: hidden;
+}
+
+.list-head {
+    padding: 16px 22px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.list-title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 720;
+}
+
+.list-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 22px;
+    border-bottom: 1px solid var(--line);
+}
+
+.list-row-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.list-row-name {
+    font-size: 13.5px;
+    font-weight: 620;
+}
+
+.list-row-sub {
+    font-size: 11.5px;
+    color: var(--tx-3);
+}
+
+.list-row-meta {
+    text-align: right;
+}
+
+.list-row-score {
+    font-size: 14px;
+    font-weight: 750;
+}
+
+.list-row-time {
+    font-size: 10.5px;
+    color: var(--tx-faint);
+}
+
+.list-empty {
+    padding: 24px;
+    text-align: center;
+    color: var(--tx-faint);
+    font-size: 13px;
+}
+
+.rejected-count {
+    font-size: 12px;
+    color: var(--st-red);
+    font-weight: 650;
+}
+
+/* ── Threads ── */
+
+.threads-card {
+    padding: 0;
+    overflow: hidden;
+    margin-top: 18px;
+}
+
+.threads-head {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--line);
+}
+
+.threads-empty {
+    padding: 40px;
+    text-align: center;
+    color: var(--tx-faint);
+    font-size: 13.5px;
+}
+
+.thread-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 22px;
+    cursor: pointer;
+}
+
+.thread-avatar-wrap {
+    position: relative;
+    flex: none;
+}
+
+.thread-unread-dot {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--st-yellow);
+    border: 2px solid var(--bg-2);
+    box-shadow: 0 0 6px var(--st-yellow);
+}
+
+.thread-info {
+    min-width: 0;
+    flex: 1;
+}
+
+.thread-info-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.thread-student-name {
+    font-size: 14px;
+    color: var(--tx-1);
+}
+
+.thread-group {
+    font-size: 11px;
+    color: var(--tx-faint);
+}
+
+.thread-lab-badge {
+    font-size: 11.5px;
+    color: var(--acc);
+    background: var(--acc-dim);
+    padding: 2px 7px;
+    border-radius: 5px;
+    border: 1px solid var(--glass-border);
+}
+
+.thread-preview-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.thread-role-label {
+    font-size: 11.5px;
+    font-weight: 600;
+}
+
+.thread-preview-text {
+    font-size: 12.5px;
+    color: var(--tx-3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 460px;
+}
+
+.thread-meta {
+    flex: none;
+    text-align: right;
+    min-width: 80px;
+}
+
+.thread-meta-time {
+    font-size: 11.5px;
+    color: var(--tx-faint);
+    margin-bottom: 4px;
+}
+
+.thread-meta-count {
+    font-size: 10.5px;
+}
+
+.thread-action {
+    flex: none;
+}
+
+/* ── Plagiarism ── */
+
+.plag-head {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.plag-hint {
+    font-size: 12px;
+    color: var(--tx-3);
+}
+
+.plag-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-left: auto;
+}
+
+.plag-select {
+    height: 34px;
+    width: 220px;
+    appearance: auto;
+}
+
+.plag-state {
+    padding: 18px;
+    text-align: center;
+    color: var(--tx-faint);
+    font-size: 13px;
+}
+
+.plag-state-idle {
+    padding: 14px;
+    text-align: center;
+    color: var(--tx-faint);
+    font-size: 12.5px;
+}
+
+.plag-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.plag-pair-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    border-radius: 11px;
+    background: rgba(255, 255, 255, 0.025);
+}
+
+.plag-pct {
+    font-size: 17px;
+    font-weight: 780;
+    width: 52px;
+    text-align: center;
+    flex: none;
+}
+
+.plag-names {
+    flex: 1;
+    min-width: 0;
+    font-size: 13.5px;
+}
+
+.plag-group {
+    color: var(--tx-faint);
+}
+
+.plag-arrow {
+    color: var(--tx-3);
+}
+
+.plag-shared {
+    font-size: 12px;
+    color: var(--tx-3);
+    flex: none;
+}
