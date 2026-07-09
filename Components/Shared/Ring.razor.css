@@ -1,0 +1,28 @@
+.wrap {
+    position: relative;
+    width: 132px;
+    height: 132px;
+}
+
+svg {
+    transform: rotate(-90deg);
+}
+
+.progress-circle {
+    transition: stroke-dashoffset 1s cubic-bezier(.22, 1, .36, 1);
+}
+
+.center {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+}
+
+.value {
+    font-size: 32px;
+    font-weight: 780;
+    letter-spacing: -0.03em;
+    color: var(--acc-bright);
+    line-height: 1;
+}

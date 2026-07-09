@@ -1,0 +1,51 @@
+.card {
+    padding: 18px 20px;
+    position: relative;
+    overflow: hidden;
+}
+
+.glow {
+    position: absolute;
+    right: -20px;
+    top: -30px;
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.head {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    margin-bottom: 14px;
+    position: relative;
+}
+
+.icon-wrap {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+}
+
+.hint-badge {
+    margin-left: auto;
+    height: 22px;
+}
+
+.value {
+    font-size: 30px;
+    font-weight: 790;
+    letter-spacing: -0.03em;
+    line-height: 1;
+    color: var(--tx-1);
+}
+
+.label {
+    font-size: 12.5px;
+    color: var(--tx-3);
+    margin-top: 7px;
+    font-weight: 500;
+}
