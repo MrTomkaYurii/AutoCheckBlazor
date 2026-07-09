@@ -11,16 +11,16 @@
 
 <TopBar Title="Кабінет" Sub="Профіль викладача та параметри практикуму" />
 
-<div class="screen-anim" style="padding:0 34px 40px;position:relative;z-index:1">
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
+<div class="screen-anim page">
+<div class="grid-2">
 
     @* ── Профіль викладача ─────────────────────────────────────────────────── *@
-    <section class="glass" style="padding:0;overflow:hidden">
-        <div style="padding:28px 26px;display:flex;align-items:center;gap:18px;background:radial-gradient(500px 200px at 0% 0%, rgba(118,199,173,0.12), transparent 60%);border-bottom:1px solid var(--line)">
-            <div style="width:66px;height:66px;border-radius:18px;display:grid;place-items:center;font-weight:750;font-size:24px;background:linear-gradient(150deg, rgba(118,199,173,0.32), rgba(118,199,173,0.12));border:1px solid var(--glass-border-hover);color:var(--acc-bright);flex:none">@App.Teacher.Initials</div>
-            <div style="flex:1;min-width:0">
-                <h2 style="margin:0;font-size:20px;font-weight:740">@App.Teacher.FirstName @App.Teacher.LastName</h2>
-                <div style="display:flex;gap:8px;margin-top:7px;flex-wrap:wrap">
+    <section class="glass card">
+        <div class="card-hero">
+            <div class="avatar-lg">@App.Teacher.Initials</div>
+            <div class="hero-info">
+                <h2 class="hero-name">@App.Teacher.FirstName @App.Teacher.LastName</h2>
+                <div class="hero-badges">
                     <span class="badge badge-green"><span class="dot"></span>Викладач</span>
                     @if (!string.IsNullOrEmpty(App.Teacher.Title))
                     {
@@ -36,7 +36,7 @@
 
         @if (!_profileEdit && !_pwEdit)
         {
-            <div style="padding:8px 26px 4px">
+            <div class="info-list">
                 @foreach (var (lbl, val) in new[] {
                     ("Ім'я",              App.Teacher.FirstName),
                     ("Прізвище",          App.Teacher.LastName),
@@ -45,15 +45,15 @@
                     ("Курс / практикум",  App.Teacher.Course),
                 })
                 {
-                    <div style="display:flex;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)">
-                        <span style="width:150px;font-size:12.5px;color:var(--tx-3);font-weight:600">@lbl</span>
-                        <span style="font-size:13.5px;color:@(string.IsNullOrEmpty(val) ? "var(--tx-faint)" : "var(--tx-1)")">@(string.IsNullOrEmpty(val) ? "—" : val)</span>
+                    <div class="info-row">
+                        <span class="info-label">@lbl</span>
+                        <span class="info-value" style="color:@(string.IsNullOrEmpty(val) ? "var(--tx-faint)" : "var(--tx-1)")">@(string.IsNullOrEmpty(val) ? "—" : val)</span>
                     </div>
                 }
                 @* Password row *@
-                <div style="display:flex;align-items:center;padding:12px 0">
-                    <span style="width:150px;font-size:12.5px;color:var(--tx-3);font-weight:600">Пароль</span>
-                    <span style="font-size:13.5px;color:var(--tx-2);flex:1;letter-spacing:0.12em">••••••••••</span>
+                <div class="info-row-last">
+                    <span class="info-label">Пароль</span>
+                    <span class="pw-dots">••••••••••</span>
                     <button class="btn btn-ghost btn-sm" @onclick="@(() => { _pwEdit = true; _profileEdit = false; })">
                         <Icon Name="settings" Size="13" />Змінити
                     </button>
@@ -62,8 +62,8 @@
         }
         else if (_profileEdit)
         {
-            <div style="padding:20px 26px;display:flex;flex-direction:column;gap:14px">
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="edit-body">
+                <div class="edit-grid-2">
                     <div class="field"><label>Ім'я</label><input class="input" @bind="_firstName" /></div>
                     <div class="field"><label>Прізвище</label><input class="input" @bind="_lastName" /></div>
                 </div>
@@ -74,7 +74,7 @@
                 <div class="field"><label>Посада</label><input class="input" @bind="_posada" placeholder="Асистент, Доцент, к.т.н.…" /></div>
                 <div class="field"><label>Назва курсу / практикуму</label><input class="input" @bind="_course" placeholder="ООП та патерни C#" /></div>
                 @Feedback(_profileMsg)
-                <div style="display:flex;justify-content:flex-end">
+                <div class="edit-actions">
                     <button class="btn btn-primary btn-sm" @onclick="SaveProfile" disabled="@_savingProfile">
                         <Icon Name="check" Size="15" />@(_savingProfile ? "Збереження…" : "Зберегти")
                     </button>
@@ -83,7 +83,7 @@
         }
         else if (_pwEdit)
         {
-            <div style="padding:20px 26px;display:flex;flex-direction:column;gap:14px">
+            <div class="edit-body">
                 <div class="field">
                     <label>Поточний пароль</label>
                     <input class="input" type="password" @bind="_pwOld" autocomplete="current-password" />
@@ -97,7 +97,7 @@
                     <input class="input" type="password" @bind="_pwConfirm" autocomplete="new-password" />
                 </div>
                 @Feedback(_pwMsg)
-                <div style="display:flex;justify-content:flex-end;gap:8px">
+                <div class="edit-actions-gap">
                     <button class="btn btn-ghost btn-sm" @onclick="@(() => { _pwEdit = false; _pwOld = _pwNew = _pwConfirm = _pwMsg = ""; })">
                         Скасувати
                     </button>
@@ -110,11 +110,11 @@
     </section>
 
     @* ── Налаштування системи ─────────────────────────────────────────────── *@
-    <section class="glass" style="padding:0;overflow:hidden">
-        <div style="display:flex;align-items:center;gap:11px;padding:18px 26px;border-bottom:1px solid var(--line)">
+    <section class="glass card">
+        <div class="section-head">
             <Icon Name="settings" Size="18" Style="color:var(--acc)" />
-            <h3 style="margin:0;font-size:15px;font-weight:720">Налаштування системи</h3>
-            <button class="btn btn-ghost btn-sm" style="margin-left:auto" @onclick="ToggleSettings">
+            <h3 class="section-title">Налаштування системи</h3>
+            <button class="btn btn-ghost btn-sm push-right" @onclick="ToggleSettings">
                 <Icon Name="@(_settingsEdit ? "x" : "settings")" Size="14" />
                 @(_settingsEdit ? "Скасувати" : "Редагувати")
             </button>
@@ -123,17 +123,17 @@
         @if (!_settingsEdit)
         {
             @* Gemini subsection *@
-            <div style="padding:16px 26px 4px">
-                <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--tx-3);margin-bottom:10px">Gemini AI</div>
+            <div class="subsection">
+                <div class="subsection-label">Gemini AI</div>
                 @foreach (var (lbl, val, mono, secret) in new[] {
                     ("API ключ",    Cfg["Gemini:ApiKey"]    ?? "",                               true,  true),
                     ("Модель",      Cfg["Gemini:Model"]     ?? "gemini-2.5-flash",               true,  false),
                     ("Денний ліміт", Cfg["Gemini:DailyLimit"] ?? "50",                           false, false),
                 })
                 {
-                    <div style="display:flex;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)">
-                        <span style="width:140px;font-size:12.5px;color:var(--tx-3);font-weight:600">@lbl</span>
-                        <span class="@(mono ? "mono" : "")" style="font-size:13px;color:@(string.IsNullOrEmpty(val) ? "var(--tx-faint)" : "var(--tx-1)")">
+                    <div class="settings-row">
+                        <span class="settings-label">@lbl</span>
+                        <span class="@(mono ? "mono" : "") settings-value" style="color:@(string.IsNullOrEmpty(val) ? "var(--tx-faint)" : "var(--tx-1)")">
                             @if (secret && !string.IsNullOrEmpty(val))
                             {
                                 @($"{val[..Math.Min(6, val.Length)]}••••••••")
@@ -144,29 +144,29 @@
                     </div>
                 }
                 @* Quota status *@
-                <div style="display:flex;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)">
-                    <span style="width:140px;font-size:12.5px;color:var(--tx-3);font-weight:600">Сьогодні</span>
-                    <div style="display:flex;align-items:center;gap:10px;flex:1">
-                        <div style="flex:1;height:5px;border-radius:3px;background:rgba(255,255,255,0.07);overflow:hidden">
-                            <div style="height:100%;border-radius:3px;width:@(Quota.DailyLimit > 0 ? (int)((double)Quota.TodayCount / Quota.DailyLimit * 100) : 0)%;background:@(Quota.IsExhausted ? "var(--st-red)" : "var(--acc)");transition:width .3s"></div>
+                <div class="settings-row">
+                    <span class="settings-label">Сьогодні</span>
+                    <div class="quota-wrap">
+                        <div class="quota-track">
+                            <div class="quota-fill" style="width:@(Quota.DailyLimit > 0 ? (int)((double)Quota.TodayCount / Quota.DailyLimit * 100) : 0)%;background:@(Quota.IsExhausted ? "var(--st-red)" : "var(--acc)")"></div>
                         </div>
-                        <span class="mono" style="font-size:12px;color:@(Quota.IsExhausted ? "var(--st-red)" : "var(--tx-2)");white-space:nowrap">@Quota.TodayCount / @Quota.DailyLimit</span>
+                        <span class="mono quota-num" style="color:@(Quota.IsExhausted ? "var(--st-red)" : "var(--tx-2)")">@Quota.TodayCount / @Quota.DailyLimit</span>
                     </div>
                 </div>
             </div>
             @* Grading subsection *@
-            <div style="padding:16px 26px 20px">
-                <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--tx-3);margin-bottom:10px">Перевірка</div>
-                <div style="display:flex;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)">
-                    <span style="width:140px;font-size:12.5px;color:var(--tx-3);font-weight:600">WorkRoot</span>
+            <div class="subsection-last">
+                <div class="subsection-label">Перевірка</div>
+                <div class="settings-row">
+                    <span class="settings-label">WorkRoot</span>
                     <span class="mono" style="font-size:12px;color:@(string.IsNullOrEmpty(Cfg["Grading:WorkRoot"]) ? "var(--tx-faint)" : "var(--tx-1)")">
                         @(string.IsNullOrEmpty(Cfg["Grading:WorkRoot"]) ? "тимчасова папка" : Cfg["Grading:WorkRoot"])
                     </span>
                 </div>
                 @* Backup row *@
-                <div style="display:flex;align-items:center;padding:10px 0;gap:10px">
-                    <span style="width:140px;font-size:12.5px;color:var(--tx-3);font-weight:600">Бекап БД</span>
-                    <span style="font-size:12px;color:var(--tx-3);flex:1">автоматично щодня · вручну:</span>
+                <div class="settings-row-gap">
+                    <span class="settings-label">Бекап БД</span>
+                    <span class="backup-hint">автоматично щодня · вручну:</span>
                     <button class="btn btn-ghost btn-sm" @onclick="BackupNow" disabled="@_backingUp">
                         <Icon Name="upload" Size="13" />@(_backingUp ? "Створення…" : "Створити зараз")
                     </button>
@@ -179,13 +179,13 @@
         }
         else
         {
-            <div style="padding:20px 26px;display:flex;flex-direction:column;gap:14px">
-                <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--tx-3)">Gemini AI</div>
+            <div class="edit-body">
+                <div class="subsection-label">Gemini AI</div>
                 <div class="field">
                     <label>API ключ</label>
                     <input class="input mono" type="password" @bind="_geminiKey" placeholder="AIza…" autocomplete="off" />
                 </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div class="edit-grid-2">
                     <div class="field">
                         <label>Модель</label>
                         <input class="input mono" @bind="_geminiModel" placeholder="gemini-2.5-flash" />
@@ -195,13 +195,13 @@
                         <input class="input" type="number" min="1" max="1000" @bind="_geminiLimit" />
                     </div>
                 </div>
-                <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--tx-3);margin-top:4px">Перевірка</div>
+                <div class="subsection-label" style="margin-top:4px">Перевірка</div>
                 <div class="field">
-                    <label>WorkRoot <span style="color:var(--tx-faint);font-weight:400">(порожньо = тимчасова папка ОС)</span></label>
+                    <label>WorkRoot <span class="hint">(порожньо = тимчасова папка ОС)</span></label>
                     <input class="input mono" @bind="_workRoot" placeholder="C:\autocheck-repos або /tmp/repos" />
                 </div>
                 @Feedback(_settingsMsg)
-                <div style="display:flex;justify-content:flex-end">
+                <div class="edit-actions">
                     <button class="btn btn-primary btn-sm" @onclick="SaveSettings" disabled="@_savingSettings">
                         <Icon Name="check" Size="15" />@(_savingSettings ? "Збереження…" : "Зберегти")
                     </button>
@@ -211,32 +211,30 @@
     </section>
 
     @* ── Ліміти авто-перевірок ────────────────────────────────────────────── *@
-    <section class="glass" style="padding:0;overflow:hidden;margin-top:20px">
-        <div style="display:flex;align-items:center;gap:11px;padding:18px 26px;border-bottom:1px solid var(--line)">
+    <section class="glass card-mt">
+        <div class="section-head">
             <Icon Name="refresh" Size="18" Style="color:var(--acc)" />
-            <h3 style="margin:0;font-size:15px;font-weight:720">Ліміти авто-перевірок</h3>
-            <span style="font-size:12px;color:var(--tx-3);margin-left:4px">— кількість спроб здачі на auto-grading для кожної лаби</span>
+            <h3 class="section-title">Ліміти авто-перевірок</h3>
+            <span class="section-title-hint">— кількість спроб здачі на auto-grading для кожної лаби</span>
             @if (_attemptsChanged)
             {
-                <button class="btn btn-primary btn-sm" style="margin-left:auto" @onclick="SaveAttempts" disabled="@_savingAttempts">
+                <button class="btn btn-primary btn-sm push-right" @onclick="SaveAttempts" disabled="@_savingAttempts">
                     <Icon Name="check" Size="14" />@(_savingAttempts ? "Збереження…" : "Зберегти зміни")
                 </button>
             }
         </div>
 
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:0">
+        <div class="attempts-grid">
             @foreach (var row in _labAttempts)
             {
-                <div style="display:flex;align-items:center;gap:12px;padding:12px 22px;border-bottom:1px solid var(--line);border-right:1px solid var(--line)">
-                    <span class="mono" style="width:30px;font-size:12px;font-weight:750;color:var(--acc-bright);background:var(--acc-dim);padding:3px 0;border-radius:6px;text-align:center;border:1px solid var(--glass-border);flex:none">@row.Number.ToString("D2")</span>
-                    <span style="flex:1;font-size:13px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="@row.Title">@row.Title</span>
-                    <div style="display:flex;align-items:center;gap:6px;flex:none">
-                        <button @onclick="@(() => ChangeAttempts(row, -1))"
-                                style="width:26px;height:26px;border-radius:7px;border:1px solid var(--line);background:rgba(255,255,255,0.04);color:var(--tx-2);cursor:pointer;display:grid;place-items:center;font-size:16px;line-height:1"
+                <div class="attempt-row">
+                    <span class="mono attempt-num">@row.Number.ToString("D2")</span>
+                    <span class="attempt-title" title="@row.Title">@row.Title</span>
+                    <div class="attempt-controls">
+                        <button @onclick="@(() => ChangeAttempts(row, -1))" class="attempt-btn"
                                 disabled="@(row.Value <= 1)">−</button>
-                        <span class="mono" style="width:24px;text-align:center;font-size:14px;font-weight:700;color:@(row.Changed ? "var(--acc-bright)" : "var(--tx-1)")">@row.Value</span>
-                        <button @onclick="@(() => ChangeAttempts(row, +1))"
-                                style="width:26px;height:26px;border-radius:7px;border:1px solid var(--line);background:rgba(255,255,255,0.04);color:var(--tx-2);cursor:pointer;display:grid;place-items:center;font-size:16px;line-height:1"
+                        <span class="mono attempt-value" style="color:@(row.Changed ? "var(--acc-bright)" : "var(--tx-1)")">@row.Value</span>
+                        <button @onclick="@(() => ChangeAttempts(row, +1))" class="attempt-btn"
                                 disabled="@(row.Value >= 10)">+</button>
                     </div>
                 </div>
@@ -245,39 +243,39 @@
 
         @if (!string.IsNullOrEmpty(_attemptsMsg))
         {
-            <div style="padding:10px 26px;border-top:1px solid var(--line)">
+            <div class="feedback-wrap">
                 @Feedback(_attemptsMsg)
             </div>
         }
     </section>
 
     @* ── Викладачі курсу ───────────────────────────────────────────────────── *@
-    <section class="glass" style="padding:0;overflow:hidden;margin-top:20px">
-        <div style="display:flex;align-items:center;gap:11px;padding:18px 26px;border-bottom:1px solid var(--line)">
+    <section class="glass card-mt">
+        <div class="section-head">
             <Icon Name="users" Size="18" Style="color:var(--acc)" />
-            <h3 style="margin:0;font-size:15px;font-weight:720">Викладачі курсу</h3>
-            <button class="btn btn-ghost btn-sm" style="margin-left:auto" @onclick="@(() => { _teacherAddOpen = !_teacherAddOpen; _teacherMsg = ""; })">
+            <h3 class="section-title">Викладачі курсу</h3>
+            <button class="btn btn-ghost btn-sm push-right" @onclick="@(() => { _teacherAddOpen = !_teacherAddOpen; _teacherMsg = ""; })">
                 <Icon Name="@(_teacherAddOpen ? "x" : "profile")" Size="14" />
                 @(_teacherAddOpen ? "Скасувати" : "Додати викладача")
             </button>
         </div>
 
-        <div style="padding:8px 26px 4px">
+        <div class="teacher-list">
             @foreach (var t in _teachers)
             {
-                <div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)">
-                    <div style="width:36px;height:36px;border-radius:10px;flex:none;display:grid;place-items:center;font-weight:700;font-size:13px;background:linear-gradient(150deg, rgba(118,199,173,0.3), rgba(118,199,173,0.12));border:1px solid var(--glass-border-hover);color:var(--acc-bright)">@t.Initials</div>
-                    <div style="flex:1;min-width:0">
-                        <div style="font-size:13.5px;font-weight:640">@t.FirstName @t.LastName</div>
-                        <div class="mono" style="font-size:11.5px;color:var(--tx-3)">@(string.IsNullOrEmpty(t.Email) ? "—" : t.Email)</div>
+                <div class="teacher-row">
+                    <div class="teacher-avatar">@t.Initials</div>
+                    <div class="teacher-info">
+                        <div class="teacher-name">@t.FirstName @t.LastName</div>
+                        <div class="mono teacher-email">@(string.IsNullOrEmpty(t.Email) ? "—" : t.Email)</div>
                     </div>
                     @if (t.UserLink != null)
                     {
-                        <span class="badge badge-green" style="height:22px"><span class="dot"></span>активний</span>
+                        <span class="badge badge-green teacher-badge"><span class="dot"></span>активний</span>
                     }
                     else
                     {
-                        <span class="badge badge-grey" style="height:22px"><span class="dot"></span>без акаунта</span>
+                        <span class="badge badge-grey teacher-badge"><span class="dot"></span>без акаунта</span>
                     }
                 </div>
             }
@@ -285,24 +283,24 @@
 
         @if (_teacherAddOpen)
         {
-            <div style="padding:16px 26px 20px;display:flex;flex-direction:column;gap:14px;border-top:1px solid var(--line)">
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="teacher-add-body">
+                <div class="edit-grid-2">
                     <div class="field"><label>Ім'я</label><input class="input" @bind="_tFirst" placeholder="Іван" /></div>
                     <div class="field"><label>Прізвище</label><input class="input" @bind="_tLast" placeholder="Петренко" /></div>
                 </div>
                 <div class="field">
-                    <label>Email <span style="color:var(--tx-faint);font-weight:400">(логін для входу)</span></label>
+                    <label>Email <span class="hint">(логін для входу)</span></label>
                     <input class="input" type="email" @bind="_tEmail" placeholder="teacher2@example.com" />
                 </div>
                 @if (!string.IsNullOrEmpty(_teacherTempPw))
                 {
-                    <div style="padding:12px 16px;border-radius:11px;background:rgba(12,20,17,0.7);border:1px solid var(--glass-border-hover)">
-                        <div style="font-size:12px;color:var(--tx-3);margin-bottom:6px">Акаунт створено. Тимчасовий пароль (передайте колезі):</div>
-                        <code class="mono" style="font-size:16px;font-weight:700;color:var(--acc-bright);letter-spacing:0.04em">@_teacherTempPw</code>
+                    <div class="temp-pw-box">
+                        <div class="temp-pw-hint">Акаунт створено. Тимчасовий пароль (передайте колезі):</div>
+                        <code class="mono temp-pw-value">@_teacherTempPw</code>
                     </div>
                 }
                 @Feedback(_teacherMsg)
-                <div style="display:flex;justify-content:flex-end">
+                <div class="edit-actions">
                     <button class="btn btn-primary btn-sm" @onclick="AddTeacher" disabled="@_savingTeacher">
                         <Icon Name="check" Size="15" />@(_savingTeacher ? "Створення…" : "Створити акаунт")
                     </button>
