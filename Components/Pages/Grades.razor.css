@@ -1,0 +1,271 @@
+.page {
+    padding: 0 34px 40px;
+    position: relative;
+    z-index: 1;
+}
+
+.stat-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 20px;
+}
+
+.table-card {
+    padding: 0;
+    overflow: hidden;
+    margin-bottom: 20px;
+}
+
+.table-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--line);
+}
+
+.table-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 720;
+    letter-spacing: -0.02em;
+}
+
+.table-updated {
+    margin-left: auto;
+    font-size: 12.5px;
+    color: var(--tx-3);
+}
+
+.table-scroll {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 860px;
+}
+
+thead tr {
+    font-size: 11.5px;
+    color: var(--tx-3);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.th-lab {
+    padding: 12px 14px;
+    text-align: left;
+    padding-left: 24px;
+    font-weight: 600;
+}
+
+.th-attempt {
+    padding: 10px 6px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 10.5px;
+}
+
+.th-mid {
+    padding: 12px 14px;
+    text-align: center;
+    font-weight: 600;
+}
+
+.th-status {
+    padding: 12px 14px;
+    text-align: right;
+    padding-right: 24px;
+    font-weight: 600;
+}
+
+.row {
+    border-top: 1px solid var(--line);
+    cursor: pointer;
+}
+
+.cell-lab {
+    padding: 13px 14px;
+    padding-left: 24px;
+    vertical-align: middle;
+}
+
+.cell-lab-inner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.lab-number {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 7px;
+}
+
+.lab-title {
+    font-size: 13.5px;
+    font-weight: 600;
+}
+
+.cell-attempt {
+    padding: 8px 6px;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.attempt-value {
+    font-size: 13px;
+    padding: 3px 9px;
+    border-radius: 6px;
+}
+
+.attempt-empty {
+    font-size: 12px;
+    color: var(--tx-faint);
+}
+
+.cell-mid {
+    padding: 13px 14px;
+    text-align: center;
+}
+
+.final-value {
+    font-size: 16px;
+    font-weight: 780;
+    color: var(--acc-bright);
+}
+
+.cell-status {
+    padding: 13px 14px;
+    text-align: right;
+    padding-right: 24px;
+}
+
+.locked-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--tx-faint);
+    font-size: 12.5px;
+}
+
+.progress-card {
+    padding: 24px 28px;
+    position: relative;
+    overflow: hidden;
+}
+
+.progress-glow {
+    position: absolute;
+    right: -30px;
+    top: -50px;
+    width: 260px;
+    height: 260px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(118, 199, 173, 0.12), transparent 65%);
+    pointer-events: none;
+}
+
+.progress-inner {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
+    position: relative;
+}
+
+.progress-text-block {
+    flex: 1 1 360px;
+    min-width: 0;
+}
+
+.progress-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.progress-head-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 720;
+}
+
+.progress-legend {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    color: var(--tx-2);
+    margin-bottom: 8px;
+}
+
+.progress-legend-done {
+    color: var(--acc-bright);
+}
+
+.progress-bar-wrap {
+    position: relative;
+}
+
+.progress-threshold {
+    position: absolute;
+    top: -3px;
+    width: 2px;
+    height: 14px;
+    background: var(--st-yellow);
+    border-radius: 2px;
+}
+
+.progress-note {
+    margin: 16px 0 0;
+    font-size: 13px;
+    color: var(--tx-3);
+    line-height: 1.6;
+    max-width: 480px;
+}
+
+.progress-note-strong {
+    color: var(--tx-1);
+}
+
+.progress-note-accent {
+    color: var(--acc-bright);
+}
+
+.avg-block {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding-left: 8px;
+}
+
+.avg-value-wrap {
+    text-align: center;
+}
+
+.avg-value {
+    font-size: 46px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    color: var(--acc-bright);
+    line-height: 1;
+}
+
+.avg-label {
+    font-size: 12px;
+    color: var(--tx-3);
+    margin-top: 4px;
+}
+
+.star-row {
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
+}

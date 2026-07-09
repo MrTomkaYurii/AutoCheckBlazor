@@ -6,10 +6,10 @@
 
 <TopBar Title="Журнал оцінок" Sub="Усі твої оцінки за семестр" />
 
-<div class="screen-anim" style="padding:0 34px 40px;position:relative;z-index:1">
+<div class="screen-anim page">
 
     @* summary stat strip *@
-    <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:14px;margin-bottom:20px">
+    <div class="stat-strip">
         <StatCard Icon="target" Tone="var(--acc)" Value="@AvgStr" Label="Середній бал" Sub="по фінальних оцінках" />
         <StatCard Icon="check" Tone="var(--st-green)" Value="@($"{Done} / {Rows.Count}")" Label="Зараховано" Sub="@($"мінімум {Needed} для заліку")" />
         <StatCard Icon="spark" Tone="var(--st-yellow)" Value="@AvgAuto.ToString()" Label="Сер. авто-оцінка" Sub="точність коду" />
@@ -17,25 +17,25 @@
     </div>
 
     @* table *@
-    <section class="glass" style="padding:0;overflow:hidden;margin-bottom:20px">
-        <div style="display:flex;align-items:center;gap:12px;padding:18px 24px;border-bottom:1px solid var(--line)">
+    <section class="glass table-card">
+        <div class="table-head">
             <Icon Name="grades" Size="18" Style="color:var(--acc)" />
-            <h3 style="margin:0;font-size:16px;font-weight:720;letter-spacing:-0.02em">Журнал оцінок</h3>
+            <h3 class="table-title">Журнал оцінок</h3>
             <span class="badge badge-grey"><span class="dot"></span>Семестр 2</span>
-            <span class="mono" style="margin-left:auto;font-size:12.5px;color:var(--tx-3)">оновлено щойно</span>
+            <span class="mono table-updated">оновлено щойно</span>
         </div>
-        <div style="overflow-x:auto">
-            <table style="width:100%;border-collapse:collapse;min-width:860px">
+        <div class="table-scroll">
+            <table>
                 <thead>
-                    <tr style="font-size:11.5px;color:var(--tx-3);text-transform:uppercase;letter-spacing:0.05em">
-                        <th style="padding:12px 14px;text-align:left;padding-left:24px;font-weight:600">Лабораторна</th>
-                        <th style="padding:10px 6px;text-align:center;font-weight:600;font-size:10.5px">Спроба 1</th>
-                        <th style="padding:10px 6px;text-align:center;font-weight:600;font-size:10.5px">Спроба 2</th>
-                        <th style="padding:10px 6px;text-align:center;font-weight:600;font-size:10.5px">Спроба 3</th>
-                        <th style="padding:12px 14px;text-align:center;font-weight:600">Авто-оцінка</th>
-                        <th style="padding:12px 14px;text-align:center;font-weight:600">Викладач</th>
-                        <th style="padding:12px 14px;text-align:center;font-weight:600">Фінальна</th>
-                        <th style="padding:12px 14px;text-align:right;padding-right:24px;font-weight:600">Статус</th>
+                    <tr>
+                        <th class="th-lab">Лабораторна</th>
+                        <th class="th-attempt">Спроба 1</th>
+                        <th class="th-attempt">Спроба 2</th>
+                        <th class="th-attempt">Спроба 3</th>
+                        <th class="th-mid">Авто-оцінка</th>
+                        <th class="th-mid">Викладач</th>
+                        <th class="th-mid">Фінальна</th>
+                        <th class="th-status">Статус</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -43,43 +43,43 @@
                     {
                         var locked = r.Status == LabStatus.Locked;
                         var bestAuto = new[] { r.Attempt1 ?? 0, r.Attempt2 ?? 0, r.Attempt3 ?? 0 }.Max();
-                        <tr class="grow" @onclick="@(() => Nav.NavigateTo($"/student/lab/{r.Id}"))" style="border-top:1px solid var(--line);opacity:@(locked ? "0.5" : "1");cursor:pointer">
-                            <td style="padding:13px 14px;padding-left:24px;vertical-align:middle">
-                                <div style="display:flex;align-items:center;gap:12px">
-                                    <span class="mono" style="font-size:12px;font-weight:700;color:@(locked ? "var(--tx-faint)" : "var(--acc)");background:@(locked ? "var(--st-grey-bg)" : "var(--acc-dim)");padding:3px 8px;border-radius:7px;border:1px solid @(locked ? "transparent" : "var(--glass-border)")">@r.Id.ToString("D2")</span>
-                                    <span style="font-size:13.5px;font-weight:600;color:@(locked ? "var(--tx-3)" : "var(--tx-1)")">@r.Title</span>
+                        <tr class="grow row" @onclick="@(() => Nav.NavigateTo($"/student/lab/{r.Id}"))" style="opacity:@(locked ? "0.5" : "1")">
+                            <td class="cell-lab">
+                                <div class="cell-lab-inner">
+                                    <span class="mono lab-number" style="color:@(locked ? "var(--tx-faint)" : "var(--acc)");background:@(locked ? "var(--st-grey-bg)" : "var(--acc-dim)");border:1px solid @(locked ? "transparent" : "var(--glass-border)")">@r.Id.ToString("D2")</span>
+                                    <span class="lab-title" style="color:@(locked ? "var(--tx-3)" : "var(--tx-1)")">@r.Title</span>
                                 </div>
                             </td>
                             @foreach (var attempt in new[] { r.Attempt1, r.Attempt2, r.Attempt3 })
                             {
                                 var isBest = attempt.HasValue && attempt.Value == bestAuto && bestAuto > 0;
-                                <td style="padding:8px 6px;text-align:center;vertical-align:middle">
+                                <td class="cell-attempt">
                                     @if (attempt.HasValue)
                                     {
-                                        <span class="mono tnum" style="font-size:13px;font-weight:@(isBest ? "780" : "600");color:@(isBest ? "var(--st-green)" : "var(--tx-2)");background:@(isBest ? "rgba(118,199,173,0.12)" : "rgba(255,255,255,0.04)");padding:3px 9px;border-radius:6px;border:1px solid @(isBest ? "rgba(118,199,173,0.3)" : "var(--line)")">@attempt</span>
+                                        <span class="mono tnum attempt-value" style="font-weight:@(isBest ? "780" : "600");color:@(isBest ? "var(--st-green)" : "var(--tx-2)");background:@(isBest ? "rgba(118,199,173,0.12)" : "rgba(255,255,255,0.04)");border:1px solid @(isBest ? "rgba(118,199,173,0.3)" : "var(--line)")">@attempt</span>
                                     }
                                     else
                                     {
-                                        <span class="mono" style="font-size:12px;color:var(--tx-faint)">—</span>
+                                        <span class="mono attempt-empty">—</span>
                                     }
                                 </td>
                             }
-                            <td style="padding:13px 14px;text-align:center"><ScorePill Value="@(r.Status == LabStatus.Rejected ? null : r.Auto)" /></td>
-                            <td style="padding:13px 14px;text-align:center"><ScorePill Value="r.Defense" /></td>
-                            <td style="padding:13px 14px;text-align:center">
+                            <td class="cell-mid"><ScorePill Value="@(r.Status == LabStatus.Rejected ? null : r.Auto)" /></td>
+                            <td class="cell-mid"><ScorePill Value="r.Defense" /></td>
+                            <td class="cell-mid">
                                 @if (r.Final is not null)
                                 {
-                                    <span class="mono tnum" style="font-size:16px;font-weight:780;color:var(--acc-bright)">@r.Final</span>
+                                    <span class="mono tnum final-value">@r.Final</span>
                                 }
                                 else
                                 {
                                     <span class="faint mono">—</span>
                                 }
                             </td>
-                            <td style="padding:13px 14px;text-align:right;padding-right:24px">
+                            <td class="cell-status">
                                 @if (locked)
                                 {
-                                    <span style="display:inline-flex;align-items:center;gap:6px;color:var(--tx-faint);font-size:12.5px"><Icon Name="lock" Size="13" />Не здано</span>
+                                    <span class="locked-label"><Icon Name="lock" Size="13" />Не здано</span>
                                 }
                                 else
                                 {
@@ -94,13 +94,13 @@
     </section>
 
     @* залік progress *@
-    <section class="glass" style="padding:24px 28px;position:relative;overflow:hidden">
-        <div style="position:absolute;right:-30px;top:-50px;width:260px;height:260px;border-radius:50%;background:radial-gradient(circle, rgba(118,199,173,0.12), transparent 65%);pointer-events:none"></div>
-        <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap;position:relative">
-            <div style="flex:1 1 360px;min-width:0">
-                <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+    <section class="glass progress-card">
+        <div class="progress-glow"></div>
+        <div class="progress-inner">
+            <div class="progress-text-block">
+                <div class="progress-head">
                     <Icon Name="flame" Size="19" Style="color:var(--acc)" Fill="true" />
-                    <h3 style="margin:0;font-size:16px;font-weight:720">Прогрес до заліку</h3>
+                    <h3 class="progress-head-title">Прогрес до заліку</h3>
                     @if (Done >= Needed)
                     {
                         <span class="badge badge-green"><span class="dot"></span>Допуск отримано</span>
@@ -110,23 +110,23 @@
                         <span class="badge badge-yellow"><span class="dot pulse"></span>Ще @(Needed - Done) лаб</span>
                     }
                 </div>
-                <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--tx-2);margin-bottom:8px">
-                    <span><b style="color:var(--acc-bright)">@Done</b> зараховано</span>
+                <div class="progress-legend">
+                    <span><b class="progress-legend-done">@Done</b> зараховано</span>
                     <span class="mono faint">поріг заліку: @Needed</span>
                     <span>усього @Rows.Count</span>
                 </div>
-                <div style="position:relative">
+                <div class="progress-bar-wrap">
                     <Progress Value="@(100.0 * Done / Rows.Count)" />
-                    <span style="position:absolute;top:-3px;left:calc(@(100.0 * Needed / Rows.Count)% - 1px);width:2px;height:14px;background:var(--st-yellow);border-radius:2px"></span>
+                    <span class="progress-threshold" style="left:calc(@(100.0 * Needed / Rows.Count)% - 1px)"></span>
                 </div>
-                <p style="margin:16px 0 0;font-size:13px;color:var(--tx-3);line-height:1.6;max-width:480px">Для допуску до заліку потрібно <b style="color:var(--tx-1)">@Needed</b> зарахованих лабораторних. У тебе вже <b style="color:var(--acc-bright)">@Done</b> — продовжуй у тому ж темпі! 🎯</p>
+                <p class="progress-note">Для допуску до заліку потрібно <b class="progress-note-strong">@Needed</b> зарахованих лабораторних. У тебе вже <b class="progress-note-accent">@Done</b> — продовжуй у тому ж темпі! 🎯</p>
             </div>
-            <div style="flex:none;display:flex;flex-direction:column;align-items:center;gap:8px;padding-left:8px">
-                <div style="text-align:center">
-                    <div class="mono tnum" style="font-size:46px;font-weight:800;letter-spacing:-0.04em;color:var(--acc-bright);line-height:1">@AvgStr</div>
-                    <div style="font-size:12px;color:var(--tx-3);margin-top:4px">середній бал курсу</div>
+            <div class="avg-block">
+                <div class="avg-value-wrap">
+                    <div class="mono tnum avg-value">@AvgStr</div>
+                    <div class="avg-label">середній бал курсу</div>
                 </div>
-                <div style="display:flex;gap:4px;margin-top:4px">
+                <div class="star-row">
                     @for (int n = 1; n <= 5; n++)
                     {
                         <Icon Name="spark" Size="15" Style="@($"color:{(n <= Math.Round(Avg / 20.0) ? "var(--st-yellow)" : "var(--tx-faint)")}")" />
