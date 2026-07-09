@@ -4,6 +4,7 @@ using AutoCheck.Data;
 using AutoCheck.Services;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
@@ -42,10 +43,24 @@ builder.Services.Configure<SecurityStampValidatorOptions>(o =>
 builder.Services.ConfigureApplicationCookie(opt =>
 {
     opt.Cookie.HttpOnly = true;
+    // Behind a reverse proxy in production, TLS is terminated upstream —
+    // ForwardedHeaders below makes the request look HTTPS so this is safe.
+    opt.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
+        ? CookieSecurePolicy.SameAsRequest
+        : CookieSecurePolicy.Always;
     opt.LoginPath = "/";
     opt.AccessDeniedPath = "/";
     opt.ExpireTimeSpan = TimeSpan.FromHours(8);
     opt.SlidingExpiration = true;
+});
+
+// Trust X-Forwarded-For/-Proto from the reverse proxy (Nginx/Caddy/Traefik) so
+// the app sees the real client scheme/IP instead of the proxy's local connection.
+builder.Services.Configure<ForwardedHeadersOptions>(opt =>
+{
+    opt.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    opt.KnownIPNetworks.Clear();
+    opt.KnownProxies.Clear();
 });
 
 // Google login is optional — enabled only when ClientId is configured
@@ -98,8 +113,12 @@ using (var scope = app.Services.CreateScope())
     await scope.ServiceProvider.GetRequiredService<DatabaseSeeder>().SeedAsync();
 }
 
+app.UseForwardedHeaders();
+
 if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
+
+app.MapGet("/health", () => Results.Ok("healthy")).AllowAnonymous();
 
 app.UseStaticFiles();
 app.UseRouting();

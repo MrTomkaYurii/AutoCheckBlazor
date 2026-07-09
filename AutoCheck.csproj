@@ -23,10 +23,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Update="content\labs\**\*" CopyToOutputDirectory="PreserveNewest" />
-    <Content Remove="content\labs\**\tests\**" />
+    <!-- .md files default-glob as <None>, .json as <Content> — normalize all of
+         content/labs to explicit <Content> so instructions.md actually ships in publish output. -->
+    <None    Remove="content\labs\**\*" />
+    <Content Remove="content\labs\**\*" />
+    <Content Include="content\labs\**\*" Exclude="content\labs\**\tests\**" CopyToOutputDirectory="PreserveNewest" />
     <Compile Remove="content\labs\**\tests\**" />
-    <None    Remove="content\labs\**\tests\**" />
   </ItemGroup>
 
   <!-- Exclude test project and design prototypes from main compilation -->

@@ -1,0 +1,29 @@
+services:
+  autocheck:
+    build: .
+    image: autocheck-blazor:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - Gemini__ApiKey=${GEMINI_API_KEY}
+      - Gemini__Model=${GEMINI_MODEL:-gemini-2.5-flash}
+      - Gemini__DailyLimit=${GEMINI_DAILY_LIMIT:-50}
+      - Authentication__Google__ClientId=${GOOGLE_CLIENT_ID:-}
+      - Authentication__Google__ClientSecret=${GOOGLE_CLIENT_SECRET:-}
+      - Email__SmtpHost=${SMTP_HOST:-}
+      - Email__SmtpPort=${SMTP_PORT:-587}
+      - Email__SmtpUser=${SMTP_USER:-}
+      - Email__SmtpPassword=${SMTP_PASSWORD:-}
+      - Email__From=${SMTP_FROM:-}
+      - Email__FromName=${SMTP_FROM_NAME:-AutoCheck}
+    volumes:
+      - autocheck-data:/app/data
+      - autocheck-backups:/app/backups
+      - autocheck-dpkeys:/app/dp-keys
+
+volumes:
+  autocheck-data:
+  autocheck-backups:
+  autocheck-dpkeys:
