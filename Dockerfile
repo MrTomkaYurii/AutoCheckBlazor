@@ -12,8 +12,9 @@ RUN dotnet publish AutoCheck.csproj -c Release -o /app/publish --no-restore
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
-# GradingService shells out to git to clone/fetch student repos; curl powers HEALTHCHECK
-RUN apt-get update \
+# GradingService shells out to git to clone/fetch student repos; curl powers HEALTHCHECK.
+# Retry apt-get update — Ubuntu mirrors occasionally return a mid-sync/corrupt index.
+RUN for i in 1 2 3; do apt-get update && break || sleep 5; done \
     && apt-get install -y --no-install-recommends git curl \
     && rm -rf /var/lib/apt/lists/*
 
