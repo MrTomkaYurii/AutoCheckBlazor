@@ -2,32 +2,30 @@
 @inject NavigationManager Nav
 @inject AppState App
 
-<aside style="width:var(--sidebar-w);flex:none;height:100%;display:flex;flex-direction:column;align-items:center;padding:22px 0 18px;position:relative;z-index:5;border-right:1px solid var(--line);background:linear-gradient(180deg, rgba(21,28,25,0.7), rgba(15,26,22,0.5));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)">
+<aside>
 
-    <button @onclick="@(() => Go(Home))" title="AutoCheck"
-            style="width:46px;height:46px;border-radius:13px;border:none;cursor:pointer;display:grid;place-items:center;background:linear-gradient(150deg, var(--acc-bright), var(--acc));color:#08110d;font-weight:800;font-family:var(--mono);font-size:21px;letter-spacing:-0.04em;box-shadow:0 8px 20px -10px rgba(118,199,173,0.8), inset 0 1px 0 rgba(255,255,255,0.35)">{}</button>
+    <button @onclick="@(() => Go(Home))" title="AutoCheck" class="logo-btn">{}</button>
 
-    <nav style="margin-top:30px;display:flex;flex-direction:column;gap:6px;width:100%;padding:0 10px">
+    <nav>
         @foreach (var it in Items)
         {
             var on = it.Key == Active;
-            <button @onclick="@(() => Go(it.Route))" class="side-item"
-                    style="display:flex;flex-direction:column;align-items:center;gap:5px;padding:11px 4px 9px;border-radius:14px;border:none;cursor:pointer;background:@(on ? "var(--acc-dim)" : "transparent");color:@(on ? "var(--acc-bright)" : "var(--tx-3)");position:relative;transition:background .18s, color .18s">
+            <button @onclick="@(() => Go(it.Route))" class="side-item nav-btn"
+                    style="background:@(on ? "var(--acc-dim)" : "transparent");color:@(on ? "var(--acc-bright)" : "var(--tx-3)")">
                 @if (on)
                 {
-                    <span style="position:absolute;left:-10px;top:50%;transform:translateY(-50%);width:3px;height:22px;border-radius:3px;background:var(--acc);box-shadow:0 0 10px var(--acc)"></span>
+                    <span class="nav-active-mark"></span>
                 }
                 <Icon Name="@it.Icon" Size="22" />
-                <span style="font-size:10.5px;font-weight:600;letter-spacing:-0.01em">@it.Label</span>
+                <span class="nav-label">@it.Label</span>
             </button>
         }
     </nav>
 
-    <div style="margin-top:auto;display:flex;flex-direction:column;gap:10px;align-items:center">
+    <div class="bottom-bar">
         <form method="post" action="/account/logout">
             <AntiforgeryToken />
-            <button type="submit" title="Вийти" class="side-logout"
-                    style="width:42px;height:42px;border-radius:12px;border:1px solid var(--line-strong);background:transparent;color:var(--tx-3);cursor:pointer;display:grid;place-items:center;transition:color .18s, border-color .18s, background .18s">
+            <button type="submit" title="Вийти" class="side-logout logout-btn">
                 <Icon Name="logout" Size="19" />
             </button>
         </form>

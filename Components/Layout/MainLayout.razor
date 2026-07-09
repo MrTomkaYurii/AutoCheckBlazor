@@ -10,17 +10,17 @@
 
 @if (_ready)
 {
-    <div style="display:flex;height:100%;position:relative;z-index:1">
+    <div class="shell">
         <Sidebar />
-        <main class="scroll-area" style="flex:1;height:100%;overflow-y:auto;min-width:0">
+        <main class="scroll-area content">
             @Body
         </main>
     </div>
 }
 else
 {
-    <div style="display:grid;place-items:center;height:100vh;color:var(--tx-3);gap:12px">
-        <span style="width:22px;height:22px;border-radius:50%;border:2.5px solid var(--acc-dim-2);border-top-color:var(--acc);animation:spin .8s linear infinite"></span>
+    <div class="loading">
+        <span class="spinner"></span>
     </div>
 }
 
