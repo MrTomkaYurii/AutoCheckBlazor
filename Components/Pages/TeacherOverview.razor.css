@@ -1,0 +1,257 @@
+.journal-btn {
+    margin-right: 4px;
+}
+
+.page {
+    padding: 0 34px 40px;
+    position: relative;
+    z-index: 1;
+}
+
+.stat-strip {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 14px;
+    margin-bottom: 20px;
+}
+
+.quota-card {
+    padding: 18px 20px;
+    position: relative;
+    overflow: hidden;
+}
+
+.quota-glow {
+    position: absolute;
+    right: -20px;
+    top: -30px;
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.quota-head {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    margin-bottom: 14px;
+    position: relative;
+}
+
+.quota-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+}
+
+.quota-badge {
+    margin-left: auto;
+    height: 22px;
+}
+
+.quota-value {
+    font-size: 26px;
+    font-weight: 790;
+    letter-spacing: -0.03em;
+    line-height: 1;
+    color: var(--tx-1);
+}
+
+.quota-value-suffix {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--tx-3);
+}
+
+.quota-label {
+    font-size: 12.5px;
+    color: var(--tx-3);
+    margin-top: 7px;
+    font-weight: 500;
+}
+
+.quota-track {
+    margin-top: 10px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--line);
+    overflow: hidden;
+}
+
+.quota-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width .4s;
+}
+
+.columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    align-items: start;
+}
+
+.panel {
+    padding: 0;
+    overflow: hidden;
+}
+
+.panel-head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--line);
+}
+
+.panel-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 720;
+    letter-spacing: -0.02em;
+}
+
+.panel-sort-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-left: auto;
+}
+
+.sort-chip {
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1px solid;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all .15s;
+    border-color: var(--line);
+    background: transparent;
+    color: var(--tx-3);
+}
+
+.sort-chip.active {
+    border-color: var(--acc);
+    background: var(--acc-dim);
+    color: var(--acc-bright);
+}
+
+.panel-empty {
+    padding: 32px;
+    text-align: center;
+    color: var(--tx-faint);
+    font-size: 13.5px;
+}
+
+.group-head {
+    padding: 8px 22px;
+    background: rgba(255, 255, 255, 0.025);
+    border-bottom: 1px solid var(--line);
+}
+
+.group-head-name {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--tx-3);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.group-head-count {
+    font-size: 11px;
+    color: var(--tx-faint);
+    margin-left: 6px;
+}
+
+.qrow {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 13px 22px;
+    cursor: pointer;
+}
+
+.avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 11px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+    font-size: 13.5px;
+    background: linear-gradient(150deg, rgba(118, 199, 173, 0.3), rgba(118, 199, 173, 0.12));
+    border: 1px solid var(--glass-border-hover);
+    color: var(--acc-bright);
+}
+
+.avatar-red {
+    width: 40px;
+    height: 40px;
+    border-radius: 11px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+    font-size: 13.5px;
+    background: rgba(232, 128, 107, 0.12);
+    border: 1px solid rgba(232, 128, 107, 0.25);
+    color: var(--st-red);
+}
+
+.qrow-info {
+    min-width: 0;
+    flex: 1;
+}
+
+.qrow-name {
+    font-size: 14px;
+    font-weight: 640;
+}
+
+.qrow-meta {
+    font-size: 12px;
+    color: var(--tx-3);
+    margin-top: 2px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.qrow-meta-dot {
+    opacity: 0.4;
+}
+
+.qrow-score {
+    text-align: right;
+    flex: none;
+}
+
+.qrow-score-label {
+    font-size: 11px;
+    color: var(--tx-3);
+    margin-bottom: 3px;
+}
+
+.qrow-score-value {
+    font-size: 15px;
+    font-weight: 750;
+}
+
+.qrow-time {
+    font-size: 11.5px;
+    color: var(--tx-faint);
+    flex: none;
+    width: 72px;
+    text-align: right;
+}
+
+.qrow-action {
+    flex: none;
+}

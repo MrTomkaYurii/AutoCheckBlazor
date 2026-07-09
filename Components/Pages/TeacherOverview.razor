@@ -7,12 +7,12 @@
 @implements IDisposable
 
 <TopBar Title="Огляд курсу" Sub="ООП на C# · Семестр 2">
-    <button class="btn btn-outline btn-sm" @onclick="@(() => Nav.NavigateTo("/teacher/journal"))" style="margin-right:4px">
+    <button class="btn btn-outline btn-sm journal-btn" @onclick="@(() => Nav.NavigateTo("/teacher/journal"))">
         <Icon Name="grades" Size="15" />Відкрити журнал
     </button>
 </TopBar>
 
-<div class="screen-anim" style="padding:0 34px 40px;position:relative;z-index:1">
+<div class="screen-anim page">
 
     @* stat strip *@
     @{
@@ -22,44 +22,44 @@
         var _qPct   = _qLim > 0 ? (int)Math.Round(100.0 * _qUsed / _qLim) : 0;
         var _qTone  = _qRem == 0 ? "var(--st-red)" : _qRem <= 5 ? "var(--st-yellow)" : "var(--st-green)";
     }
-    <div style="display:grid;grid-template-columns:repeat(5, 1fr);gap:14px;margin-bottom:20px">
+    <div class="stat-strip">
         <TStat Icon="users"   Tone="var(--acc)"       Value="@Stats.Students.ToString()"      Label="Студентів на курсі"  Hint="2 групи" />
         <TStat Icon="upload"  Tone="var(--st-blue)"   Value="@Stats.Submissions.ToString()"   Label="Здач загалом" />
         <TStat Icon="target"  Tone="var(--st-green)"  Value="@($"{Stats.PassRate}%")"         Label="Успішність" />
         <TStat Icon="clock"   Tone="var(--st-yellow)" Value="@Stats.PendingReview.ToString()" Label="Очікують захисту"    Hint="нові" />
-        <div class="glass lift" style="padding:18px 20px;position:relative;overflow:hidden">
-            <div style="position:absolute;right:-20px;top:-30px;width:120px;height:120px;border-radius:50%;background:radial-gradient(circle,@(_qTone)1c,transparent 65%);pointer-events:none"></div>
-            <div style="display:flex;align-items:center;gap:11px;margin-bottom:14px;position:relative">
-                <span style="width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:@(_qTone)1e;color:@_qTone;border:1px solid @(_qTone)33">
+        <div class="glass lift quota-card">
+            <div class="quota-glow" style="background:radial-gradient(circle,@(_qTone)1c,transparent 65%)"></div>
+            <div class="quota-head">
+                <span class="quota-icon" style="background:@(_qTone)1e;color:@_qTone;border:1px solid @(_qTone)33">
                     <Icon Name="spark" Size="19" />
                 </span>
-                <span class="badge" style="margin-left:auto;height:22px;color:@_qTone;background:@(_qTone)18;border:1px solid @(_qTone)44">
+                <span class="badge quota-badge" style="color:@_qTone;background:@(_qTone)18;border:1px solid @(_qTone)44">
                     @(_qRem == 0 ? "вичерп." : $"{_qPct}%")
                 </span>
             </div>
-            <div class="mono tnum" style="font-size:26px;font-weight:790;letter-spacing:-0.03em;line-height:1;color:var(--tx-1)">
-                @_qRem<span style="font-size:14px;font-weight:500;color:var(--tx-3)"> / @_qLim</span>
+            <div class="mono tnum quota-value">
+                @_qRem<span class="quota-value-suffix"> / @_qLim</span>
             </div>
-            <div style="font-size:12.5px;color:var(--tx-3);margin-top:7px;font-weight:500">Gemini сьогодні</div>
-            <div style="margin-top:10px;height:4px;border-radius:2px;background:var(--line);overflow:hidden">
-                <div style="height:100%;width:@_qPct%;background:@_qTone;border-radius:2px;transition:width .4s"></div>
+            <div class="quota-label">Gemini сьогодні</div>
+            <div class="quota-track">
+                <div class="quota-fill" style="width:@_qPct%;background:@_qTone"></div>
             </div>
         </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start">
+    <div class="columns">
 
         @* ── Черга на перевірку ──────────────────────────────────────────────── *@
-        <section class="glass" style="padding:0;overflow:hidden">
-            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:18px 22px;border-bottom:1px solid var(--line)">
+        <section class="glass panel">
+            <div class="panel-head">
                 <Icon Name="clock" Size="18" Style="color:var(--st-yellow)" />
-                <h3 style="margin:0;font-size:16px;font-weight:720;letter-spacing:-0.02em">Черга на перевірку</h3>
+                <h3 class="panel-title">Черга на перевірку</h3>
                 <span class="badge badge-yellow"><span class="dot pulse"></span>@Queue.Count</span>
-                <div style="display:flex;gap:6px;align-items:center;margin-left:auto">
+                <div class="panel-sort-row">
                     <button @onclick='() => SetQueueSort("date")'
-                            style="@SortChip(_queueSort == "date")">За датою</button>
+                            class="sort-chip @(_queueSort == "date" ? "active" : "")">За датою</button>
                     <button @onclick='() => SetQueueSort("group")'
-                            style="@SortChip(_queueSort == "group")">За групою</button>
+                            class="sort-chip @(_queueSort == "group" ? "active" : "")">За групою</button>
                     <button class="btn btn-ghost btn-sm" @onclick="@(() => Nav.NavigateTo("/teacher/journal"))">
                         Журнал<Icon Name="arrowR" Size="15" />
                     </button>
@@ -68,7 +68,7 @@
 
             @if (Queue.Count == 0)
             {
-                <div style="padding:32px;text-align:center;color:var(--tx-faint);font-size:13.5px">
+                <div class="panel-empty">
                     Черга порожня — усі роботи перевірені 🎉
                 </div>
             }
@@ -77,28 +77,28 @@
                 var byGroup = SortedQueue.GroupBy(r => r.Group).OrderBy(g => g.Key);
                 @foreach (var grp in byGroup)
                 {
-                    <div style="padding:8px 22px;background:rgba(255,255,255,0.025);border-bottom:1px solid var(--line)">
-                        <span style="font-size:11.5px;font-weight:700;color:var(--tx-3);text-transform:uppercase;letter-spacing:0.06em">@grp.Key</span>
-                        <span class="mono" style="font-size:11px;color:var(--tx-faint);margin-left:6px">@grp.Count() робіт</span>
+                    <div class="group-head">
+                        <span class="group-head-name">@grp.Key</span>
+                        <span class="mono group-head-count">@grp.Count() робіт</span>
                     </div>
                     @foreach (var (q, last) in grp.Select((x, i) => (x, i == grp.Count() - 1)))
                     {
                         <div class="qrow" @onclick="@(() => OpenResults(q.StudentId, q.LabId))"
-                             style="display:flex;align-items:center;gap:14px;padding:13px 22px;cursor:pointer;border-bottom:@(last ? "none" : "1px solid var(--line)")">
-                            <div style="@Avatar">@q.Initials</div>
-                            <div style="min-width:0;flex:1">
-                                <div style="font-size:14px;font-weight:640">@q.Name</div>
-                                <div style="font-size:12px;color:var(--tx-3);margin-top:2px;display:flex;gap:8px;align-items:center">
-                                    <span>@q.Group</span><span style="opacity:0.4">·</span><span class="mono">@q.LabShort</span><span>@q.LabTitle</span>
+                             style="border-bottom:@(last ? "none" : "1px solid var(--line)")">
+                            <div class="avatar">@q.Initials</div>
+                            <div class="qrow-info">
+                                <div class="qrow-name">@q.Name</div>
+                                <div class="qrow-meta">
+                                    <span>@q.Group</span><span class="qrow-meta-dot">·</span><span class="mono">@q.LabShort</span><span>@q.LabTitle</span>
                                 </div>
                             </div>
-                            <div style="text-align:right;flex:none">
-                                <div style="font-size:11px;color:var(--tx-3);margin-bottom:3px">авто</div>
-                                <span class="mono tnum" style="font-size:15px;font-weight:750;color:@ScoreColor(q.Auto)">@q.Auto</span>
+                            <div class="qrow-score">
+                                <div class="qrow-score-label">авто</div>
+                                <span class="mono tnum qrow-score-value" style="color:@ScoreColor(q.Auto)">@q.Auto</span>
                             </div>
-                            <span style="font-size:11.5px;color:var(--tx-faint);flex:none;width:72px;text-align:right">@q.When</span>
-                            <button class="btn btn-ghost btn-sm" style="flex:none" title="Переглянути результати автоперевірки" @onclick:stopPropagation @onclick="@(() => OpenResults(q.StudentId, q.LabId))"><Icon Name="search" Size="14" />Результати</button>
-                            <button class="btn btn-outline btn-sm" style="flex:none" @onclick:stopPropagation @onclick="@(() => OpenGrade(q.StudentId, q.LabId))">Оцінити</button>
+                            <span class="qrow-time">@q.When</span>
+                            <button class="btn btn-ghost btn-sm qrow-action" title="Переглянути результати автоперевірки" @onclick:stopPropagation @onclick="@(() => OpenResults(q.StudentId, q.LabId))"><Icon Name="search" Size="14" />Результати</button>
+                            <button class="btn btn-outline btn-sm qrow-action" @onclick:stopPropagation @onclick="@(() => OpenGrade(q.StudentId, q.LabId))">Оцінити</button>
                         </div>
                     }
                 }
@@ -110,43 +110,43 @@
                     var q    = SortedQueue[i];
                     var last = i == SortedQueue.Count - 1;
                     <div class="qrow" @onclick="@(() => OpenResults(q.StudentId, q.LabId))"
-                         style="display:flex;align-items:center;gap:14px;padding:13px 22px;cursor:pointer;border-bottom:@(last ? "none" : "1px solid var(--line)")">
-                        <div style="@Avatar">@q.Initials</div>
-                        <div style="min-width:0;flex:1">
-                            <div style="font-size:14px;font-weight:640">@q.Name</div>
-                            <div style="font-size:12px;color:var(--tx-3);margin-top:2px;display:flex;gap:8px;align-items:center">
-                                <span>@q.Group</span><span style="opacity:0.4">·</span><span class="mono">@q.LabShort</span><span>@q.LabTitle</span>
+                         style="border-bottom:@(last ? "none" : "1px solid var(--line)")">
+                        <div class="avatar">@q.Initials</div>
+                        <div class="qrow-info">
+                            <div class="qrow-name">@q.Name</div>
+                            <div class="qrow-meta">
+                                <span>@q.Group</span><span class="qrow-meta-dot">·</span><span class="mono">@q.LabShort</span><span>@q.LabTitle</span>
                             </div>
                         </div>
-                        <div style="text-align:right;flex:none">
-                            <div style="font-size:11px;color:var(--tx-3);margin-bottom:3px">авто</div>
-                            <span class="mono tnum" style="font-size:15px;font-weight:750;color:@ScoreColor(q.Auto)">@q.Auto</span>
+                        <div class="qrow-score">
+                            <div class="qrow-score-label">авто</div>
+                            <span class="mono tnum qrow-score-value" style="color:@ScoreColor(q.Auto)">@q.Auto</span>
                         </div>
-                        <span style="font-size:11.5px;color:var(--tx-faint);flex:none;width:72px;text-align:right">@q.When</span>
-                        <button class="btn btn-ghost btn-sm" style="flex:none" title="Переглянути результати автоперевірки" @onclick:stopPropagation @onclick="@(() => OpenResults(q.StudentId, q.LabId))"><Icon Name="search" Size="14" />Результати</button>
-                        <button class="btn btn-outline btn-sm" style="flex:none" @onclick:stopPropagation @onclick="@(() => OpenGrade(q.StudentId, q.LabId))">Оцінити</button>
+                        <span class="qrow-time">@q.When</span>
+                        <button class="btn btn-ghost btn-sm qrow-action" title="Переглянути результати автоперевірки" @onclick:stopPropagation @onclick="@(() => OpenResults(q.StudentId, q.LabId))"><Icon Name="search" Size="14" />Результати</button>
+                        <button class="btn btn-outline btn-sm qrow-action" @onclick:stopPropagation @onclick="@(() => OpenGrade(q.StudentId, q.LabId))">Оцінити</button>
                     </div>
                 }
             }
         </section>
 
         @* ── Відхилені до захисту ────────────────────────────────────────────── *@
-        <section class="glass" style="padding:0;overflow:hidden">
-            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:18px 22px;border-bottom:1px solid var(--line)">
+        <section class="glass panel">
+            <div class="panel-head">
                 <Icon Name="x" Size="18" Style="color:var(--st-red)" />
-                <h3 style="margin:0;font-size:16px;font-weight:720;letter-spacing:-0.02em">Відхилені до захисту</h3>
+                <h3 class="panel-title">Відхилені до захисту</h3>
                 <span class="badge badge-red"><span class="dot"></span>@Rejected.Count</span>
-                <div style="display:flex;gap:6px;align-items:center;margin-left:auto">
+                <div class="panel-sort-row">
                     <button @onclick='() => SetRejSort("date")'
-                            style="@SortChip(_rejSort == "date")">За датою</button>
+                            class="sort-chip @(_rejSort == "date" ? "active" : "")">За датою</button>
                     <button @onclick='() => SetRejSort("group")'
-                            style="@SortChip(_rejSort == "group")">За групою</button>
+                            class="sort-chip @(_rejSort == "group" ? "active" : "")">За групою</button>
                 </div>
             </div>
 
             @if (Rejected.Count == 0)
             {
-                <div style="padding:32px;text-align:center;color:var(--tx-faint);font-size:13.5px">
+                <div class="panel-empty">
                     Відхилених робіт немає 🎉
                 </div>
             }
@@ -155,28 +155,28 @@
                 var byGroup = SortedRejected.GroupBy(r => r.Group).OrderBy(g => g.Key);
                 @foreach (var grp in byGroup)
                 {
-                    <div style="padding:8px 22px;background:rgba(255,255,255,0.025);border-bottom:1px solid var(--line)">
-                        <span style="font-size:11.5px;font-weight:700;color:var(--tx-3);text-transform:uppercase;letter-spacing:0.06em">@grp.Key</span>
-                        <span class="mono" style="font-size:11px;color:var(--tx-faint);margin-left:6px">@grp.Count() робіт</span>
+                    <div class="group-head">
+                        <span class="group-head-name">@grp.Key</span>
+                        <span class="mono group-head-count">@grp.Count() робіт</span>
                     </div>
                     @foreach (var (q, last) in grp.Select((x, i) => (x, i == grp.Count() - 1)))
                     {
                         <div class="qrow" @onclick="@(() => OpenResults(q.StudentId, q.LabId))"
-                             style="display:flex;align-items:center;gap:14px;padding:13px 22px;cursor:pointer;border-bottom:@(last ? "none" : "1px solid var(--line)")">
-                            <div style="@AvatarRed">@q.Initials</div>
-                            <div style="min-width:0;flex:1">
-                                <div style="font-size:14px;font-weight:640">@q.Name</div>
-                                <div style="font-size:12px;color:var(--tx-3);margin-top:2px;display:flex;gap:8px;align-items:center">
-                                    <span>@q.Group</span><span style="opacity:0.4">·</span>
+                             style="border-bottom:@(last ? "none" : "1px solid var(--line)")">
+                            <div class="avatar-red">@q.Initials</div>
+                            <div class="qrow-info">
+                                <div class="qrow-name">@q.Name</div>
+                                <div class="qrow-meta">
+                                    <span>@q.Group</span><span class="qrow-meta-dot">·</span>
                                     <span class="mono">@q.LabShort</span><span>@q.LabTitle</span>
                                 </div>
                             </div>
-                            <div style="text-align:right;flex:none">
-                                <div style="font-size:11px;color:var(--tx-3);margin-bottom:3px">найкраща спроба</div>
-                                <span class="mono tnum" style="font-size:15px;font-weight:750;color:var(--st-red)">@q.Auto</span>
+                            <div class="qrow-score">
+                                <div class="qrow-score-label">найкраща спроба</div>
+                                <span class="mono tnum qrow-score-value" style="color:var(--st-red)">@q.Auto</span>
                             </div>
-                            <span style="font-size:11.5px;color:var(--tx-faint);flex:none;width:72px;text-align:right">@q.When</span>
-                            <button class="btn btn-ghost btn-sm" style="flex:none" title="Переглянути результати автоперевірки" @onclick:stopPropagation @onclick="@(() => OpenResults(q.StudentId, q.LabId))"><Icon Name="search" Size="14" />Результати</button>
+                            <span class="qrow-time">@q.When</span>
+                            <button class="btn btn-ghost btn-sm qrow-action" title="Переглянути результати автоперевірки" @onclick:stopPropagation @onclick="@(() => OpenResults(q.StudentId, q.LabId))"><Icon Name="search" Size="14" />Результати</button>
                         </div>
                     }
                 }
@@ -188,21 +188,21 @@
                     var q    = SortedRejected[i];
                     var last = i == SortedRejected.Count - 1;
                     <div class="qrow" @onclick="@(() => OpenResults(q.StudentId, q.LabId))"
-                         style="display:flex;align-items:center;gap:14px;padding:13px 22px;cursor:pointer;border-bottom:@(last ? "none" : "1px solid var(--line)")">
-                        <div style="@AvatarRed">@q.Initials</div>
-                        <div style="min-width:0;flex:1">
-                            <div style="font-size:14px;font-weight:640">@q.Name</div>
-                            <div style="font-size:12px;color:var(--tx-3);margin-top:2px;display:flex;gap:8px;align-items:center">
-                                <span>@q.Group</span><span style="opacity:0.4">·</span>
+                         style="border-bottom:@(last ? "none" : "1px solid var(--line)")">
+                        <div class="avatar-red">@q.Initials</div>
+                        <div class="qrow-info">
+                            <div class="qrow-name">@q.Name</div>
+                            <div class="qrow-meta">
+                                <span>@q.Group</span><span class="qrow-meta-dot">·</span>
                                 <span class="mono">@q.LabShort</span><span>@q.LabTitle</span>
                             </div>
                         </div>
-                        <div style="text-align:right;flex:none">
-                            <div style="font-size:11px;color:var(--tx-3);margin-bottom:3px">найкраща спроба</div>
-                            <span class="mono tnum" style="font-size:15px;font-weight:750;color:var(--st-red)">@q.Auto</span>
+                        <div class="qrow-score">
+                            <div class="qrow-score-label">найкраща спроба</div>
+                            <span class="mono tnum qrow-score-value" style="color:var(--st-red)">@q.Auto</span>
                         </div>
-                        <span style="font-size:11.5px;color:var(--tx-faint);flex:none;width:72px;text-align:right">@q.When</span>
-                        <button class="btn btn-ghost btn-sm" style="flex:none" title="Переглянути результати автоперевірки" @onclick:stopPropagation @onclick="@(() => OpenResults(q.StudentId, q.LabId))"><Icon Name="search" Size="14" />Результати</button>
+                        <span class="qrow-time">@q.When</span>
+                        <button class="btn btn-ghost btn-sm qrow-action" title="Переглянути результати автоперевірки" @onclick:stopPropagation @onclick="@(() => OpenResults(q.StudentId, q.LabId))"><Icon Name="search" Size="14" />Результати</button>
                     </div>
                 }
             }
@@ -258,13 +258,6 @@
 
     private static string ScoreColor(int auto) =>
         auto >= 85 ? "var(--st-green)" : auto >= 60 ? "var(--st-yellow)" : "var(--st-red)";
-
-    private static string SortChip(bool active) =>
-        $"padding:4px 12px;border-radius:20px;border:1px solid;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;" +
-        $"border-color:{(active ? "var(--acc)" : "var(--line)")};background:{(active ? "var(--acc-dim)" : "transparent")};color:{(active ? "var(--acc-bright)" : "var(--tx-3)")}";
-
-    private const string Avatar    = "width:40px;height:40px;border-radius:11px;flex:none;display:grid;place-items:center;font-weight:700;font-size:13.5px;background:linear-gradient(150deg, rgba(118,199,173,0.3), rgba(118,199,173,0.12));border:1px solid var(--glass-border-hover);color:var(--acc-bright)";
-    private const string AvatarRed = "width:40px;height:40px;border-radius:11px;flex:none;display:grid;place-items:center;font-weight:700;font-size:13.5px;background:rgba(232,128,107,0.12);border:1px solid rgba(232,128,107,0.25);color:var(--st-red)";
 
     private void OpenResults(int studentId, int labId) =>
         Nav.NavigateTo($"/teacher/results/{studentId}/{labId}");
