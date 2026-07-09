@@ -6,29 +6,29 @@
 
 <TopBar Title="Журнал оцінок" Sub="Матриця оцінок по всіх лабах" />
 
-<div class="screen-anim" style="padding:0 34px 40px;position:relative;z-index:1">
+<div class="screen-anim page">
 
     @* filter bar *@
-    <section class="glass" style="padding:16px 20px;margin-bottom:18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-        <div style="display:flex;align-items:center;gap:8px">
+    <section class="glass filter-bar">
+        <div class="group-block">
             <Icon Name="users" Size="17" Style="color:var(--tx-3)" />
-            <div style="display:flex;gap:4px;padding:4px;background:rgba(12,20,17,0.6);border-radius:11px;border:1px solid var(--line)">
+            <div class="group-tabs">
                 @foreach (var g in _groups)
                 {
                     var on = _group == g;
-                    <button @onclick="@(() => _group = g)" style="height:32px;padding:0 14px;border-radius:8px;border:none;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:650;background:@(on ? "var(--acc-dim-2)" : "transparent");color:@(on ? "var(--acc-bright)" : "var(--tx-3)");transition:all .15s">@g</button>
+                    <button @onclick="@(() => _group = g)" class="group-tab" style="background:@(on ? "var(--acc-dim-2)" : "transparent");color:@(on ? "var(--acc-bright)" : "var(--tx-3)")">@g</button>
                 }
             </div>
         </div>
 
-        <div class="input-wrap" style="flex:1 1 200px;max-width:280px">
+        <div class="input-wrap search-wrap">
             <span class="lead"><Icon Name="search" Size="16" /></span>
-            <input class="input" placeholder="Пошук студента…" value="@_query" @oninput="@(e => _query = e.Value?.ToString() ?? "")" style="height:40px" />
+            <input class="input search-input" placeholder="Пошук студента…" value="@_query" @oninput="@(e => _query = e.Value?.ToString() ?? "")" />
         </div>
 
-        <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
-            <span style="font-size:12.5px;color:var(--tx-3)">Фокус лаби:</span>
-            <select class="select" value="@_focusLab" @onchange="@(e => _focusLab = int.Parse(e.Value?.ToString() ?? "0"))" style="height:40px;width:150px">
+        <div class="focus-block">
+            <span class="focus-label">Фокус лаби:</span>
+            <select class="select focus-select" value="@_focusLab" @onchange="@(e => _focusLab = int.Parse(e.Value?.ToString() ?? "0"))">
                 <option value="0">Усі лаби</option>
                 @foreach (var c in _labCols)
                 {
@@ -39,38 +39,38 @@
     </section>
 
     @* matrix *@
-    <section class="glass" style="padding:0;overflow:hidden">
-        <div style="display:flex;align-items:center;gap:11px;padding:16px 22px;border-bottom:1px solid var(--line)">
+    <section class="glass matrix-card">
+        <div class="matrix-head">
             <Icon Name="grades" Size="18" Style="color:var(--acc)" />
-            <h3 style="margin:0;font-size:16px;font-weight:720;letter-spacing:-0.02em">Журнал оцінок</h3>
+            <h3 class="matrix-title">Журнал оцінок</h3>
             <span class="badge badge-grey"><span class="dot"></span>@Filtered.Count студентів</span>
-            <button class="btn btn-ghost btn-sm" style="margin-left:8px" @onclick="GeneratePdfAsync" title="Сформувати PDF поточного журналу">
+            <button class="btn btn-ghost btn-sm pdf-btn" @onclick="GeneratePdfAsync" title="Сформувати PDF поточного журналу">
                 <Icon Name="file-text" Size="15" />PDF
             </button>
-            <div style="margin-left:auto;display:flex;gap:14px;font-size:12px;color:var(--tx-3);align-items:center">
-                <span style="display:flex;align-items:center;gap:6px"><span style="width:11px;height:11px;border-radius:4px;background:rgba(118,199,173,0.2);border:1px solid rgba(118,199,173,0.4)"></span>зараховано</span>
-                <span style="display:flex;align-items:center;gap:6px"><span style="width:11px;height:11px;border-radius:4px;background:rgba(231,193,75,0.2);border:1px solid rgba(231,193,75,0.4);display:grid;place-items:center;color:var(--st-yellow)"><Icon Name="clock" Size="8" Stroke="2.4" /></span>на перевірці</span>
-                <span style="display:flex;align-items:center;gap:6px"><span style="width:11px;height:11px;border-radius:4px;background:rgba(232,128,107,0.2);border:1px solid rgba(232,128,107,0.4)"></span>відхилено</span>
+            <div class="legend">
+                <span class="legend-item"><span class="legend-dot legend-dot-done"></span>зараховано</span>
+                <span class="legend-item"><span class="legend-dot legend-dot-review"><Icon Name="clock" Size="8" Stroke="2.4" /></span>на перевірці</span>
+                <span class="legend-item"><span class="legend-dot legend-dot-rejected"></span>відхилено</span>
             </div>
         </div>
 
-        <div style="overflow-x:auto">
-            <table style="border-collapse:separate;border-spacing:0;width:100%;min-width:@(NameW + AvgW + _labCols.Count * CellW)px">
+        <div class="matrix-scroll">
+            <table style="min-width:@(NameW + AvgW + _labCols.Count * CellW)px">
                 <thead>
                     <tr>
-                        <th style="position:sticky;left:0;z-index:3;background:var(--bg-2);box-shadow:1px 0 0 var(--line);width:@(NameW)px;min-width:@(NameW)px;text-align:left;padding:12px 16px 12px 22px">
-                            <span style="@ThLabel">Студент</span>
+                        <th class="col-name">
+                            <span class="th-label">Студент</span>
                         </th>
                         @foreach (var c in _labCols)
                         {
                             var focused = _focusLab == c.Id;
                             <th @onclick="@(() => _focusLab = focused ? 0 : c.Id)" title="@c.Title"
-                                style="width:@(CellW)px;min-width:@(CellW)px;padding:10px 4px;cursor:pointer;background:@(focused ? "var(--acc-dim)" : "transparent")">
+                                class="col-lab" style="background:@(focused ? "var(--acc-dim)" : "transparent")">
                                 <span class="mono" style="font-size:11.5px;font-weight:700;color:@(focused ? "var(--acc-bright)" : "var(--tx-3)")">@c.Id.ToString("D2")</span>
                             </th>
                         }
-                        <th style="position:sticky;right:0;z-index:3;background:var(--bg-2);box-shadow:-1px 0 0 var(--line);width:@(AvgW)px;min-width:@(AvgW)px;padding:12px 16px">
-                            <span style="@ThLabel">Серед.</span>
+                        <th class="col-avg">
+                            <span class="th-label">Серед.</span>
                         </th>
                     </tr>
                 </thead>
@@ -78,24 +78,24 @@
                     @foreach (var s in Filtered)
                     {
                         <tr class="jrow">
-                            <td style="position:sticky;left:0;z-index:2;background:var(--bg-2);box-shadow:1px 0 0 var(--line);width:@(NameW)px;min-width:@(NameW)px;padding:8px 16px 8px 22px;border-top:1px solid var(--line)">
-                                <div style="display:flex;align-items:center;gap:11px">
-                                    <div style="@SmAvatar">@s.Initials</div>
+                            <td class="cell-name">
+                                <div class="cell-name-inner">
+                                    <div class="avatar">@s.Initials</div>
                                     <div style="min-width:0">
-                                        <div style="font-size:13.5px;font-weight:620;white-space:nowrap">@s.Last @FirstInitial(s.First)</div>
-                                        <div style="font-size:11px;color:var(--tx-3)">@s.Group</div>
+                                        <div class="student-name">@s.Last @FirstInitial(s.First)</div>
+                                        <div class="student-group">@s.Group</div>
                                     </div>
                                 </div>
                             </td>
                             @for (int ci = 0; ci < s.Labs.Count; ci++)
                             {
                                 var idx = ci;
-                                <td style="padding:6px 5px;border-top:1px solid var(--line);background:@(_focusLab == idx + 1 ? "rgba(118,199,173,0.05)" : "transparent")">
+                                <td class="cell-lab" style="background:@(_focusLab == idx + 1 ? "rgba(118,199,173,0.05)" : "transparent")">
                                     <GradeCell Cell="s.Labs[idx]" Dim="@(_focusLab != 0 && _focusLab != idx + 1)" OnClick="@(() => OpenGrade(s.Id, idx + 1))" />
                                 </td>
                             }
-                            <td style="position:sticky;right:0;z-index:2;background:var(--bg-2);box-shadow:-1px 0 0 var(--line);width:@(AvgW)px;padding:8px 16px;border-top:1px solid var(--line);text-align:center">
-                                <span class="mono tnum" style="font-size:16px;font-weight:780;color:@(s.Avg is null ? "var(--tx-faint)" : "var(--acc-bright)")">@(s.Avg?.ToString() ?? "—")</span>
+                            <td class="cell-avg">
+                                <span class="mono tnum avg-value" style="color:@(s.Avg is null ? "var(--tx-faint)" : "var(--acc-bright)")">@(s.Avg?.ToString() ?? "—")</span>
                             </td>
                         </tr>
                     }
@@ -104,10 +104,10 @@
         </div>
         @if (Filtered.Count == 0)
         {
-            <div style="padding:40px;text-align:center;color:var(--tx-3);font-size:14px">Нікого не знайдено за запитом «@_query»</div>
+            <div class="empty-row">Нікого не знайдено за запитом «@_query»</div>
         }
     </section>
-    <p style="margin:14px 4px 0;font-size:12.5px;color:var(--tx-faint);display:flex;align-items:center;gap:7px">
+    <p class="footnote">
         <Icon Name="dot" Size="14" Fill="true" Style="color:var(--st-yellow)" />Натисніть на клітинку зі статусом «на перевірці», щоб виставити оцінку захисту.
     </p>
 </div>
@@ -118,8 +118,6 @@
     private int _focusLab = 0;
 
     private const int NameW = 230, AvgW = 74, CellW = 50;
-    private const string ThLabel = "font-size:11px;color:var(--tx-3);text-transform:uppercase;letter-spacing:0.05em;font-weight:600";
-    private const string SmAvatar = "width:34px;height:34px;border-radius:9px;flex:none;display:grid;place-items:center;font-weight:700;font-size:12px;background:linear-gradient(150deg, rgba(118,199,173,0.3), rgba(118,199,173,0.12));border:1px solid var(--glass-border-hover);color:var(--acc-bright)";
 
     private string[] _groups = ["Усі групи"];
     private List<(int Id, string Short, string Title)> _labCols = [];
