@@ -1,51 +1,51 @@
 @* Grade-defense dialog — shows auto-check task results, saves to DB, sends notification *@
 <MudDialog>
     <DialogContent>
-        <div class="glass" style="width:580px;max-width:92vw;padding:26px;box-shadow:var(--shadow-pop)">
+        <div class="glass dlg">
 
             @* ── Header ── *@
-            <div style="display:flex;align-items:center;gap:14px;margin-bottom:22px">
-                <div style="width:48px;height:48px;border-radius:13px;flex:none;display:grid;place-items:center;font-weight:700;font-size:16px;background:linear-gradient(150deg, rgba(118,199,173,0.3), rgba(118,199,173,0.12));border:1px solid var(--glass-border-hover);color:var(--acc-bright)">@_initials</div>
-                <div style="flex:1;min-width:0">
-                    <h3 style="margin:0;font-size:18px;font-weight:730;letter-spacing:-0.02em">@_name</h3>
-                    <div style="display:flex;gap:9px;margin-top:5px;align-items:center;font-size:12.5px;color:var(--tx-3)">
-                        <span class="badge badge-grey" style="height:22px"><span class="dot"></span>@_group</span>
+            <div class="dlg-head">
+                <div class="avatar">@_initials</div>
+                <div class="dlg-head-info">
+                    <h3 class="dlg-title">@_name</h3>
+                    <div class="dlg-subline">
+                        <span class="badge badge-grey dlg-subline-badge"><span class="dot"></span>@_group</span>
                         <span class="mono">Lab@(LabId.ToString("D2"))</span>
                         <span>· @_labTitle</span>
                     </div>
                 </div>
-                <button @onclick="Cancel" class="topbar-icon" style="width:42px;height:42px;border-radius:12px;flex:none;border:1px solid var(--line);background:rgba(255,255,255,0.03);color:var(--tx-2);cursor:pointer;display:grid;place-items:center"><Icon Name="x" Size="18" /></button>
+                <button @onclick="Cancel" class="topbar-icon dlg-close"><Icon Name="x" Size="18" /></button>
             </div>
 
             @* ── Task results breakdown ── *@
             @if (_taskResults.Count > 0)
             {
-                <div style="margin-bottom:16px">
-                    <div style="font-size:11.5px;font-weight:700;color:var(--tx-3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:9px">
+                <div class="results-block">
+                    <div class="results-heading">
                         Результати авто-перевірки
                         @if (_attemptNo > 0)
                         {
-                            <span style="color:var(--tx-faint);text-transform:none;letter-spacing:0;font-weight:600"> · найкраща спроба (№@_attemptNo)</span>
+                            <span class="results-heading-attempt"> · найкраща спроба (№@_attemptNo)</span>
                         }
                     </div>
-                    <div style="display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto;padding-right:2px">
+                    <div class="results-list">
                         @foreach (var tr in _taskResults)
                         {
                             var tone  = tr.State == "pass" ? "var(--st-green)" : tr.State == "warn" ? "var(--st-yellow)" : "var(--st-red)";
                             var icon  = tr.State == "pass" ? "check" : tr.State == "warn" ? "warn" : "x";
-                            <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,0.025);border:1px solid var(--line)">
-                                <span style="width:22px;height:22px;border-radius:6px;flex:none;display:grid;place-items:center;background:@(tone)22;color:@tone;border:1px solid @(tone)44">
+                            <div class="result-row">
+                                <span class="result-icon" style="background:@(tone)22;color:@tone;border:1px solid @(tone)44">
                                     <Icon Name="@icon" Size="13" Stroke="2.4" />
                                 </span>
-                                <div style="flex:1;min-width:0">
-                                    <div style="font-size:13px;font-weight:640">@tr.TaskTitle</div>
+                                <div class="result-body">
+                                    <div class="result-title">@tr.TaskTitle</div>
                                     @if (!string.IsNullOrEmpty(tr.Feedback))
                                     {
-                                        <div style="font-size:11.5px;color:var(--tx-faint);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@tr.Feedback</div>
+                                        <div class="result-feedback">@tr.Feedback</div>
                                     }
                                 </div>
-                                <div style="text-align:right;flex:none">
-                                    <span class="mono tnum" style="font-size:14px;font-weight:700;color:@tone">@tr.Score</span>
+                                <div class="result-score-wrap">
+                                    <span class="mono tnum result-score" style="color:@tone">@tr.Score</span>
                                 </div>
                             </div>
                         }
@@ -54,52 +54,51 @@
             }
 
             @* ── Scores ── *@
-            <div style="display:flex;flex-direction:column;gap:12px">
-                <div style="@Row">
-                    <div style="display:flex;align-items:center;gap:10px">
+            <div class="scores">
+                <div class="score-row">
+                    <div class="score-row-label">
                         <Icon Name="spark" Size="17" Style="color:var(--tx-3)" />
-                        <span style="font-size:13.5px;color:var(--tx-2);font-weight:600">Авто-оцінка</span>
-                        <span style="font-size:11.5px;color:var(--tx-faint)">· вага 40%</span>
+                        <span class="score-row-title">Авто-оцінка</span>
+                        <span class="score-row-weight">· вага 40%</span>
                     </div>
-                    <span class="mono tnum" style="font-size:19px;font-weight:760;color:@AutoColor">@_auto<span style="font-size:12px;opacity:0.5">/100</span></span>
+                    <span class="mono tnum score-value" style="color:@AutoColor">@_auto<span class="score-value-suffix">/100</span></span>
                 </div>
 
-                <div style="@Row;flex-direction:column;align-items:stretch;gap:14px;background:var(--acc-dim);border-color:var(--glass-border)">
-                    <div style="display:flex;align-items:center;justify-content:space-between">
-                        <div style="display:flex;align-items:center;gap:10px">
+                <div class="score-row defense-row">
+                    <div class="defense-row-head">
+                        <div class="score-row-label">
                             <Icon Name="user" Size="17" Style="color:var(--acc-bright)" />
-                            <span style="font-size:13.5px;color:var(--tx-1);font-weight:650">Оцінка захисту</span>
-                            <span style="font-size:11.5px;color:var(--tx-3)">· вага 60%</span>
+                            <span class="defense-row-title">Оцінка захисту</span>
+                            <span class="defense-row-weight">· вага 60%</span>
                         </div>
-                        <div style="display:flex;align-items:baseline;gap:4px">
-                            <input type="number" min="0" max="100" value="@_defense" @oninput="OnDefenseInput" placeholder="—" class="mono tnum"
-                                   style="width:78px;height:46px;text-align:center;font-size:22px;font-weight:750;background:rgba(12,20,17,0.7);border:1px solid var(--glass-border-hover);border-radius:11px;color:var(--acc-bright);outline:none" />
-                            <span style="font-size:13px;color:var(--tx-3)">/100</span>
+                        <div class="defense-input-wrap">
+                            <input type="number" min="0" max="100" value="@_defense" @oninput="OnDefenseInput" placeholder="—" class="mono tnum defense-input" />
+                            <span class="defense-input-suffix">/100</span>
                         </div>
                     </div>
-                    <input type="range" min="0" max="100" value="@(_defNum ?? 0)" @oninput="OnDefenseInput" class="grade-range" style="accent-color:var(--acc);width:100%" />
-                    <div style="display:flex;gap:7px">
+                    <input type="range" min="0" max="100" value="@(_defNum ?? 0)" @oninput="OnDefenseInput" class="grade-range defense-range" />
+                    <div class="quick-buttons">
                         @foreach (var q in new[] { 60, 70, 80, 90, 100 })
                         {
                             var sel = _defense == q.ToString();
-                            <button @onclick="@(() => SetDefense(q.ToString()))"
-                                    style="flex:1;height:32px;border-radius:8px;cursor:pointer;font-family:var(--mono);font-weight:700;font-size:13px;border:1px solid @(sel ? "var(--glass-border-hover)" : "var(--line)");background:@(sel ? "var(--acc-dim-2)" : "rgba(255,255,255,0.03)");color:@(sel ? "var(--acc-bright)" : "var(--tx-2)");transition:all .14s">@q</button>
+                            <button @onclick="@(() => SetDefense(q.ToString()))" class="quick-btn"
+                                    style="border:1px solid @(sel ? "var(--glass-border-hover)" : "var(--line)");background:@(sel ? "var(--acc-dim-2)" : "rgba(255,255,255,0.03)");color:@(sel ? "var(--acc-bright)" : "var(--tx-2)")">@q</button>
                         }
                     </div>
                 </div>
 
-                <div style="@Row;background:rgba(12,20,17,0.45);border-color:@(FinalColor)44">
-                    <div style="display:flex;align-items:center;gap:10px">
+                <div class="score-row final-row" style="border-color:@(FinalColor)44">
+                    <div class="final-row-label">
                         <Icon Name="target" Size="18" Style="@($"color:{FinalColor}")" />
-                        <span style="font-size:14px;color:var(--tx-1);font-weight:700">Фінальна оцінка</span>
-                        <span style="font-size:11.5px;color:var(--tx-faint)">розрахунок наживо</span>
+                        <span class="final-row-title">Фінальна оцінка</span>
+                        <span class="final-row-hint">розрахунок наживо</span>
                     </div>
-                    <div style="display:flex;align-items:baseline;gap:6px">
+                    <div class="final-value-wrap">
                         @if (_defNum is not null)
                         {
-                            <span class="mono" style="font-size:12px;color:var(--tx-faint)">@((int)Math.Round(0.4 * _auto)) + @((int)Math.Round(0.6 * _defNum.Value)) =</span>
+                            <span class="mono final-breakdown">@((int)Math.Round(0.4 * _auto)) + @((int)Math.Round(0.6 * _defNum.Value)) =</span>
                         }
-                        <span class="mono tnum" style="font-size:32px;font-weight:800;letter-spacing:-0.03em;color:@FinalColor;line-height:1">@(Final?.ToString() ?? "—")</span>
+                        <span class="mono tnum final-value" style="color:@FinalColor">@(Final?.ToString() ?? "—")</span>
                     </div>
                 </div>
             </div>
@@ -107,28 +106,27 @@
             @* ── Audit history ── *@
             @if (_audits.Count > 0)
             {
-                <div style="margin-top:14px;border:1px solid var(--line);border-radius:11px;overflow:hidden">
-                    <button @onclick="@(() => _historyOpen = !_historyOpen)"
-                            style="width:100%;display:flex;align-items:center;gap:9px;padding:11px 16px;background:rgba(255,255,255,0.02);border:none;cursor:pointer;color:var(--tx-2);font-family:inherit;font-size:12.5px;font-weight:650">
+                <div class="audit-box">
+                    <button @onclick="@(() => _historyOpen = !_historyOpen)" class="audit-toggle">
                         <Icon Name="clock" Size="14" />
                         Історія змін оцінки (@_audits.Count)
-                        <span style="margin-left:auto;font-size:11.5px;color:var(--tx-faint)">@(_historyOpen ? "сховати ↑" : "показати ↓")</span>
+                        <span class="audit-toggle-hint">@(_historyOpen ? "сховати ↑" : "показати ↓")</span>
                     </button>
                     @if (_historyOpen)
                     {
-                        <div style="border-top:1px solid var(--line);max-height:180px;overflow-y:auto">
+                        <div class="audit-list">
                             @foreach (var a in _audits)
                             {
-                                <div style="padding:9px 16px;border-bottom:1px solid var(--line);font-size:12px;line-height:1.5">
-                                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                                        <span class="mono" style="color:var(--tx-faint);font-size:11px">@a.At.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</span>
-                                        <span style="color:var(--tx-2);font-weight:650">@a.Actor</span>
-                                        <span class="badge badge-@(a.Action == "reject" ? "red" : a.Action == "extra-attempt" ? "yellow" : "green")" style="height:19px;font-size:10.5px">
+                                <div class="audit-item">
+                                    <div class="audit-item-head">
+                                        <span class="mono audit-item-time">@a.At.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</span>
+                                        <span class="audit-item-actor">@a.Actor</span>
+                                        <span class="badge badge-@(a.Action == "reject" ? "red" : a.Action == "extra-attempt" ? "yellow" : "green") audit-item-badge">
                                             <span class="dot"></span>@(a.Action switch { "grade" => "оцінка", "reject" => "відхилено", "extra-attempt" => "+1 спроба", _ => a.Action })
                                         </span>
                                     </div>
-                                    <div style="color:var(--tx-3);margin-top:3px">
-                                        <span style="opacity:0.7">@a.OldValue</span> → <span style="color:var(--tx-1)">@a.NewValue</span>
+                                    <div class="audit-item-diff">
+                                        <span class="audit-item-old">@a.OldValue</span> → <span class="audit-item-new">@a.NewValue</span>
                                     </div>
                                 </div>
                             }
@@ -138,15 +136,15 @@
             }
 
             @* ── Actions ── *@
-            <div style="display:flex;gap:10px;margin-top:22px;align-items:center">
+            <div class="actions">
                 @if (_saved)
                 {
-                    <span style="display:flex;align-items:center;gap:7px;color:var(--st-green);font-size:13px;font-weight:600;margin-right:auto"><Icon Name="check" Size="16" Stroke="2.4" />Збережено в БД</span>
+                    <span class="saved-note"><Icon Name="check" Size="16" Stroke="2.4" />Збережено в БД</span>
                 }
                 else
                 {
-                    <div style="display:flex;gap:8px;margin-right:auto;align-items:center">
-                        <button class="btn btn-ghost btn-sm" style="color:var(--st-red)" @onclick="Reject" disabled="@_saving">
+                    <div class="reject-actions">
+                        <button class="btn btn-ghost btn-sm reject-btn" @onclick="Reject" disabled="@_saving">
                             <Icon Name="x" Size="15" />Відхилити
                         </button>
                         <button class="btn btn-ghost btn-sm" title="Збільшити ліміт спроб цього студента на 1"
@@ -191,8 +189,6 @@
 
     private string AutoColor  => _auto  >= 85 ? "var(--st-green)" : _auto  >= 60 ? "var(--st-yellow)" : "var(--st-red)";
     private string FinalColor => Final is null ? "var(--tx-faint)" : Final >= 85 ? "var(--st-green)" : Final >= 60 ? "var(--st-yellow)" : "var(--st-red)";
-
-    private const string Row = "display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-radius:12px;background:rgba(255,255,255,0.025);border:1px solid var(--line)";
 
     protected override async Task OnInitializedAsync()
     {
