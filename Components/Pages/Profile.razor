@@ -235,6 +235,7 @@
             // Email is the login — keep the Identity account and the link in sync
             var newEmail = _email.Trim();
             var user = await UserManager.FindByIdAsync(sub);
+            var emailChanged = false;
             if (user != null && !string.Equals(user.Email, newEmail, StringComparison.OrdinalIgnoreCase))
             {
                 string? err = null;
@@ -250,11 +251,23 @@
                     return;
                 }
 
-                user.Email = newEmail;
-                user.UserName = newEmail;
-                await UserManager.UpdateAsync(user);
+                // SetEmailAsync/SetUserNameAsync (not raw property + UpdateAsync) so a
+                // concurrency/validation failure is caught here instead of silently
+                // proceeding to write the new email into StudentRecord/UserLink anyway —
+                // and so the security stamp rotates, matching the password-change flow.
+                var setEmail = await UserManager.SetEmailAsync(user, newEmail);
+                var setName  = setEmail.Succeeded ? await UserManager.SetUserNameAsync(user, newEmail) : setEmail;
+                if (!setEmail.Succeeded || !setName.Succeeded)
+                {
+                    var failed = setEmail.Succeeded ? setName : setEmail;
+                    _msg = "Помилка: " + string.Join(" ", failed.Errors.Select(e => e.Description));
+                    _saving = false; StateHasChanged();
+                    await Task.Delay(2500); _msg = ""; StateHasChanged();
+                    return;
+                }
                 await Db.UserLinks.Where(l => l.UserId == sub)
                     .ExecuteUpdateAsync(l => l.SetProperty(x => x.Email, newEmail));
+                emailChanged = true;
             }
 
             var initials = (_firstName.Length > 0 ? _firstName[0].ToString() : "")
@@ -271,12 +284,20 @@
                         .SetProperty(x => x.GithubToken, Tokens.Protect(_githubToken.Trim())));
             await App.PreloadAsync(state.User);
             _msg = "Профіль оновлено";
+            _saving = false; _editing = false; StateHasChanged();
+            if (emailChanged)
+            {
+                // Security stamp changed → re-issue the auth cookie so the session stays valid
+                await Task.Delay(1200);
+                Nav.NavigateTo("/account/refresh-signin?returnUrl=/student/profile", forceLoad: true);
+                return;
+            }
         }
         else
         {
             _msg = "Помилка: профіль не знайдено";
+            _saving = false; _editing = false; StateHasChanged();
         }
-        _saving = false; _editing = false; StateHasChanged();
         await Task.Delay(2000); _msg = ""; StateHasChanged();
     }
 }

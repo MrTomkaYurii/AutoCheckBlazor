@@ -235,6 +235,11 @@ app.MapGet("/account/google-callback", async (
         info.LoginProvider, info.ProviderKey, isPersistent: true, bypassTwoFactor: true);
     if (result.Succeeded)
         return Results.Redirect(dest);
+    // A locked-out account (e.g. too many failed password attempts) must stay locked
+    // out here too — falling through to the new-account/sign-in path below would let
+    // Google login bypass the lockout entirely, since SignInAsync doesn't check it.
+    if (result.IsLockedOut)
+        return Results.Redirect(Fail("Акаунт тимчасово заблоковано через забагато невдалих спроб входу. Спробуйте пізніше."));
 
     var email = info.Principal.FindFirstValue(ClaimTypes.Email);
     if (string.IsNullOrEmpty(email))

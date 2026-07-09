@@ -564,6 +564,7 @@
             // Email is the login — keep the Identity account and the link in sync
             var newEmail = _email.Trim();
             var user = await UserManager.FindByIdAsync(sub);
+            var emailChanged = false;
             if (user != null && !string.IsNullOrEmpty(newEmail)
                 && !string.Equals(user.Email, newEmail, StringComparison.OrdinalIgnoreCase))
             {
@@ -580,11 +581,22 @@
                     return;
                 }
 
-                user.Email = newEmail;
-                user.UserName = newEmail;
-                await UserManager.UpdateAsync(user);
+                // SetEmailAsync/SetUserNameAsync so a validation/concurrency failure is
+                // caught here instead of silently writing the new email into
+                // UserLink/TeacherRecord anyway — and so the security stamp rotates.
+                var setEmail = await UserManager.SetEmailAsync(user, newEmail);
+                var setName  = setEmail.Succeeded ? await UserManager.SetUserNameAsync(user, newEmail) : setEmail;
+                if (!setEmail.Succeeded || !setName.Succeeded)
+                {
+                    var failed = setEmail.Succeeded ? setName : setEmail;
+                    _profileMsg = "err:" + string.Join(" ", failed.Errors.Select(e => e.Description));
+                    _savingProfile = false; StateHasChanged();
+                    await Task.Delay(2500); _profileMsg = ""; StateHasChanged();
+                    return;
+                }
                 await Db.UserLinks.Where(l => l.UserId == sub)
                     .ExecuteUpdateAsync(l => l.SetProperty(x => x.Email, newEmail));
+                emailChanged = true;
             }
 
             var initials = (_firstName.Length > 0 ? _firstName[0].ToString() : "")
@@ -599,12 +611,20 @@
             _emailDisplay = newEmail;
             await App.PreloadAsync(state.User);
             _profileMsg = "ok:Профіль оновлено";
+            _savingProfile = false; _profileEdit = false; StateHasChanged();
+            if (emailChanged)
+            {
+                // Security stamp changed → re-issue the auth cookie so the session stays valid
+                await Task.Delay(1200);
+                Nav.NavigateTo("/account/refresh-signin?returnUrl=/teacher/profile", forceLoad: true);
+                return;
+            }
         }
         else
         {
             _profileMsg = "err:Профіль викладача не знайдено";
+            _savingProfile = false; _profileEdit = false; StateHasChanged();
         }
-        _savingProfile = false; _profileEdit = false; StateHasChanged();
         await Task.Delay(2000); _profileMsg = ""; StateHasChanged();
     }
 

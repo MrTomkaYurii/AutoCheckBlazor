@@ -16,20 +16,32 @@ public class PlagiarismService(AppDbContext db)
 {
     public async Task<List<PlagPair>> CheckLabAsync(int labNumber, double threshold = 0.5)
     {
-        var subs = await db.Submissions.AsNoTracking()
+        var rawSubs = await db.Submissions.AsNoTracking()
             .Where(s => s.LabDef.Number == labNumber && s.TaskResults.Any())
             .Select(s => new
             {
                 s.StudentId,
                 Name  = s.Student.LastName + " " + s.Student.FirstName,
                 s.Student.Group,
-                Lines = s.TaskResults
-                    .SelectMany(tr => tr.DiffLines
-                        .Where(d => d.Type == "add")
-                        .Select(d => d.Text))
-                    .ToList(),
+                TaskResults = s.TaskResults.Select(tr => new
+                {
+                    tr.AttemptNo,
+                    Lines = tr.DiffLines.Where(d => d.Type == "add").Select(d => d.Text).ToList(),
+                }).ToList(),
             })
             .ToListAsync();
+
+        // Compare only each submission's LATEST attempt — mixing lines from earlier,
+        // superseded attempts in with the current one dilutes the similarity ratio.
+        var subs = rawSubs.Select(s =>
+        {
+            var latest = s.TaskResults.Count > 0 ? s.TaskResults.Max(tr => tr.AttemptNo) : 0;
+            return new
+            {
+                s.StudentId, s.Name, s.Group,
+                Lines = s.TaskResults.Where(tr => tr.AttemptNo == latest).SelectMany(tr => tr.Lines).ToList(),
+            };
+        }).ToList();
 
         // normalize: drop whitespace; skip short/trivial lines (braces, usings…)
         var sets = subs
@@ -82,19 +94,31 @@ public class PlagiarismService(AppDbContext db)
             .ToHashSet();
         if (candidate.Count < 10) return null;   // too little code to judge
 
-        var others = await db.Submissions.AsNoTracking()
+        var rawOthers = await db.Submissions.AsNoTracking()
             .Where(s => s.LabDefId == labDefId && s.StudentId != studentId && s.TaskResults.Any())
             .Select(s => new
             {
                 Name  = s.Student.LastName + " " + s.Student.FirstName,
                 s.Student.Group,
-                Lines = s.TaskResults
-                    .SelectMany(tr => tr.DiffLines
-                        .Where(d => d.Type == "add")
-                        .Select(d => d.Text))
-                    .ToList(),
+                TaskResults = s.TaskResults.Select(tr => new
+                {
+                    tr.AttemptNo,
+                    Lines = tr.DiffLines.Where(d => d.Type == "add").Select(d => d.Text).ToList(),
+                }).ToList(),
             })
             .ToListAsync();
+
+        // Compare against each other student's LATEST attempt only — the same
+        // "don't dilute with stale attempts" reasoning as CheckLabAsync above.
+        var others = rawOthers.Select(s =>
+        {
+            var latest = s.TaskResults.Count > 0 ? s.TaskResults.Max(tr => tr.AttemptNo) : 0;
+            return new
+            {
+                s.Name, s.Group,
+                Lines = s.TaskResults.Where(tr => tr.AttemptNo == latest).SelectMany(tr => tr.Lines).ToList(),
+            };
+        }).ToList();
 
         ExactMatch? best = null;
         foreach (var other in others)

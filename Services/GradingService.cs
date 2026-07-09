@@ -66,12 +66,17 @@ public class GradingService(
         // One grading at a time — the rest wait in line
         using var _queueSlot = await queue.EnterAsync(progress, ct);
 
-        // Re-check the attempt limit after waiting: a parallel submit (second tab)
-        // may have consumed the last attempt while we were queued
+        // Re-check attempt limit AND deadline after waiting: a parallel submit (second
+        // tab) may have consumed the last attempt, and the queue wait itself (clone +
+        // Gemini calls for everyone ahead in line) can take long enough for the
+        // deadline to pass while this submission was sitting in the queue.
         await db.Entry(sub).ReloadAsync(ct);
         if (sub.AttemptsUsed >= sub.AttemptsMax)
             throw new InvalidOperationException(
                 $"Ліміт спроб вичерпано ({sub.AttemptsMax} з {sub.AttemptsMax}). Зверніться до викладача.");
+        if (sub.LabDef.Deadline is DateTime queuedDeadline && DateTime.UtcNow > queuedDeadline)
+            throw new InvalidOperationException(
+                "Дедлайн минув — здача цієї лаби закрита. Зверніться до викладача.");
 
         progress?.Report("Перевірка системи аналізу…");
         await CheckGeminiAsync(ct);
@@ -141,7 +146,11 @@ public class GradingService(
                 sub.AttemptsUsed++;
                 sub.SubmittedAt = DateTime.UtcNow;
                 sub.Status = (int)LabStatus.Rejected;
-                sub.AutoScore = null;
+                // Don't erase a legitimately earned score from an earlier, unrelated
+                // attempt — only null it out if no prior attempt scored >= 50 (mirrors
+                // the "best-of-attempts" logic in the normal grading path below).
+                var priorBest = new[] { sub.Attempt1Score ?? 0, sub.Attempt2Score ?? 0, sub.Attempt3Score ?? 0 }.Max();
+                sub.AutoScore = priorBest >= 50 ? priorBest : null;
                 sub.PlagiarismFlag = true;
                 sub.PlagiarismNote =
                     $"Збіг {match.Containment:P0} з роботою: {match.StudentName} ({match.Group})";

@@ -14,6 +14,13 @@ namespace AutoCheck.Services;
 /// </summary>
 public static class GitBackupSync
 {
+    // The daily BackupService timer and a teacher's manual "Backup now" click both
+    // funnel through here against the same on-disk repoDir — without this, two
+    // concurrent git subprocesses (e.g. one's `reset --hard` racing another's
+    // `add`/`commit`, or both deleting/writing the same rotated .gz file) can corrupt
+    // the working tree or silently drop a backup.
+    private static readonly SemaphoreSlim _lock = new(1, 1);
+
     public static async Task SyncAsync(string backupFilePath, IConfiguration cfg, ILogger log, CancellationToken ct = default)
     {
         var remoteUrl = cfg["Backup:Git:RemoteUrl"];
@@ -31,6 +38,7 @@ public static class GitBackupSync
         var authHeader = "AUTHORIZATION: basic " +
             Convert.ToBase64String(Encoding.ASCII.GetBytes($"x-access-token:{token}"));
 
+        await _lock.WaitAsync(ct);
         try
         {
             if (!Directory.Exists(Path.Combine(repoDir, ".git")))
@@ -85,6 +93,10 @@ public static class GitBackupSync
         catch (Exception ex)
         {
             log.LogWarning(ex, "Git backup sync failed");
+        }
+        finally
+        {
+            _lock.Release();
         }
     }
 
