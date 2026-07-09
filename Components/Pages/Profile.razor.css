@@ -1,0 +1,173 @@
+.page {
+    padding: 0 34px 40px;
+    position: relative;
+    z-index: 1;
+    max-width: 720px;
+}
+
+.card {
+    padding: 0;
+    overflow: hidden;
+}
+
+.card-second {
+    margin-top: 20px;
+}
+
+.head {
+    padding: 32px 30px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    background: radial-gradient(500px 200px at 0% 0%, rgba(118, 199, 173, 0.12), transparent 60%);
+    border-bottom: 1px solid var(--line);
+}
+
+.avatar {
+    width: 72px;
+    height: 72px;
+    border-radius: 20px;
+    display: grid;
+    place-items: center;
+    font-weight: 750;
+    font-size: 26px;
+    background: linear-gradient(150deg, rgba(118, 199, 173, 0.32), rgba(118, 199, 173, 0.12));
+    border: 1px solid var(--glass-border-hover);
+    color: var(--acc-bright);
+}
+
+.head-info {
+    flex: 1;
+}
+
+.head-name {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 740;
+}
+
+.head-badges {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.view-list {
+    padding: 10px 30px 24px;
+}
+
+.view-row {
+    display: flex;
+    align-items: center;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--line);
+}
+
+.view-label {
+    width: 140px;
+    font-size: 13px;
+    color: var(--tx-3);
+    font-weight: 600;
+}
+
+.view-value {
+    font-size: 14px;
+    color: var(--tx-1);
+}
+
+.edit-form {
+    padding: 24px 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.edit-row2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+
+.field-hint {
+    color: var(--tx-faint);
+    font-weight: 400;
+}
+
+.success-box {
+    padding: 9px 13px;
+    background: rgba(118, 199, 173, 0.1);
+    border: 1px solid rgba(118, 199, 173, 0.25);
+    border-radius: 9px;
+    color: var(--st-green);
+    font-size: 13px;
+}
+
+.edit-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+/* ── Security section ── */
+
+.sec-head {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 18px 30px;
+    border-bottom: 1px solid var(--line);
+}
+
+.sec-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 720;
+}
+
+.sec-google-badge {
+    margin-left: auto;
+}
+
+.pw-view-row {
+    display: flex;
+    align-items: center;
+    padding: 14px 30px;
+}
+
+.pw-view-label {
+    width: 140px;
+    font-size: 13px;
+    color: var(--tx-3);
+    font-weight: 600;
+}
+
+.pw-view-value {
+    font-size: 13.5px;
+    color: var(--tx-2);
+    flex: 1;
+    letter-spacing: 0.12em;
+}
+
+.pw-form {
+    padding: 20px 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.pw-row2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.pw-msg {
+    padding: 9px 13px;
+    border-radius: 9px;
+    font-size: 13px;
+}
+
+.pw-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}

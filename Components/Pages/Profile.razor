@@ -9,13 +9,13 @@
 
 <TopBar Title="Профіль" Sub="Дані студента" />
 
-<div class="screen-anim" style="padding:0 34px 40px;position:relative;z-index:1;max-width:720px">
-    <section class="glass" style="padding:0;overflow:hidden">
-        <div style="padding:32px 30px;display:flex;align-items:center;gap:20px;background:radial-gradient(500px 200px at 0% 0%, rgba(118,199,173,0.12), transparent 60%);border-bottom:1px solid var(--line)">
-            <div style="width:72px;height:72px;border-radius:20px;display:grid;place-items:center;font-weight:750;font-size:26px;background:linear-gradient(150deg, rgba(118,199,173,0.32), rgba(118,199,173,0.12));border:1px solid var(--glass-border-hover);color:var(--acc-bright)">@App.Student.Initials</div>
-            <div style="flex:1">
-                <h2 style="margin:0;font-size:22px;font-weight:740">@App.Student.FirstName @App.Student.LastName</h2>
-                <div style="display:flex;gap:10px;margin-top:8px">
+<div class="screen-anim page">
+    <section class="glass card">
+        <div class="head">
+            <div class="avatar">@App.Student.Initials</div>
+            <div class="head-info">
+                <h2 class="head-name">@App.Student.FirstName @App.Student.LastName</h2>
+                <div class="head-badges">
                     <span class="badge badge-green"><span class="dot"></span>Студент</span>
                     <span class="badge badge-grey"><span class="dot"></span>@App.Student.Group</span>
                 </div>
@@ -28,7 +28,7 @@
 
         @if (!_editing)
         {
-            <div style="padding:10px 30px 24px">
+            <div class="view-list">
                 @foreach (var (k, v, mono) in new[]
                 {
                     ("Ім'я",          App.Student.FirstName, false),
@@ -39,33 +39,33 @@
                     ("Група",         App.Student.Group,  false),
                 })
                 {
-                    <div style="display:flex;align-items:center;padding:14px 0;border-bottom:1px solid var(--line)">
-                        <span style="width:140px;font-size:13px;color:var(--tx-3);font-weight:600">@k</span>
-                        <span class="@(mono ? "mono" : "")" style="font-size:14px;color:var(--tx-1)">@v</span>
+                    <div class="view-row">
+                        <span class="view-label">@k</span>
+                        <span class="@(mono ? "mono" : "") view-value">@v</span>
                     </div>
                 }
             </div>
         }
         else
         {
-            <div style="padding:24px 30px;display:flex;flex-direction:column;gap:14px">
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div class="edit-form">
+                <div class="edit-row2">
                     <div class="field"><label>Ім'я</label><input class="input" @bind="_firstName" /></div>
                     <div class="field"><label>Прізвище</label><input class="input" @bind="_lastName" /></div>
                 </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+                <div class="edit-row2">
                     <div class="field"><label>Email</label><input class="input" type="email" @bind="_email" /></div>
                     <div class="field"><label>GitHub репо</label><input class="input mono" @bind="_github" placeholder="https://github.com/username/repo" /></div>
                 </div>
                 <div class="field">
-                    <label>GitHub токен <span style="color:var(--tx-faint);font-weight:400">(необов'язково — для вищого rate limit)</span></label>
+                    <label>GitHub токен <span class="field-hint">(необов'язково — для вищого rate limit)</span></label>
                     <input class="input mono" type="password" @bind="_githubToken" placeholder="ghp_xxxxxxxxxxxx" />
                 </div>
                 @if (!string.IsNullOrEmpty(_msg))
                 {
-                    <div style="padding:9px 13px;background:rgba(118,199,173,0.1);border:1px solid rgba(118,199,173,0.25);border-radius:9px;color:var(--st-green);font-size:13px">@_msg</div>
+                    <div class="success-box">@_msg</div>
                 }
-                <div style="display:flex;justify-content:flex-end">
+                <div class="edit-actions">
                     <button class="btn btn-primary" @onclick="SaveProfile" disabled="@_saving">
                         <Icon Name="check" Size="16" />@(_saving ? "Збереження…" : "Зберегти")
                     </button>
@@ -75,21 +75,21 @@
     </section>
 
     @* ── Безпека ──────────────────────────────────────────────────────────── *@
-    <section class="glass" style="padding:0;overflow:hidden;margin-top:20px">
-        <div style="display:flex;align-items:center;gap:11px;padding:18px 30px;border-bottom:1px solid var(--line)">
+    <section class="glass card card-second">
+        <div class="sec-head">
             <Icon Name="settings" Size="18" Style="color:var(--acc)" />
-            <h3 style="margin:0;font-size:15px;font-weight:720">Безпека</h3>
+            <h3 class="sec-title">Безпека</h3>
             @if (_hasGoogle)
             {
-                <span class="badge badge-green" style="margin-left:auto"><span class="dot"></span>Google підключено</span>
+                <span class="badge badge-green sec-google-badge"><span class="dot"></span>Google підключено</span>
             }
         </div>
 
         @if (!_pwEdit)
         {
-            <div style="display:flex;align-items:center;padding:14px 30px">
-                <span style="width:140px;font-size:13px;color:var(--tx-3);font-weight:600">Пароль</span>
-                <span style="font-size:13.5px;color:var(--tx-2);flex:1;letter-spacing:0.12em">
+            <div class="pw-view-row">
+                <span class="pw-view-label">Пароль</span>
+                <span class="pw-view-value">
                     @(_hasPassword ? "••••••••••" : "не встановлено — вхід через Google")
                 </span>
                 <button class="btn btn-ghost btn-sm" @onclick="@(() => { _pwEdit = true; _pwMsg = ""; })">
@@ -99,7 +99,7 @@
         }
         else
         {
-            <div style="padding:20px 30px;display:flex;flex-direction:column;gap:14px">
+            <div class="pw-form">
                 @if (_hasPassword)
                 {
                     <div class="field">
@@ -107,7 +107,7 @@
                         <input class="input" type="password" @bind="_pwOld" autocomplete="current-password" />
                     </div>
                 }
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div class="pw-row2">
                     <div class="field">
                         <label>Новий пароль</label>
                         <input class="input" type="password" @bind="_pwNew" autocomplete="new-password" />
@@ -120,9 +120,9 @@
                 @if (!string.IsNullOrEmpty(_pwMsg))
                 {
                     var isErr = _pwMsg.StartsWith("err:");
-                    <div style="padding:9px 13px;background:@(isErr ? "rgba(255,80,80,0.08)" : "rgba(118,199,173,0.1)");border:1px solid @(isErr ? "rgba(255,80,80,0.25)" : "rgba(118,199,173,0.25)");border-radius:9px;color:@(isErr ? "var(--st-red)" : "var(--st-green)");font-size:13px">@(isErr ? _pwMsg[4..] : _pwMsg[3..])</div>
+                    <div class="pw-msg" style="background:@(isErr ? "rgba(255,80,80,0.08)" : "rgba(118,199,173,0.1)");border:1px solid @(isErr ? "rgba(255,80,80,0.25)" : "rgba(118,199,173,0.25)");color:@(isErr ? "var(--st-red)" : "var(--st-green)")">@(isErr ? _pwMsg[4..] : _pwMsg[3..])</div>
                 }
-                <div style="display:flex;justify-content:flex-end;gap:8px">
+                <div class="pw-actions">
                     <button class="btn btn-ghost btn-sm" @onclick="@(() => { _pwEdit = false; _pwOld = _pwNew = _pwConfirm = _pwMsg = ""; })">
                         Скасувати
                     </button>
