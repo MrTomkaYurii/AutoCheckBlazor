@@ -150,11 +150,16 @@ if (!app.Environment.IsDevelopment())
 
 app.MapGet("/health", () => Results.Ok("healthy")).AllowAnonymous();
 
-app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
+
+// .NET 9+ serves Blazor framework assets (_framework/blazor.web.js, scoped CSS,
+// _content/*) through the static-assets endpoint, NOT UseStaticFiles(). In a
+// published container UseStaticFiles() alone 404s blazor.web.js → the circuit never
+// starts and the UI hangs on "loading". MapStaticAssets() serves them correctly.
+app.MapStaticAssets();
 
 // ── Auth endpoints (must be outside Blazor circuit — they set/clear cookies) ──
 
