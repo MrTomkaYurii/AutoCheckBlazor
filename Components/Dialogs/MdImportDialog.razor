@@ -1,69 +1,68 @@
 @* Import labs from MD files dialog — preview → select → confirm *@
 <MudDialog>
     <DialogContent>
-        <div class="glass" style="width:620px;max-width:94vw;padding:26px;box-shadow:var(--shadow-pop)">
-            <div style="display:flex;align-items:center;gap:13px;margin-bottom:20px">
-                <span style="width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:var(--acc-dim);border:1px solid var(--glass-border);color:var(--acc-bright)"><Icon Name="upload" Size="20" /></span>
+        <div class="glass dlg">
+            <div class="dlg-head">
+                <span class="dlg-icon"><Icon Name="upload" Size="20" /></span>
                 <div>
-                    <h3 style="margin:0;font-size:17px;font-weight:720">Імпорт лаб з MD файлів</h3>
-                    <p style="margin:3px 0 0;font-size:12.5px;color:var(--tx-3)">content/labs/ → база даних</p>
+                    <h3 class="dlg-title">Імпорт лаб з MD файлів</h3>
+                    <p class="dlg-subtitle">content/labs/ → база даних</p>
                 </div>
-                <button @onclick="Cancel" style="margin-left:auto;width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--tx-2);cursor:pointer;display:grid;place-items:center"><Icon Name="x" Size="16" /></button>
+                <button @onclick="Cancel" class="dlg-close"><Icon Name="x" Size="16" /></button>
             </div>
 
             @if (_loading)
             {
-                <div style="padding:30px;text-align:center;color:var(--tx-3)">
-                    <span style="display:inline-block;width:24px;height:24px;border:2.5px solid var(--acc-dim-2);border-top-color:var(--acc);border-radius:50%;animation:spin .8s linear infinite"></span>
-                    <div style="margin-top:10px;font-size:13px">Сканування файлів…</div>
+                <div class="loading">
+                    <span class="spinner"></span>
+                    <div class="loading-label">Сканування файлів…</div>
                 </div>
             }
             else if (_done)
             {
-                <div style="padding:20px;text-align:center">
-                    <div style="width:56px;height:56px;border-radius:50%;margin:0 auto 14px;display:grid;place-items:center;background:var(--st-green-bg);border:1px solid var(--glass-border);color:var(--st-green)"><Icon Name="check" Size="28" Stroke="2.4" /></div>
-                    <h4 style="margin:0 0 6px;font-size:17px;font-weight:720">Імпорт завершено</h4>
-                    <p style="margin:0;color:var(--tx-2);font-size:13.5px">Додано лаб: <b style="color:var(--acc-bright)">@_result.Labs</b>, завдань: <b style="color:var(--acc-bright)">@_result.Tasks</b></p>
-                    <button class="btn btn-primary" style="margin-top:18px" @onclick="Close"><Icon Name="check" Size="16" />Готово</button>
+                <div class="done-box">
+                    <div class="done-icon"><Icon Name="check" Size="28" Stroke="2.4" /></div>
+                    <h4 class="done-title">Імпорт завершено</h4>
+                    <p class="done-text">Додано лаб: <b class="done-num">@_result.Labs</b>, завдань: <b class="done-num">@_result.Tasks</b></p>
+                    <button class="btn btn-primary done-btn" @onclick="Close"><Icon Name="check" Size="16" />Готово</button>
                 </div>
             }
             else
             {
                 @* Step 1: Select which labs to import *@
-                <div style="margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">
-                    <span style="font-size:13px;color:var(--tx-2)">Виберіть лаби для імпорту (або оновлення):</span>
-                    <div style="display:flex;gap:8px">
+                <div class="step-head">
+                    <span class="step-head-label">Виберіть лаби для імпорту (або оновлення):</span>
+                    <div class="step-head-actions">
                         <button class="btn btn-ghost btn-sm" @onclick="SelectAll">Всі</button>
                         <button class="btn btn-ghost btn-sm" @onclick="SelectNew">Тільки нові</button>
                     </div>
                 </div>
 
-                <div style="max-height:320px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
+                <div class="item-list">
                     @foreach (var item in _items)
                     {
                         var isChecked = _selected.Contains(item.Number);
-                        <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,0.025);border:1px solid var(--line);cursor:pointer"
-                             @onclick="@(() => Toggle(item.Number))">
+                        <div class="item-row" @onclick="@(() => Toggle(item.Number))">
                             <input type="checkbox" checked="@isChecked" @onclick:stopPropagation @onchange="@(() => Toggle(item.Number))"
-                                   style="accent-color:var(--acc);width:15px;height:15px;cursor:pointer" />
-                            <span class="mono" style="width:28px;font-size:12px;font-weight:700;color:var(--tx-3)">@item.Number.ToString("D2")</span>
-                            <span style="flex:1;font-size:13.5px;font-weight:600">@item.Title</span>
-                            <span style="font-size:12px;color:var(--tx-3)">@item.TaskCount завд.</span>
+                                   class="item-checkbox" />
+                            <span class="mono item-number">@item.Number.ToString("D2")</span>
+                            <span class="item-title">@item.Title</span>
+                            <span class="item-taskcount">@item.TaskCount завд.</span>
                             @if (item.AlreadyInDb)
                             {
-                                <span class="badge badge-yellow" style="height:20px"><span class="dot"></span>оновити</span>
+                                <span class="badge badge-yellow item-badge"><span class="dot"></span>оновити</span>
                             }
                             else
                             {
-                                <span class="badge badge-green" style="height:20px"><span class="dot"></span>нова</span>
+                                <span class="badge badge-green item-badge"><span class="dot"></span>нова</span>
                             }
                         </div>
                     }
                 </div>
 
-                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
-                    <span style="font-size:12.5px;color:var(--tx-3)">Вибрано: <b style="color:var(--tx-1)">@_selected.Count</b> з @_items.Count</span>
-                    <div style="display:flex;gap:10px">
+                <div class="footer">
+                    <span class="footer-count">Вибрано: <b class="footer-count-num">@_selected.Count</b> з @_items.Count</span>
+                    <div class="footer-actions">
                         <button class="btn btn-ghost" @onclick="Cancel">Скасувати</button>
                         <button class="btn btn-primary" disabled="@(_selected.Count == 0 || _importing)" @onclick="Import">
                             <Icon Name="upload" Size="16" />@(_importing ? "Імпорт…" : $"Імпортувати {_selected.Count}")

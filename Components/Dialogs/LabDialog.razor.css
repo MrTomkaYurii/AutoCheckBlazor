@@ -1,0 +1,104 @@
+.dlg {
+    width: 560px;
+    max-width: 92vw;
+    padding: 28px;
+    box-shadow: var(--shadow-pop);
+}
+
+.dlg-head {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    margin-bottom: 22px;
+}
+
+.dlg-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    background: var(--acc-dim);
+    border: 1px solid var(--glass-border);
+    color: var(--acc-bright);
+}
+
+.dlg-title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 730;
+}
+
+.dlg-close {
+    margin-left: auto;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--tx-2);
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+}
+
+.dlg-body {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.dlg-row2 {
+    display: grid;
+    gap: 14px;
+}
+
+.dlg-row-num {
+    grid-template-columns: 100px 1fr;
+}
+
+.dlg-row-even {
+    grid-template-columns: 1fr 1fr;
+}
+
+.dlg-goal-textarea {
+    resize: vertical;
+    height: 80px;
+    font-family: var(--mono);
+    font-size: 13px;
+}
+
+.dlg-deadline-input {
+    color-scheme: dark;
+}
+
+.dlg-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    font-size: 13.5px;
+    color: var(--tx-2);
+}
+
+.dlg-checkbox {
+    accent-color: var(--acc);
+    width: 16px;
+    height: 16px;
+}
+
+.dlg-error {
+    padding: 10px 14px;
+    background: rgba(232, 128, 107, 0.12);
+    border: 1px solid rgba(232, 128, 107, 0.3);
+    border-radius: 10px;
+    color: var(--st-red);
+    font-size: 13px;
+}
+
+.dlg-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 22px;
+    justify-content: flex-end;
+}

@@ -1,15 +1,15 @@
 @* Create / Edit lab dialog *@
 <MudDialog>
     <DialogContent>
-        <div class="glass" style="width:560px;max-width:92vw;padding:28px;box-shadow:var(--shadow-pop)">
-            <div style="display:flex;align-items:center;gap:13px;margin-bottom:22px">
-                <span style="width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:var(--acc-dim);border:1px solid var(--glass-border);color:var(--acc-bright)"><Icon Name="labs" Size="20" /></span>
-                <h3 style="margin:0;font-size:18px;font-weight:730">@(IsNew ? "Нова лаба" : "Редагування лаби")</h3>
-                <button @onclick="Cancel" style="margin-left:auto;width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--tx-2);cursor:pointer;display:grid;place-items:center"><Icon Name="x" Size="16" /></button>
+        <div class="glass dlg">
+            <div class="dlg-head">
+                <span class="dlg-icon"><Icon Name="labs" Size="20" /></span>
+                <h3 class="dlg-title">@(IsNew ? "Нова лаба" : "Редагування лаби")</h3>
+                <button @onclick="Cancel" class="dlg-close"><Icon Name="x" Size="16" /></button>
             </div>
 
-            <div style="display:flex;flex-direction:column;gap:14px">
-                <div style="display:grid;grid-template-columns:100px 1fr;gap:14px">
+            <div class="dlg-body">
+                <div class="dlg-row2 dlg-row-num">
                     <div class="field">
                         <label>Номер *</label>
                         <input class="input" type="number" min="1" @bind="_number" placeholder="1" />
@@ -22,35 +22,34 @@
 
                 <div class="field">
                     <label>Мета (markdown)</label>
-                    <textarea class="input" rows="3" @bind="_goal" placeholder="Навчитися…" style="resize:vertical;height:80px;font-family:var(--mono);font-size:13px"></textarea>
+                    <textarea class="input dlg-goal-textarea" rows="3" @bind="_goal" placeholder="Навчитися…"></textarea>
                 </div>
 
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+                <div class="dlg-row2 dlg-row-even">
                     <div class="field">
                         <label>Гілка git</label>
                         <input class="input mono" @bind="_branch" placeholder="feature/classes" />
                     </div>
                     <div class="field">
                         <label>Дедлайн здачі</label>
-                        <input class="input" type="datetime-local"
+                        <input class="input dlg-deadline-input" type="datetime-local"
                                value="@_deadlineStr"
-                               @oninput="@(e => _deadlineStr = e.Value?.ToString() ?? "")"
-                               style="color-scheme:dark" />
+                               @oninput="@(e => _deadlineStr = e.Value?.ToString() ?? "")" />
                     </div>
                 </div>
 
-                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13.5px;color:var(--tx-2)">
-                    <input type="checkbox" @bind="_mergesMain" style="accent-color:var(--acc);width:16px;height:16px" />
+                <label class="dlg-checkbox-label">
+                    <input type="checkbox" @bind="_mergesMain" class="dlg-checkbox" />
                     Гілка зливається в main після захисту
                 </label>
 
                 @if (!string.IsNullOrEmpty(_error))
                 {
-                    <div style="padding:10px 14px;background:rgba(232,128,107,0.12);border:1px solid rgba(232,128,107,0.3);border-radius:10px;color:var(--st-red);font-size:13px">@_error</div>
+                    <div class="dlg-error">@_error</div>
                 }
             </div>
 
-            <div style="display:flex;gap:10px;margin-top:22px;justify-content:flex-end">
+            <div class="dlg-actions">
                 <button class="btn btn-ghost" @onclick="Cancel">Скасувати</button>
                 <button class="btn btn-primary" @onclick="Save" disabled="@_saving">
                     <Icon Name="check" Size="17" />@(_saving ? "Збереження…" : (IsNew ? "Додати" : "Зберегти"))

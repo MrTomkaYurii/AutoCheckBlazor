@@ -1,0 +1,99 @@
+.dlg {
+    width: 620px;
+    max-width: 95vw;
+    min-width: 420px;
+    min-height: 480px;
+    padding: 26px;
+    box-shadow: var(--shadow-pop);
+    resize: both;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.dlg-head {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    margin-bottom: 20px;
+    flex: none;
+}
+
+.dlg-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 11px;
+    display: grid;
+    place-items: center;
+    background: var(--acc-dim);
+    border: 1px solid var(--glass-border);
+    color: var(--acc-bright);
+}
+
+.dlg-title {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 720;
+}
+
+.dlg-close {
+    margin-left: auto;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--tx-2);
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+}
+
+.dlg-body {
+    display: flex;
+    flex-direction: column;
+    gap: 13px;
+    flex: 1;
+    min-height: 0;
+}
+
+.dlg-row3 {
+    display: grid;
+    grid-template-columns: 80px 1fr 110px;
+    gap: 12px;
+    align-items: end;
+    flex: none;
+}
+
+.dlg-brief-field {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.dlg-brief-textarea {
+    flex: 1;
+    resize: none;
+    min-height: 80px;
+    font-size: 12.5px;
+    line-height: 1.6;
+}
+
+.dlg-error {
+    flex: none;
+    padding: 9px 13px;
+    background: rgba(232, 128, 107, 0.1);
+    border: 1px solid rgba(232, 128, 107, 0.3);
+    border-radius: 9px;
+    color: var(--st-red);
+    font-size: 13px;
+}
+
+.dlg-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    justify-content: flex-end;
+    flex: none;
+}
