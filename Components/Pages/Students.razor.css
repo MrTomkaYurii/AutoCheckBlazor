@@ -1,0 +1,242 @@
+.page {
+    padding: 0 34px 40px;
+    position: relative;
+    z-index: 1;
+}
+
+.filter-bar {
+    padding: 14px 20px;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.group-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    background: rgba(12, 20, 17, 0.6);
+    border-radius: 11px;
+    border: 1px solid var(--line);
+}
+
+.group-tab {
+    height: 32px;
+    padding: 0 14px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-family: var(--font);
+    font-size: 13px;
+    font-weight: 650;
+    transition: all .15s;
+}
+
+.search-wrap {
+    flex: 1 1 180px;
+    max-width: 240px;
+}
+
+.search-input {
+    height: 36px;
+}
+
+.count-badge {
+    margin-left: auto;
+}
+
+.cards-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+
+.card {
+    padding: 18px 20px;
+    animation: stagger .5s cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.card-head {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    margin-bottom: 16px;
+}
+
+.avatar {
+    width: 46px;
+    height: 46px;
+    border-radius: 13px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+    font-size: 15px;
+    background: linear-gradient(150deg, rgba(118, 199, 173, 0.3), rgba(118, 199, 173, 0.12));
+    border: 1px solid var(--glass-border-hover);
+    color: var(--acc-bright);
+}
+
+.card-info {
+    min-width: 0;
+    flex: 1;
+}
+
+.card-name {
+    font-size: 15px;
+    font-weight: 670;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.card-group {
+    font-size: 12px;
+    color: var(--tx-3);
+    margin-top: 2px;
+}
+
+.avg-block {
+    text-align: center;
+    flex: none;
+}
+
+.avg-value {
+    font-size: 22px;
+    font-weight: 780;
+    line-height: 1;
+}
+
+.avg-label {
+    font-size: 10px;
+    color: var(--tx-faint);
+    margin-top: 3px;
+}
+
+.progress-summary {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 7px;
+    font-size: 12px;
+}
+
+.progress-summary-text {
+    color: var(--tx-2);
+}
+
+.progress-summary-strong {
+    color: var(--acc-bright);
+}
+
+.review-hint {
+    color: var(--st-yellow);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.lab-dots {
+    display: flex;
+    gap: 4px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+}
+
+.lab-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    opacity: 0.9;
+}
+
+.card-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 14px;
+}
+
+.delete-btn {
+    color: var(--st-red);
+}
+
+/* ── password-reset overlay ── */
+
+.overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background: rgba(6, 12, 10, 0.72);
+    backdrop-filter: blur(7px);
+    -webkit-backdrop-filter: blur(7px);
+}
+
+.overlay-card {
+    width: 100%;
+    max-width: 420px;
+    padding: 26px;
+    animation: popIn .3s cubic-bezier(.22, 1, .36, 1) both;
+    box-shadow: var(--shadow-pop);
+}
+
+.overlay-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.overlay-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 720;
+}
+
+.overlay-error {
+    padding: 10px 14px;
+    background: rgba(255, 80, 80, 0.08);
+    border: 1px solid rgba(255, 80, 80, 0.25);
+    border-radius: 10px;
+    color: var(--st-red);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.overlay-text {
+    margin: 0 0 14px;
+    font-size: 13.5px;
+    color: var(--tx-2);
+    line-height: 1.5;
+}
+
+.overlay-name {
+    color: var(--tx-1);
+}
+
+.password-box {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    border-radius: 11px;
+    background: rgba(12, 20, 17, 0.7);
+    border: 1px solid var(--glass-border-hover);
+}
+
+.password-value {
+    flex: 1;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--acc-bright);
+    letter-spacing: 0.04em;
+}
+
+.overlay-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 18px;
+}
