@@ -169,7 +169,7 @@ public class DatabaseSeeder(
             await userManager.AddToRoleAsync(user, role);
 
         if (role == "teacher") await auth.LinkTeacherAsync(user);
-        else                   await auth.LinkStudentAsync(user, "КІ-31");
+        else                   await auth.LinkStudentAsync(user, "144а");
     }
 
     private async Task AddColumnIfMissingAsync(string table, string column, string type)
@@ -240,7 +240,7 @@ public class DatabaseSeeder(
 
     private async Task SeedGroupsAsync()
     {
-        var groups = new[] { "КІ-31", "КІ-32", "КІ-33", "КН-31", "КН-32", "СП-31" };
+        var groups = new[] { "144а", "144б", "244а", "244б" };
         for (int i = 0; i < groups.Length; i++)
             db.Groups.Add(new GroupRecord { Name = groups[i], OrderIndex = i });
         await db.SaveChangesAsync();
@@ -301,20 +301,20 @@ public class DatabaseSeeder(
 
         var specs = new List<Spec>
         {
-            new("Іваненко",   "Петро",      "КІ-31", Custom: true),
-            new("Коваленко",  "Олександра", "КІ-31", 94, 8),
-            new("Бондаренко", "Андрій",     "КІ-31", 78, 6, true),
-            new("Ткаченко",   "Софія",      "КІ-31", 88, 7, true),
-            new("Мельник",    "Дмитро",     "КІ-31", 64, 5, true, 4),
-            new("Шевченко",   "Марія",      "КІ-31", 91, 8),
-            new("Кравчук",    "Назар",      "КІ-31", 72, 4, true),
-            new("Поліщук",    "Вікторія",   "КІ-32", 85, 7),
-            new("Савченко",   "Артем",      "КІ-32", 58, 3, true, 3),
-            new("Руденко",    "Юлія",       "КІ-32", 96, 9),
-            new("Захарчук",   "Богдан",     "КІ-32", 69, 5),
-            new("Лисенко",    "Катерина",   "КІ-32", 81, 6, true),
-            new("Гончаренко", "Максим",     "КІ-32", 75, 5, true, 5),
-            new("Марченко",   "Дарина",     "КІ-31", 89, 7),
+            new("Іваненко",   "Петро",      "144а", Custom: true),
+            new("Коваленко",  "Олександра", "144а", 94, 8),
+            new("Бондаренко", "Андрій",     "144а", 78, 6, true),
+            new("Ткаченко",   "Софія",      "144а", 88, 7, true),
+            new("Мельник",    "Дмитро",     "144а", 64, 5, true, 4),
+            new("Шевченко",   "Марія",      "144а", 91, 8),
+            new("Кравчук",    "Назар",      "144а", 72, 4, true),
+            new("Поліщук",    "Вікторія",   "144б", 85, 7),
+            new("Савченко",   "Артем",      "144б", 58, 3, true, 3),
+            new("Руденко",    "Юлія",       "144б", 96, 9),
+            new("Захарчук",   "Богдан",     "144б", 69, 5),
+            new("Лисенко",    "Катерина",   "144б", 81, 6, true),
+            new("Гончаренко", "Максим",     "144б", 75, 5, true, 5),
+            new("Марченко",   "Дарина",     "144а", 89, 7),
         };
 
         for (int si = 0; si < specs.Count; si++)
