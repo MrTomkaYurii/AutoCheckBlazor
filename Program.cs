@@ -11,6 +11,17 @@ using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// UI-editable settings (teacher cabinet → Gemini key/model/limit, WorkRoot) are
+// persisted to a writable JSON override file — on the mounted data volume in Docker,
+// so they survive container restarts. Added LAST, so it overrides both appsettings.json
+// AND environment variables: a teacher's in-app change is authoritative and durable.
+// (Without this, the cabinet wrote appsettings.json, which is not on a volume and is
+// shadowed by the compose env vars — the change silently didn't persist.)
+var settingsOverrideFile = builder.Configuration["Settings:File"];
+if (string.IsNullOrWhiteSpace(settingsOverrideFile))
+    settingsOverrideFile = Path.Combine(builder.Environment.ContentRootPath, "settings.override.json");
+builder.Configuration.AddJsonFile(settingsOverrideFile, optional: true, reloadOnChange: true);
+
 // ── Razor + MudBlazor ─────────────────────────────────────────────────────────
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddMudServices();

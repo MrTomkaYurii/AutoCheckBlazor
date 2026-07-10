@@ -742,13 +742,22 @@
         _savingSettings = true; StateHasChanged();
         try
         {
-            var path = Path.Combine(Env.ContentRootPath, "appsettings.json");
-            var json = await File.ReadAllTextAsync(path);
-            var node = System.Text.Json.Nodes.JsonNode.Parse(json)!;
+            // Write to the override file (on the data volume in Docker), NOT appsettings.json —
+            // this persists across restarts and takes precedence over env vars. See Program.cs.
+            var path = Cfg["Settings:File"];
+            if (string.IsNullOrWhiteSpace(path))
+                path = Path.Combine(Env.ContentRootPath, "settings.override.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 
+            var node = File.Exists(path)
+                ? System.Text.Json.Nodes.JsonNode.Parse(await File.ReadAllTextAsync(path)) as System.Text.Json.Nodes.JsonObject ?? new()
+                : new System.Text.Json.Nodes.JsonObject();
+
+            node["Gemini"] ??= new System.Text.Json.Nodes.JsonObject();
             node["Gemini"]!["ApiKey"]     = _geminiKey.Trim();
             node["Gemini"]!["Model"]      = string.IsNullOrWhiteSpace(_geminiModel) ? "gemini-2.5-flash" : _geminiModel.Trim();
             node["Gemini"]!["DailyLimit"] = _geminiLimit > 0 ? _geminiLimit : 50;
+            node["Grading"] ??= new System.Text.Json.Nodes.JsonObject();
             node["Grading"]!["WorkRoot"]  = _workRoot.Trim();
 
             var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };

@@ -58,3 +58,6 @@ publish/
 # ── Data Protection keys + DB backups ──
 dp-keys/
 backups/
+
+# ── Runtime-written settings override (teacher cabinet) ──
+settings.override.json
