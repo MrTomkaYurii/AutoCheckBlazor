@@ -159,7 +159,7 @@ public class GradingService(
             if (!string.IsNullOrEmpty(mappedSha))
             {
                 var rawDiff = await GetCommitCodeAsync(workDir, mappedSha, ct);
-                code = FilterDiffToTask(rawDiff, taskDef.Number);
+                code = GitDiff.FilterToTask(rawDiff, taskDef.Number);
             }
             else
             {
@@ -180,7 +180,7 @@ public class GradingService(
             // non-mapped, full-file submissions — mirrors the corpus in PlagiarismService.
             var candidateLines = taskInputs.SelectMany(t =>
             {
-                var parsed = ParseDiff(t.Code);
+                var parsed = GitDiff.Parse(t.Code);
                 var add = parsed.Where(d => d.Type == "add").Select(d => d.Text).ToList();
                 return add.Count > 0 ? add : parsed.Where(d => d.Type == "ctx").Select(d => d.Text).ToList();
             });
@@ -250,7 +250,7 @@ public class GradingService(
                 TestsTotal   = 0,
                 Feedback     = JsonSerializer.Serialize(new { done = result.Done, issues = result.Issues, analysis = result.Analysis }),
             };
-            var diffLines = ParseDiff(code);
+            var diffLines = GitDiff.Parse(code);
             for (int i = 0; i < diffLines.Count; i++)
             {
                 var (dtype, n1, n2, text) = diffLines[i];
@@ -519,7 +519,7 @@ public class GradingService(
 
     private async Task<string?> PrepareRepoAsync(string rawUrl, string branch, string? token, CancellationToken ct)
     {
-        var repoUrl = NormalizeGitUrl(rawUrl);
+        var repoUrl = GitDiff.NormalizeUrl(rawUrl);
         var slug    = Convert.ToHexString(
             System.Security.Cryptography.MD5.HashData(Encoding.UTF8.GetBytes(repoUrl)))[..10];
         var dir = Path.Combine(WorkRoot, slug);
@@ -563,14 +563,6 @@ public class GradingService(
             log.LogWarning("Git prepare failed {Url}/{Branch}: {Msg}", repoUrl, branch, msg);
             return null;
         }
-    }
-
-    private static string NormalizeGitUrl(string raw)
-    {
-        raw = raw.Trim().TrimEnd('/');
-        if (!raw.StartsWith("http")) raw = "https://" + raw;
-        if (!raw.EndsWith(".git"))   raw += ".git";
-        return raw;
     }
 
     private async Task Git(string workDir, string args, CancellationToken ct)
@@ -651,124 +643,6 @@ public class GradingService(
 
     private static bool IsUkrainianStopWord(string w) =>
         w is "Клас" or "Метод" or "Клас:" or "Реалізуй" or "Визнач" or "Додай" or "Зростаючий";
-
-    // ── Diff filter — keeps only the hunk(s) for Task{N}.cs ─────────────────
-
-    private static string FilterDiffToTask(string diffOutput, int taskNumber)
-    {
-        if (string.IsNullOrWhiteSpace(diffOutput)) return diffOutput;
-
-        var trimmed = diffOutput.TrimStart();
-        if (!trimmed.StartsWith("commit ") && !trimmed.StartsWith("diff --git"))
-            return diffOutput; // plain file content, not a git diff
-
-        var pattern  = $"task{taskNumber}";
-        var lines    = diffOutput.Split('\n');
-        var header   = new List<string>(); // commit / Author / Date / message lines
-        var taskSec  = new List<string>(); // lines for this task's file
-        bool inDiff  = false;
-        bool inTask  = false;
-
-        foreach (var rawLine in lines)
-        {
-            var line = rawLine.TrimEnd('\r');
-            if (line.StartsWith("diff --git"))
-            {
-                inDiff = true;
-                inTask = line.Contains(pattern, StringComparison.OrdinalIgnoreCase);
-                if (inTask) taskSec.Add(line);
-            }
-            else if (!inDiff)
-            {
-                header.Add(line);
-            }
-            else if (inTask)
-            {
-                taskSec.Add(line);
-            }
-        }
-
-        return taskSec.Count > 0
-            ? string.Join('\n', header.Concat(taskSec))
-            : diffOutput; // fallback: show full diff if no task-specific file found
-    }
-
-    // ── Diff parser ───────────────────────────────────────────────────────────
-
-    private static List<(string Type, int? N1, int? N2, string Text)> ParseDiff(string raw)
-    {
-        var result = new List<(string, int?, int?, string)>();
-        if (string.IsNullOrWhiteSpace(raw)) return result;
-
-        bool isDiff = raw.TrimStart().StartsWith("commit ") ||
-                      raw.TrimStart().StartsWith("diff --git");
-
-        if (!isDiff)
-        {
-            int n = 1;
-            foreach (var line in raw.Split('\n').Take(600))
-                result.Add(("ctx", n, n++, line.TrimEnd('\r')));
-            return result;
-        }
-
-        int oldLine = 0, newLine = 0;
-        bool inHunk = false;
-
-        foreach (var rawLine in raw.Split('\n').Take(1200))
-        {
-            var line = rawLine.TrimEnd('\r');
-
-            if (line.StartsWith("diff --git") || line.StartsWith("index ") ||
-                line.StartsWith("--- ") || line.StartsWith("+++ ") ||
-                line.StartsWith("Binary "))
-            {
-                result.Add(("hdr", null, null, line));
-                inHunk = false;
-                continue;
-            }
-            if (line.StartsWith("commit ") || line.StartsWith("Author:") ||
-                line.StartsWith("Date:") || line.StartsWith("Merge:") ||
-                (line.StartsWith("    ") && !inHunk))
-            {
-                result.Add(("hdr", null, null, line));
-                continue;
-            }
-            if (line.StartsWith("@@"))
-            {
-                var parts = line.Split(' ');
-                foreach (var p in parts)
-                {
-                    if (p.StartsWith("-") && p.Length > 1 && !p.StartsWith("---"))
-                    { int.TryParse(p[1..].Split(',')[0], out oldLine); }
-                    else if (p.StartsWith("+") && p.Length > 1 && !p.StartsWith("+++"))
-                    { int.TryParse(p[1..].Split(',')[0], out newLine); }
-                }
-                inHunk = true;
-                result.Add(("hdr", null, null, line));
-                continue;
-            }
-            if (!inHunk) continue;
-
-            if (line.StartsWith("+"))
-            {
-                result.Add(("add", null, newLine, line[1..]));
-                newLine++;
-            }
-            else if (line.StartsWith("-"))
-            {
-                result.Add(("del", oldLine, null, line[1..]));
-                oldLine++;
-            }
-            else if (line.StartsWith(" ") || line.Length == 0)
-            {
-                result.Add(("ctx", oldLine, newLine, line.Length > 0 ? line[1..] : ""));
-                oldLine++;
-                newLine++;
-            }
-        }
-
-        return result;
-    }
 
     // ── Gemini health check ───────────────────────────────────────────────────
 
