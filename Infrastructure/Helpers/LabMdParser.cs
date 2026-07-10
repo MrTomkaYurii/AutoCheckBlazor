@@ -27,6 +27,10 @@ public static class LabMdParser
             title = h1.Groups[1].Value.Trim();
             title = Regex.Replace(title, @"^Лаба\s+\d+\s+[—–]\s+", "");
             title = Regex.Replace(title, @"^Лабораторна робота №?\s*\d+[.\s]+", "");
+            // "Лабораторна робота NN — Title" (лаби 17–22) leaves a stray "— " that the
+            // rule above doesn't eat — strip a leftover leading dash so titles don't
+            // start with it (e.g. "— EF Core: …" → "EF Core: …").
+            title = Regex.Replace(title, @"^[—–]\s+", "");
             title = Unescape(title.Trim());
         }
 

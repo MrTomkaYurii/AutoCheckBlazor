@@ -69,6 +69,13 @@ public class DatabaseSeeder(
             )
             """);
 
+        // One-time backfill: earlier seeds parsed "Лабораторна робота NN — Title"
+        // (labs 17–22) into a title with a stray leading "— " (parser now strips it).
+        // Fix already-seeded rows without a full DB reset. Idempotent — the WHERE only
+        // touches titles that still start with a dash.
+        await db.Database.ExecuteSqlRawAsync(
+            "UPDATE Labs SET Title = TRIM(SUBSTR(Title, 2)) WHERE Title LIKE '—%' OR Title LIKE '–%'");
+
         if (!await db.Labs.AnyAsync())     await SeedLabsAsync();
         if (!await db.Groups.AnyAsync())   await SeedGroupsAsync();
 
