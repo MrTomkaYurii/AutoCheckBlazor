@@ -127,6 +127,7 @@ builder.Services.AddScoped<PlagiarismService>();
 builder.Services.AddScoped<CodeSimilarityService>();
 builder.Services.AddHostedService<DeadlineReminderService>();
 builder.Services.AddHostedService<BackupService>();
+builder.Services.AddHostedService<RepoCleanupService>();
 builder.Services.AddSingleton<TeacherNotificationService>();
 builder.Services.AddScoped<AppState>();
 builder.Services.AddScoped<GitHubService>();

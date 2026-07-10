@@ -28,9 +28,7 @@ public class GradingService(
 {
     private string ApiKey   => cfg["Gemini:ApiKey"]  ?? "";
     private string Model    => cfg["Gemini:Model"]   ?? "gemini-2.5-flash";
-    private string WorkRoot => string.IsNullOrEmpty(cfg["Grading:WorkRoot"])
-        ? Path.Combine(Path.GetTempPath(), "autocheck-repos")
-        : cfg["Grading:WorkRoot"]!;
+    private string WorkRoot => GradingPaths.WorkRoot(cfg);
     private int MaxLines => int.TryParse(cfg["Grading:MaxLinesPerFile"], out var v) ? v : 250;
 
     // ── Entry point ───────────────────────────────────────────────────────────
@@ -552,6 +550,10 @@ public class GradingService(
 
             await Git(dir, $"checkout {branch}", ct);
             await Git(dir, $"reset --hard origin/{branch}", ct);
+            // Mark the clone as used now, so RepoCleanupService's "idle for N days"
+            // prune reflects real submission activity rather than filesystem quirks
+            // (a re-grade with no working-tree change wouldn't touch the dir otherwise).
+            try { Directory.SetLastWriteTimeUtc(dir, DateTime.UtcNow); } catch { /* best-effort */ }
             return dir;
         }
         catch (Exception ex)
@@ -827,10 +829,29 @@ public class GradingService(
             }
         };
         proc.Start();
-        var stdout = await proc.StandardOutput.ReadToEndAsync(ct);
-        var stderr = await proc.StandardError.ReadToEndAsync(ct);
-        await proc.WaitForExitAsync(ct);
-        return (proc.ExitCode, stdout, stderr);
+
+        // Drain both pipes concurrently. Reading stdout fully before touching stderr
+        // can deadlock: if the child fills stderr's ~64KB OS buffer before closing
+        // stdout, it blocks on the write while we wait on a stream that never ends.
+        // Cancellation is driven by WaitForExitAsync(ct); the reads complete once the
+        // pipes close (on exit or Kill), so they don't need the token themselves.
+        var stdoutTask = proc.StandardOutput.ReadToEndAsync();
+        var stderrTask = proc.StandardError.ReadToEndAsync();
+
+        try
+        {
+            await proc.WaitForExitAsync(ct);
+        }
+        catch (OperationCanceledException)
+        {
+            // Don't leave an orphaned git process holding the work dir or a network
+            // fetch open; kill the whole tree, then drain the reads so they settle.
+            try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { /* already gone */ }
+            try { await Task.WhenAll(stdoutTask, stderrTask); } catch { /* ignore */ }
+            throw;
+        }
+
+        return (proc.ExitCode, await stdoutTask, await stderrTask);
     }
 
 }
