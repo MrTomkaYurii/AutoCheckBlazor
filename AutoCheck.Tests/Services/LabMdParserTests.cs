@@ -24,6 +24,23 @@ public class LabMdParserTests
         result.Title.Should().Be("LINQ");
     }
 
+    // Regression: "Лабораторна робота NN — Title" (labs 17–22) used to leave a
+    // stray leading "— " because only the number, not the dash, was stripped.
+    [Fact]
+    public void Parse_LabRobotaDashFormat_StripsNumberAndDash()
+    {
+        var md = "# Лабораторна робота 19 — EF Core: TPH глибоко\n\n## Мета\nМета.";
+        LabMdParser.Parse(md).Title.Should().Be("EF Core: TPH глибоко");
+    }
+
+    [Fact]
+    public void Parse_LabRobotaDashFormat_HasNoLeadingDash()
+    {
+        var title = LabMdParser.Parse("# Лабораторна робота 21 — Async / Await").Title;
+        title.Should().Be("Async / Await");
+        title.Should().NotStartWith("—");
+    }
+
     [Fact]
     public void Parse_NoH1_ReturnsEmptyTitle()
     {

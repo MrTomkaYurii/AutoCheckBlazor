@@ -281,7 +281,7 @@ public class DatabaseSeeder(
         return ((t ^ (t >> 14)) & 0xFFFFFFFFu) / 4294967296.0;
     };
     private static int Clamp(int v) => Math.Max(0, Math.Min(100, v));
-    private static int Final(int a, int d) => Clamp((int)Math.Round(0.4 * a + 0.6 * d));
+    private static int Final(int a, int d) => Scoring.Final(a, d);   // single source of truth
 
     // Demo statuses for student 0 (Петро Іваненко), covering the first 13 labs.
     // Tuple: (status, autoScore, defenseScore, isCurrent)

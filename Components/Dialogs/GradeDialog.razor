@@ -185,7 +185,7 @@
         ? null
         : int.TryParse(_defense, out var n) ? Math.Max(0, Math.Min(100, n)) : (int?)null;
 
-    private int? Final => _defNum is null ? null : (int)Math.Round(0.4 * _auto + 0.6 * _defNum.Value);
+    private int? Final => _defNum is null ? null : Scoring.Final(_auto, _defNum.Value);
 
     private string AutoColor  => _auto  >= 85 ? "var(--st-green)" : _auto  >= 60 ? "var(--st-yellow)" : "var(--st-red)";
     private string FinalColor => Final is null ? "var(--tx-faint)" : Final >= 85 ? "var(--st-green)" : Final >= 60 ? "var(--st-yellow)" : "var(--st-red)";

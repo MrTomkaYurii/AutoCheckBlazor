@@ -11,4 +11,12 @@ public static class Scoring
             return (int)Math.Round(items.Average(i => (double)i.Score));
         return (int)Math.Round(items.Sum(i => i.Score * (double)i.Difficulty) / totalWeight);
     }
+
+    /// <summary>
+    /// Final lab grade from the auto-check and defence scores: 40% auto + 60% defence,
+    /// rounded and clamped to 0–100. Single source of truth for the formula shown in
+    /// the grade dialog and used when seeding demo data.
+    /// </summary>
+    public static int Final(int auto, int defense) =>
+        Math.Clamp((int)Math.Round(0.4 * auto + 0.6 * defense), 0, 100);
 }
