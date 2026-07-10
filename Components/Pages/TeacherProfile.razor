@@ -257,18 +257,6 @@
                         @(string.IsNullOrEmpty(Cfg["Grading:WorkRoot"]) ? "тимчасова папка" : Cfg["Grading:WorkRoot"])
                     </span>
                 </div>
-                @* Backup row *@
-                <div class="settings-row-gap">
-                    <span class="settings-label">Бекап БД</span>
-                    <span class="backup-hint">автоматично щодня · вручну:</span>
-                    <button class="btn btn-ghost btn-sm" @onclick="BackupNow" disabled="@_backingUp">
-                        <Icon Name="upload" Size="13" />@(_backingUp ? "Створення…" : "Створити зараз")
-                    </button>
-                </div>
-                @if (!string.IsNullOrEmpty(_backupMsg))
-                {
-                    @Feedback(_backupMsg)
-                }
             </div>
         }
         else
@@ -302,6 +290,109 @@
                 </div>
             </div>
         }
+    </section>
+
+    @* ── Дані та бекапи ───────────────────────────────────────────────────── *@
+    <section class="glass card-mt data-card">
+        <div class="section-head">
+            <Icon Name="upload" Size="18" Style="color:var(--acc)" />
+            <h3 class="section-title">Дані та бекапи</h3>
+            <button class="btn btn-ghost btn-sm push-right" @onclick="BackupNow" disabled="@_backingUp">
+                <Icon Name="upload" Size="14" />@(_backingUp ? "Створення…" : "Створити бекап")
+            </button>
+        </div>
+
+        @* DB info *@
+        <div class="subsection">
+            <div class="subsection-label">База даних</div>
+            <div class="settings-row">
+                <span class="settings-label">Файл</span>
+                <span class="mono data-path">@_dbPath</span>
+            </div>
+            <div class="settings-row">
+                <span class="settings-label">Розмір</span>
+                <span class="mono">@FormatSize(_dbSize)</span>
+            </div>
+            <div class="settings-row">
+                <span class="settings-label">Останній бекап</span>
+                <span class="mono">@(_backups.Count > 0 ? _backups[0].Modified.ToString("dd.MM.yyyy HH:mm") : "—")</span>
+            </div>
+        </div>
+
+        @* Backup list *@
+        <div class="subsection">
+            <div class="subsection-label">Резервні копії (@_backups.Count)</div>
+            @if (_backups.Count == 0)
+            {
+                <div class="data-empty">Ще немає бекапів. Створюються автоматично щодня, або кнопкою вгорі.</div>
+            }
+            else
+            {
+                @foreach (var b in _backups)
+                {
+                    <div class="backup-row">
+                        <Icon Name="doc" Size="15" Style="color:var(--tx-faint)" />
+                        <span class="mono backup-name">@b.Name</span>
+                        <span class="backup-meta">@FormatSize(b.SizeBytes) · @b.Modified.ToString("dd.MM HH:mm")</span>
+                        <a class="btn btn-ghost btn-sm backup-dl" href="/teacher/backup/download?name=@Uri.EscapeDataString(b.Name)">
+                            <Icon Name="upload" Size="13" />Завантажити
+                        </a>
+                    </div>
+                }
+            }
+            @if (!string.IsNullOrEmpty(_backupMsg))
+            {
+                @Feedback(_backupMsg)
+            }
+        </div>
+
+        @* Off-host mirror *@
+        <div class="subsection-last">
+            <div class="mirror-head">
+                <span class="subsection-label mirror-label">Off-host дзеркало (GitHub)</span>
+                <span class="badge @(_mirrorOn ? "badge-green" : "badge-grey") mirror-badge"><span class="dot"></span>@(_mirrorOn ? "увімкнено" : "вимкнено")</span>
+                <button class="btn btn-ghost btn-sm push-right" @onclick="ToggleMirrorEdit">
+                    <Icon Name="@(_mirrorEdit ? "x" : "settings")" Size="13" />@(_mirrorEdit ? "Скасувати" : "Налаштувати")
+                </button>
+            </div>
+
+            @if (!_mirrorEdit)
+            {
+                <div class="settings-row">
+                    <span class="settings-label">Репозиторій</span>
+                    <span class="mono" style="font-size:12px;color:@(string.IsNullOrEmpty(_mirrorUrl) ? "var(--tx-faint)" : "var(--tx-1)")">@(string.IsNullOrEmpty(_mirrorUrl) ? "—" : _mirrorUrl)</span>
+                </div>
+                <div class="settings-row">
+                    <span class="settings-label">Токен</span>
+                    <span class="mono">@(string.IsNullOrEmpty(_mirrorToken) ? "—" : "••••••••")</span>
+                </div>
+                <p class="data-hint">Кожен бекап дублюється у приватний GitHub-репозиторій (на випадок втрати сервера). Вимкнено, поки не задано URL і токен.</p>
+            }
+            else
+            {
+                <div class="field">
+                    <label>URL приватного репозиторію</label>
+                    <input class="input mono" @bind="_mirrorUrl" placeholder="https://github.com/you/autocheck-backups.git" />
+                </div>
+                <div class="edit-grid-2">
+                    <div class="field">
+                        <label>GitHub токен (PAT)</label>
+                        <input class="input mono" type="password" @bind="_mirrorToken" placeholder="ghp_…" autocomplete="off" />
+                    </div>
+                    <div class="field">
+                        <label>Зберігати останніх</label>
+                        <input class="input" type="number" min="1" max="365" @bind="_mirrorKeep" />
+                    </div>
+                </div>
+                @Feedback(_mirrorMsg)
+                <div class="edit-actions">
+                    <button class="btn btn-primary btn-sm" @onclick="SaveMirror" disabled="@_savingMirror">
+                        <Icon Name="check" Size="15" />@(_savingMirror ? "Збереження…" : "Зберегти")
+                    </button>
+                </div>
+                <p class="data-hint">Токен зберігається на сервері (volume, override-файл) — у бекапи БД він НЕ потрапляє. Потрібен приватний репо + PAT з доступом на запис.</p>
+            }
+        </div>
     </section>
 
     @* ── Ліміти авто-перевірок ────────────────────────────────────────────── *@
@@ -456,6 +547,7 @@
             await using var Db = await DbFactory.CreateDbContextAsync();
             var path = await BackupHelper.BackupNowAsync(Db, Env, Cfg);
             _backupMsg = $"ok:Бекап створено: {Path.GetFileName(path)}";
+            LoadBackupInfo();   // refresh the list + size with the new file
         }
         catch (Exception ex)
         {
@@ -463,6 +555,99 @@
         }
         _backingUp = false; StateHasChanged();
         await Task.Delay(3000); _backupMsg = ""; StateHasChanged();
+    }
+
+    // ── Data & backups ────────────────────────────────────────────────────────
+    private string _dbPath = "";
+    private long   _dbSize;
+    private sealed record BackupFile(string Name, long SizeBytes, DateTime Modified);
+    private List<BackupFile> _backups = [];
+
+    private string _mirrorUrl = "", _mirrorToken = "", _mirrorMsg = "";
+    private int    _mirrorKeep = 14;
+    private bool   _mirrorEdit, _savingMirror;
+    private bool   _mirrorOn => !string.IsNullOrEmpty(_mirrorUrl) && !string.IsNullOrEmpty(_mirrorToken);
+
+    private void LoadBackupInfo()
+    {
+        var conn = Cfg.GetConnectionString("Default") ?? "";
+        try { _dbPath = new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder(conn).DataSource; }
+        catch { _dbPath = conn; }
+        // In WAL mode most data lives in the -wal file while the main .db stays small,
+        // so sum all three to show a realistic size (≈ what a backup would be).
+        _dbSize = 0;
+        foreach (var suffix in new[] { "", "-wal", "-shm" })
+            if (File.Exists(_dbPath + suffix)) _dbSize += new FileInfo(_dbPath + suffix).Length;
+
+        var dir = Cfg["Backup:Dir"];
+        if (string.IsNullOrEmpty(dir)) dir = Path.Combine(Env.ContentRootPath, "backups");
+        _backups = Directory.Exists(dir)
+            ? new DirectoryInfo(dir).GetFiles("autocheck-*.db")
+                .OrderByDescending(f => f.LastWriteTime)
+                .Select(f => new BackupFile(f.Name, f.Length, f.LastWriteTime))
+                .ToList()
+            : [];
+    }
+
+    private void LoadMirrorFields()
+    {
+        _mirrorUrl   = Cfg["Backup:Git:RemoteUrl"] ?? "";
+        _mirrorToken = Cfg["Backup:Git:Token"]     ?? "";
+        _mirrorKeep  = int.TryParse(Cfg["Backup:Git:KeepLast"], out var v) ? v : 14;
+    }
+
+    private void ToggleMirrorEdit()
+    {
+        _mirrorEdit = !_mirrorEdit; _mirrorMsg = "";
+        if (_mirrorEdit) LoadMirrorFields();
+    }
+
+    private async Task SaveMirror()
+    {
+        _savingMirror = true; StateHasChanged();
+        try
+        {
+            await WriteOverrideAsync(node =>
+            {
+                node["Backup"] ??= new System.Text.Json.Nodes.JsonObject();
+                node["Backup"]!["Git"] ??= new System.Text.Json.Nodes.JsonObject();
+                var git = node["Backup"]!["Git"]!;
+                git["RemoteUrl"] = _mirrorUrl.Trim();
+                git["Token"]     = _mirrorToken.Trim();
+                git["KeepLast"]  = _mirrorKeep > 0 ? _mirrorKeep : 14;
+            });
+            _mirrorMsg = "ok:Збережено. Наступний бекап піде у репозиторій.";
+            _mirrorEdit = false;
+        }
+        catch (Exception ex) { _mirrorMsg = $"err:{ex.Message}"; }
+        _savingMirror = false; StateHasChanged();
+        await Task.Delay(2500); _mirrorMsg = ""; StateHasChanged();
+    }
+
+    // Merges the given keys into the override file (data volume) and reloads config.
+    // Shared by the Gemini/WorkRoot save and the off-host-mirror save.
+    private async Task WriteOverrideAsync(Action<System.Text.Json.Nodes.JsonObject> mutate)
+    {
+        var path = Cfg["Settings:File"];
+        if (string.IsNullOrWhiteSpace(path))
+            path = Path.Combine(Env.ContentRootPath, "settings.override.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+
+        var node = File.Exists(path)
+            ? System.Text.Json.Nodes.JsonNode.Parse(await File.ReadAllTextAsync(path)) as System.Text.Json.Nodes.JsonObject ?? new()
+            : new System.Text.Json.Nodes.JsonObject();
+        mutate(node);
+        await File.WriteAllTextAsync(path, node.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        if (Cfg is IConfigurationRoot root) root.Reload();
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes <= 0) return "0 B";
+        string[] u = ["B", "KB", "MB", "GB"];
+        double s = bytes; int i = 0;
+        while (s >= 1024 && i < u.Length - 1) { s /= 1024; i++; }
+        return $"{s:0.#} {u[i]}";
     }
 
     // ── Teachers management ───────────────────────────────────────────────────
@@ -540,6 +725,8 @@
             _emailDisplay = _email = Auth.GetEmail(state.User);
         }
         LoadSettingsFields();
+        LoadBackupInfo();
+        LoadMirrorFields();
         await LoadLabAttemptsAsync();
         await LoadTeachersAsync();
     }
@@ -742,28 +929,15 @@
         _savingSettings = true; StateHasChanged();
         try
         {
-            // Write to the override file (on the data volume in Docker), NOT appsettings.json —
-            // this persists across restarts and takes precedence over env vars. See Program.cs.
-            var path = Cfg["Settings:File"];
-            if (string.IsNullOrWhiteSpace(path))
-                path = Path.Combine(Env.ContentRootPath, "settings.override.json");
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-
-            var node = File.Exists(path)
-                ? System.Text.Json.Nodes.JsonNode.Parse(await File.ReadAllTextAsync(path)) as System.Text.Json.Nodes.JsonObject ?? new()
-                : new System.Text.Json.Nodes.JsonObject();
-
-            node["Gemini"] ??= new System.Text.Json.Nodes.JsonObject();
-            node["Gemini"]!["ApiKey"]     = _geminiKey.Trim();
-            node["Gemini"]!["Model"]      = string.IsNullOrWhiteSpace(_geminiModel) ? "gemini-2.5-flash" : _geminiModel.Trim();
-            node["Gemini"]!["DailyLimit"] = _geminiLimit > 0 ? _geminiLimit : 50;
-            node["Grading"] ??= new System.Text.Json.Nodes.JsonObject();
-            node["Grading"]!["WorkRoot"]  = _workRoot.Trim();
-
-            var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
-            await File.WriteAllTextAsync(path, node.ToJsonString(opts));
-
-            if (Cfg is IConfigurationRoot root) root.Reload();
+            await WriteOverrideAsync(node =>
+            {
+                node["Gemini"] ??= new System.Text.Json.Nodes.JsonObject();
+                node["Gemini"]!["ApiKey"]     = _geminiKey.Trim();
+                node["Gemini"]!["Model"]      = string.IsNullOrWhiteSpace(_geminiModel) ? "gemini-2.5-flash" : _geminiModel.Trim();
+                node["Gemini"]!["DailyLimit"] = _geminiLimit > 0 ? _geminiLimit : 50;
+                node["Grading"] ??= new System.Text.Json.Nodes.JsonObject();
+                node["Grading"]!["WorkRoot"]  = _workRoot.Trim();
+            });
             _settingsMsg = "ok:Налаштування збережено та застосовано";
         }
         catch (Exception ex)

@@ -339,6 +339,23 @@ app.MapGet("/account/refresh-signin", async (HttpContext ctx,
     return Results.Redirect(SafeReturnUrl(returnUrl));
 }).RequireAuthorization();
 
+// Teacher-only DB backup download — a GET so the browser streams it with the auth
+// cookie. Strictly validates the filename so it can only ever serve a backup file
+// from Backup:Dir (no path traversal / arbitrary file read).
+app.MapGet("/teacher/backup/download", (string name, IConfiguration cfg, IWebHostEnvironment env) =>
+{
+    var dir = cfg["Backup:Dir"];
+    if (string.IsNullOrEmpty(dir)) dir = Path.Combine(env.ContentRootPath, "backups");
+
+    if (name != Path.GetFileName(name) || !name.StartsWith("autocheck-") || !name.EndsWith(".db"))
+        return Results.BadRequest("Invalid backup name.");
+
+    var full = Path.Combine(dir, name);
+    return File.Exists(full)
+        ? Results.File(full, "application/octet-stream", name)
+        : Results.NotFound();
+}).RequireAuthorization(p => p.RequireRole("teacher"));
+
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 
 app.Run();
