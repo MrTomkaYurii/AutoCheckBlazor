@@ -1,0 +1,71 @@
+@page "/about"
+@layout LoginLayout
+@inject NavigationManager Nav
+
+<div class="about-wrap">
+    <div class="about-card glass">
+
+        <header class="about-head">
+            <div class="about-badge">{}</div>
+            <div class="about-title-block">
+                <h1 class="about-name">@AppInfo.Name <span class="about-ver mono">v@(AppInfo.Version)</span></h1>
+                <p class="about-tagline">@AppInfo.Tagline</p>
+            </div>
+        </header>
+
+        <div class="about-meta">
+            <span class="about-pill"><span class="dot"></span>@AppInfo.AcademicYear навчальний рік</span>
+            <span class="about-pill">@AppInfo.University</span>
+        </div>
+
+        <section class="about-section">
+            <h2 class="about-h2">Розробник</h2>
+            <div class="about-author">
+                <div class="about-author-avatar">TY</div>
+                <div class="about-author-info">
+                    <div class="about-author-name">@AppInfo.Author</div>
+                    <div class="about-author-links">
+                        <a href="mailto:@AppInfo.AuthorEmail">@AppInfo.AuthorEmail</a>
+                        <span class="sep">·</span>
+                        <a href="@AppInfo.Repo" target="_blank" rel="noopener">GitHub</a>
+                    </div>
+                </div>
+            </div>
+            <p class="about-note">
+                Знайшли помилку або маєте пропозицію? Студенти можуть надіслати звернення
+                прямо з застосунку (Підтримка у боковому меню) або написати на пошту вище.
+            </p>
+        </section>
+
+        <section class="about-section">
+            <h2 class="about-h2">Історія версій</h2>
+            <div class="about-changelog">
+                @foreach (var rel in AppInfo.Changelog)
+                {
+                    <div class="about-release">
+                        <div class="about-release-head">
+                            <span class="about-release-ver mono">v@(rel.Version)</span>
+                            <span class="about-release-date">@rel.Date</span>
+                        </div>
+                        <ul class="about-release-list">
+                            @foreach (var ch in rel.Changes)
+                            {
+                                <li>@ch</li>
+                            }
+                        </ul>
+                    </div>
+                }
+            </div>
+        </section>
+
+        <footer class="about-foot">
+            <button class="about-back" @onclick="Back">← Назад</button>
+            <span class="about-copy">© @AppInfo.AcademicYear · @AppInfo.Author</span>
+        </footer>
+
+    </div>
+</div>
+
+@code {
+    private void Back() => Nav.NavigateTo("/");
+}

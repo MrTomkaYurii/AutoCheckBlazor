@@ -3,18 +3,25 @@ using System.Net.Mail;
 
 namespace AutoCheck.Services;
 
+/// <summary>One in-memory attachment for an outgoing email.</summary>
+public record EmailAttachment(string FileName, byte[] Content, string ContentType);
+
 /// <summary>
 /// Sends email via SMTP. Disabled (no-op) while Email:SmtpHost is empty, so the
 /// app works out of the box; configure appsettings.json → Email to enable.
-/// Registered as a singleton; failures are logged and never thrown to callers.
+/// Registered as a singleton. Returns whether the message was actually sent so
+/// callers (e.g. the feedback form) can tell the user the truth instead of a
+/// false "надіслано"; failures are logged, never thrown.
 /// </summary>
 public class EmailService(IConfiguration cfg, ILogger<EmailService> log)
 {
     public bool Enabled => !string.IsNullOrEmpty(cfg["Email:SmtpHost"]);
 
-    public async Task SendAsync(string to, string subject, string body)
+    public async Task<bool> SendAsync(
+        string to, string subject, string body,
+        IReadOnlyList<EmailAttachment>? attachments = null)
     {
-        if (!Enabled || string.IsNullOrWhiteSpace(to) || !to.Contains('@')) return;
+        if (!Enabled || string.IsNullOrWhiteSpace(to) || !to.Contains('@')) return false;
 
         try
         {
@@ -39,11 +46,21 @@ public class EmailService(IConfiguration cfg, ILogger<EmailService> log)
                 IsBodyHtml = false,
             };
             msg.To.Add(to);
+
+            foreach (var a in attachments ?? [])
+            {
+                // Attachment owns the stream and disposes it when msg is disposed.
+                var att = new Attachment(new MemoryStream(a.Content), a.FileName, a.ContentType);
+                msg.Attachments.Add(att);
+            }
+
             await client.SendMailAsync(msg);
+            return true;
         }
         catch (Exception ex)
         {
             log.LogWarning(ex, "Email send failed to {To}: {Subject}", to, subject);
+            return false;
         }
     }
 }

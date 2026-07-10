@@ -14,6 +14,13 @@
         <Sidebar />
         <main class="scroll-area content">
             @Body
+            <footer class="app-footer">
+                <a href="/about" class="app-footer-link">@AppInfo.Name v@(AppInfo.Version)</a>
+                <span class="app-footer-sep">·</span>
+                <span>© @AppInfo.AcademicYear</span>
+                <span class="app-footer-sep">·</span>
+                <span>Розроблено @AppInfo.Author</span>
+            </footer>
         </main>
     </div>
 }

@@ -47,9 +47,10 @@
 
     private List<Item> StudentItems =>
     [
-        new("dashboard", "home",    "Дашборд",  "/student"),
-        new("grades",    "grades",  "Оцінки",   "/student/grades"),
-        new("profile",   "profile", "Профіль",  "/student/profile"),
+        new("dashboard", "home",    "Дашборд",   "/student"),
+        new("grades",    "grades",  "Оцінки",    "/student/grades"),
+        new("profile",   "profile", "Профіль",   "/student/profile"),
+        new("feedback",  "mail",    "Підтримка", "/student/feedback"),
     ];
 
     private List<Item> TeacherItems =>
@@ -81,9 +82,10 @@
                 if (path.StartsWith("/teacher/profile"))   return "profile";
                 return "teacher";
             }
-            if (path.StartsWith("/student/grades"))  return "grades";
-            if (path.StartsWith("/student/profile")) return "profile";
-            if (path.StartsWith("/student/lab"))     return "labs";
+            if (path.StartsWith("/student/grades"))   return "grades";
+            if (path.StartsWith("/student/profile"))  return "profile";
+            if (path.StartsWith("/student/feedback")) return "feedback";
+            if (path.StartsWith("/student/lab"))      return "labs";
             return "dashboard";
         }
     }

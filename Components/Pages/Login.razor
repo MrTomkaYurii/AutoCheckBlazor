@@ -33,7 +33,7 @@
 
         @* Hero text *@
         <div class="hero">
-            <div class="badge badge-green hero-badge"><span class="dot pulse"></span>Семестр 2 · 2025–2026</div>
+            <div class="badge badge-green hero-badge"><span class="dot pulse"></span>Семестр 2 · @AppInfo.AcademicYear</div>
             <h1 class="hero-title">
                 Об'єктно-орієнтоване<br />програмування <span class="hero-accent">на C#</span>
             </h1>
@@ -53,7 +53,9 @@
 
         @* Footer *@
         <div class="left-footer">
-            © 2025–2026 · Кафедра КН · ЧНУ ім. Ю. Федьковича
+            © @AppInfo.AcademicYear · Кафедра КН · ЧНУ ім. Ю. Федьковича<br />
+            <a href="/about" style="color:var(--tx-3);text-decoration:none;font-weight:600">@AppInfo.Name v@(AppInfo.Version)</a>
+            · Розроблено @AppInfo.Author
         </div>
     </div>
 

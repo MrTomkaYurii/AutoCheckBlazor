@@ -1,0 +1,195 @@
+@page "/student/feedback"
+@inject EmailService Email
+@inject AppState App
+@inject IConfiguration Cfg
+@inject ILogger<Feedback> Log
+
+<div class="fb-page scroll-area">
+    <div class="fb-head">
+        <h1 class="fb-title">Підтримка</h1>
+        <p class="fb-sub">
+            Знайшли помилку, щось не працює або маєте пропозицію? Опишіть проблему —
+            звернення піде розробнику, щоб він міг покращити систему.
+        </p>
+    </div>
+
+    @if (_sent)
+    {
+        <div class="fb-card glass fb-done">
+            <div class="fb-done-icon">✓</div>
+            <h2 class="fb-done-title">Дякуємо! Звернення надіслано</h2>
+            <p class="fb-done-text">Розробник отримає ваше повідомлення на пошту та розгляне його.</p>
+            <button class="fb-btn" @onclick="Reset">Надіслати ще одне</button>
+        </div>
+    }
+    else
+    {
+        <div class="fb-card glass">
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <div class="fb-error">@_error</div>
+            }
+
+            <div class="fb-field">
+                <label>Категорія</label>
+                <select class="fb-input" @bind="_category">
+                    <option value="Помилка / баг">Помилка / баг</option>
+                    <option value="Проблема з перевіркою">Проблема з перевіркою лаби</option>
+                    <option value="Пропозиція">Пропозиція / покращення</option>
+                    <option value="Інше">Інше</option>
+                </select>
+            </div>
+
+            <div class="fb-field">
+                <label>Тема</label>
+                <input class="fb-input" @bind="_subject" maxlength="120"
+                       placeholder="Коротко про що йдеться" />
+            </div>
+
+            <div class="fb-field">
+                <label>Опис</label>
+                <textarea class="fb-input fb-textarea" @bind="_message" rows="7" maxlength="4000"
+                          placeholder="Що сталося, що ви очікували, кроки для відтворення…"></textarea>
+            </div>
+
+            <div class="fb-field">
+                <label>Скріншот <span class="fb-hint">(необов'язково, зображення до @MaxMb МБ)</span></label>
+                <InputFile OnChange="OnFile" accept="image/*" class="fb-file" />
+                @if (_fileName is not null)
+                {
+                    <div class="fb-file-chip">
+                        <span>@_fileName</span>
+                        <button type="button" class="fb-file-x" @onclick="ClearFile">✕</button>
+                    </div>
+                }
+            </div>
+
+            <div class="fb-actions">
+                <button class="fb-btn fb-btn-primary" @onclick="Submit" disabled="@_sending">
+                    @if (_sending) { <span class="fb-spinner"></span><span>Надсилання…</span> }
+                    else { <span>Надіслати звернення</span> }
+                </button>
+                <span class="fb-direct">або напряму: <a href="mailto:@Recipient">@Recipient</a></span>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private const int MaxMb = 5;
+    private const long MaxBytes = MaxMb * 1024L * 1024L;
+
+    private string _category = "Помилка / баг";
+    private string _subject = "";
+    private string _message = "";
+
+    private IBrowserFile? _file;
+    private string? _fileName;
+
+    private bool _sending;
+    private bool _sent;
+    private string? _error;
+
+    private string Recipient => Cfg["Feedback:Email"] ?? AppInfo.AuthorEmail;
+
+    private void OnFile(InputFileChangeEventArgs e)
+    {
+        _error = null;
+        var f = e.File;
+        if (f is null) return;
+        if (!f.ContentType.StartsWith("image/"))
+        {
+            _error = "Дозволені лише зображення.";
+            return;
+        }
+        if (f.Size > MaxBytes)
+        {
+            _error = $"Файл завеликий — максимум {MaxMb} МБ.";
+            return;
+        }
+        _file = f;
+        _fileName = f.Name;
+    }
+
+    private void ClearFile()
+    {
+        _file = null;
+        _fileName = null;
+    }
+
+    private async Task Submit()
+    {
+        _error = null;
+
+        if (string.IsNullOrWhiteSpace(_subject))
+        {
+            _error = "Вкажіть тему звернення.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_message))
+        {
+            _error = "Опишіть проблему.";
+            return;
+        }
+
+        _sending = true;
+        try
+        {
+            List<EmailAttachment>? attachments = null;
+            if (_file is not null)
+            {
+                using var ms = new MemoryStream();
+                await _file.OpenReadStream(MaxBytes).CopyToAsync(ms);
+                attachments = [new EmailAttachment(_file.Name, ms.ToArray(), _file.ContentType)];
+            }
+
+            var s = App.Student;
+            var name = $"{s.FirstName} {s.LastName}".Trim();
+            var subject = $"[AutoCheck] {_category}: {_subject}";
+            var body =
+                $"""
+                Нове звернення від студента AutoCheck.
+
+                Студент:   {name}
+                Група:     {s.Group}
+                Email:     {s.Email}
+                Категорія: {_category}
+                Тема:      {_subject}
+
+                Повідомлення:
+                {_message}
+                """;
+
+            var ok = await Email.SendAsync(Recipient, subject, body, attachments);
+            if (ok)
+            {
+                _sent = true;
+            }
+            else
+            {
+                _error =
+                    $"Не вдалося надіслати — сервіс пошти наразі недоступний. " +
+                    $"Будь ласка, напишіть напряму на {Recipient}.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.LogWarning(ex, "Feedback submit failed");
+            _error = $"Сталася помилка. Спробуйте пізніше або напишіть на {Recipient}.";
+        }
+        finally
+        {
+            _sending = false;
+        }
+    }
+
+    private void Reset()
+    {
+        _sent = false;
+        _subject = "";
+        _message = "";
+        _category = "Помилка / баг";
+        ClearFile();
+        _error = null;
+    }
+}

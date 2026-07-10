@@ -8,6 +8,13 @@
 | `/student/lab/{id}` | Lab | Деталі лаби: завдання, результати, diff, здача |
 | `/student/grades` | Grades | Таблиця всіх оцінок |
 | `/student/profile` | Profile | Профіль: ім'я, прізвище, email, GitHub URL, GitHub token |
+| `/student/feedback` | Feedback | Форма звернення (баг/пропозиція) + скріншот → email розробнику (`Feedback:Email`) |
+
+## Спільні / публічні
+
+| URL | Компонент | Що показує |
+|-----|-----------|-----------|
+| `/about` | About | Про продукт: опис, версія, історія версій, розробник (з `AppInfo`); публічна, `LoginLayout` |
 
 ## Викладач
 

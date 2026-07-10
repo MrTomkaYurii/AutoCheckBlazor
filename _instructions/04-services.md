@@ -76,7 +76,9 @@ In-app + email нотифікації (через `EmailService`).
 In-memory стрічка подій для викладача: `Add(title, body, type)`, `GetAll`, `MarkAllRead`.
 
 ## EmailService (singleton)
-SMTP-розсилка; `Enabled` лише коли задано `Email:SmtpHost`. `SendAsync(to, subject, body)`.
+SMTP-розсилка; `Enabled` лише коли задано `Email:SmtpHost`.
+`SendAsync(to, subject, body, attachments?)` → `bool` (чи реально надіслано — форма звернень
+показує чесний статус). Підтримує вкладення (`EmailAttachment`, напр. скріншот).
 
 ## ICommentService / CommentService
 Коментарі викладач↔студент до здачі/завдання. `GetForSubmissionAsync`, `AddAsync`, `GetAllThreadsAsync`, `DeleteAsync`.

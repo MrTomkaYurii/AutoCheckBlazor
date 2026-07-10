@@ -1,0 +1,232 @@
+.about-wrap {
+    min-height: 100%;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 48px 20px;
+}
+
+.about-card {
+    width: 100%;
+    max-width: 720px;
+    border-radius: 20px;
+    padding: 34px 38px 26px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+}
+
+/* ── Header ── */
+.about-head {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    margin-bottom: 22px;
+}
+
+.about-badge {
+    width: 58px;
+    height: 58px;
+    flex: 0 0 auto;
+    border-radius: 16px;
+    display: grid;
+    place-items: center;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--acc-bright);
+    background: var(--acc-dim);
+    border: 1px solid var(--glass-border-hover);
+}
+
+.about-name {
+    font-size: 27px;
+    font-weight: 800;
+    color: var(--tx-1);
+    margin: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+}
+
+.about-ver {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--acc-bright);
+    background: var(--acc-dim);
+    padding: 2px 9px;
+    border-radius: 999px;
+}
+
+.about-tagline {
+    margin: 6px 0 0;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--tx-2);
+}
+
+/* ── Meta pills ── */
+.about-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 26px;
+}
+
+.about-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12.5px;
+    color: var(--tx-2);
+    background: var(--glass-bg-strong);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 5px 12px;
+}
+
+.about-pill .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--st-green);
+    box-shadow: 0 0 0 3px var(--st-green-bg);
+}
+
+/* ── Sections ── */
+.about-section { margin-bottom: 26px; }
+
+.about-h2 {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--tx-faint);
+    margin: 0 0 14px;
+}
+
+/* ── Author ── */
+.about-author {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.about-author-avatar {
+    width: 46px;
+    height: 46px;
+    flex: 0 0 auto;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--tx-1);
+    background: var(--st-blue-bg);
+    border: 1px solid var(--line-strong);
+}
+
+.about-author-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--tx-1);
+}
+
+.about-author-links {
+    font-size: 13px;
+    color: var(--tx-3);
+    margin-top: 2px;
+}
+
+.about-author-links a {
+    color: var(--acc-bright);
+    text-decoration: none;
+}
+
+.about-author-links a:hover { text-decoration: underline; }
+.about-author-links .sep { margin: 0 8px; color: var(--tx-faint); }
+
+.about-note {
+    margin: 14px 0 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--tx-3);
+}
+
+/* ── Changelog ── */
+.about-changelog {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.about-release {
+    border-left: 2px solid var(--line-strong);
+    padding-left: 16px;
+}
+
+.about-release-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 7px;
+}
+
+.about-release-ver {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--tx-1);
+}
+
+.about-release-date {
+    font-size: 12px;
+    color: var(--tx-faint);
+}
+
+.about-release-list {
+    margin: 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.about-release-list li {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--tx-2);
+}
+
+/* ── Footer ── */
+.about-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 28px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+}
+
+.about-back {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--tx-2);
+    background: var(--glass-bg-strong);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: color .15s, border-color .15s;
+}
+
+.about-back:hover { color: var(--tx-1); border-color: var(--line-strong); }
+
+.about-copy {
+    font-size: 12px;
+    color: var(--tx-faint);
+}
+
+@media (max-width: 560px) {
+    .about-card { padding: 26px 22px 20px; }
+    .about-head { flex-direction: column; align-items: flex-start; gap: 12px; }
+}
