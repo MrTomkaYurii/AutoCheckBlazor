@@ -13,6 +13,8 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       # Only Caddy (on the pinned subnet below) may set X-Forwarded-Proto/-For.
       - ForwardedHeaders__KnownNetworks=172.28.0.0/16
+      # Default teacher/student password (empty ⇒ code fallback). Set to rotate securely.
+      - Seed__DefaultPassword=${SEED_DEFAULT_PASSWORD:-}
       - Gemini__ApiKey=${GEMINI_API_KEY}
       - Gemini__Model=${GEMINI_MODEL:-gemini-2.5-flash}
       - Gemini__DailyLimit=${GEMINI_DAILY_LIMIT:-50}

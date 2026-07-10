@@ -90,6 +90,7 @@ jobs:
             umask 077
             cat > .env <<EOF
             APP_DOMAIN=${{ secrets.APP_DOMAIN }}
+            SEED_DEFAULT_PASSWORD=${{ secrets.SEED_DEFAULT_PASSWORD }}
             GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
             GEMINI_MODEL=${{ vars.GEMINI_MODEL }}
             GEMINI_DAILY_LIMIT=${{ vars.GEMINI_DAILY_LIMIT }}

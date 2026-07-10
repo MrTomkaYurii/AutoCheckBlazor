@@ -1,0 +1,119 @@
+@* Teacher-only structural code-similarity report. Students never see this. *@
+@inject CodeSimilarityService Sim
+
+<MudDialog>
+    <DialogContent>
+        <div class="glass dlg sim-dlg">
+
+            @* ── Header ── *@
+            <div class="dlg-head">
+                <div class="dlg-head-info">
+                    <h3 class="dlg-title">Схожість коду — @StudentName</h3>
+                    <div class="dlg-subline">
+                        <span class="mono">Lab@(LabNumber.ToString("D2"))</span>
+                        <span>· @LabTitle</span>
+                        <span class="sim-teacher-only">лише для викладача</span>
+                    </div>
+                </div>
+                <button @onclick="@(() => MudDialog.Close())" class="topbar-icon dlg-close"><Icon Name="x" Size="18" /></button>
+            </div>
+
+            @if (_loading)
+            {
+                <div class="loading-row"><span class="spinner"></span> Аналіз структури коду…</div>
+            }
+            else if (_similar.Count == 0)
+            {
+                <div class="panel-empty">Схожих робіт не знайдено 🎉</div>
+            }
+            else
+            {
+                <div class="sim-body">
+
+                    @* ── Top-N similar students ── *@
+                    <div class="sim-list">
+                        <div class="sim-list-head">Найсхожіші (топ @_similar.Count)</div>
+                        @foreach (var s in _similar)
+                        {
+                            <button class="sim-item @(s.StudentId == _selectedId ? "active" : "")"
+                                    @onclick="@(() => SelectAsync(s.StudentId))">
+                                <div class="sim-item-top">
+                                    <span class="sim-item-name">@s.Name</span>
+                                    <span class="mono sim-item-pct" style="color:@Tone(s.Percent)">@s.Percent%</span>
+                                </div>
+                                <div class="sim-item-meta">@s.Group</div>
+                                <div class="sim-bar"><div class="sim-bar-fill" style="width:@s.Percent%;background:@Tone(s.Percent)"></div></div>
+                            </button>
+                        }
+                        <div class="sim-note">
+                            Структурна схожість (стійка до перейменування змінних/методів).
+                            Високий % — привід переглянути код, а не автоматичний вирок.
+                        </div>
+                    </div>
+
+                    @* ── Side-by-side code with matched lines highlighted ── *@
+                    <div class="sim-code">
+                        @if (_overlap is null)
+                        {
+                            <div class="loading-row"><span class="spinner"></span> Порівняння…</div>
+                        }
+                        else
+                        {
+                            <div class="sim-code-head">
+                                <span class="mono" style="color:@Tone(_overlap.Percent)">@_overlap.Percent% збігу</span>
+                                <span>· підсвічені рядки збігаються структурно з <b>@_overlap.StudentName</b></span>
+                            </div>
+                            <div class="sim-cols">
+                                <div class="sim-col">
+                                    <div class="sim-col-head">@StudentName</div>
+                                    <pre class="sim-pre">@foreach (var l in _overlap.Target)
+{<span class="sim-line @(l.Matched ? "hit" : "")">@(l.Text.Length == 0 ? " " : l.Text)</span>
+}</pre>
+                                </div>
+                                <div class="sim-col">
+                                    <div class="sim-col-head">@_overlap.StudentName</div>
+                                    <pre class="sim-pre">@foreach (var l in _overlap.Other)
+{<span class="sim-line @(l.Matched ? "hit" : "")">@(l.Text.Length == 0 ? " " : l.Text)</span>
+}</pre>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public int StudentId { get; set; }
+    [Parameter] public int LabNumber { get; set; }
+    [Parameter] public string StudentName { get; set; } = "";
+    [Parameter] public string LabTitle { get; set; } = "";
+
+    private bool _loading = true;
+    private List<SimilarStudent> _similar = [];
+    private int _selectedId;
+    private CodeOverlap? _overlap;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _similar = await Sim.FindSimilarAsync(LabNumber, StudentId, 7);
+        _loading = false;
+        if (_similar.Count > 0)
+            await SelectAsync(_similar[0].StudentId);
+    }
+
+    private async Task SelectAsync(int otherId)
+    {
+        _selectedId = otherId;
+        _overlap = null;
+        StateHasChanged();
+        _overlap = await Sim.GetOverlapAsync(LabNumber, StudentId, otherId);
+        StateHasChanged();
+    }
+
+    private static string Tone(int pct) =>
+        pct >= 70 ? "var(--st-red)" : pct >= 40 ? "var(--st-yellow)" : "var(--st-green)";
+}

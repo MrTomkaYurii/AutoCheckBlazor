@@ -21,6 +21,10 @@
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="9.0.11" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="9.0.11" />
     <PackageReference Include="Markdig" Version="0.38.0" />
+    <!-- Roslyn — structural (rename-resistant) code-similarity detection.
+         Pinned to 4.8.0 to match the version already in the transitive graph (avoids NU1608);
+         only basic ParseText/token APIs are used, stable across Roslyn versions. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
     <!-- Force the patched native SQLite bundle — transitive resolution otherwise pins the
          vulnerable 2.1.10 (NU1903 / GHSA-2m69-gcr7-jv3q); 3.x ships the fixed e_sqlite3. -->
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />

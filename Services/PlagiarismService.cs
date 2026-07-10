@@ -27,7 +27,8 @@ public class PlagiarismService(IDbContextFactory<AppDbContext> dbf)
                 TaskResults = s.TaskResults.Select(tr => new
                 {
                     tr.AttemptNo,
-                    Lines = tr.DiffLines.Where(d => d.Type == "add").Select(d => d.Text).ToList(),
+                    Add = tr.DiffLines.Where(d => d.Type == "add").Select(d => d.Text).ToList(),
+                    Ctx = tr.DiffLines.Where(d => d.Type == "ctx").Select(d => d.Text).ToList(),
                 }).ToList(),
             })
             .ToListAsync();
@@ -37,11 +38,14 @@ public class PlagiarismService(IDbContextFactory<AppDbContext> dbf)
         var subs = rawSubs.Select(s =>
         {
             var latest = s.TaskResults.Count > 0 ? s.TaskResults.Max(tr => tr.AttemptNo) : 0;
-            return new
-            {
-                s.StudentId, s.Name, s.Group,
-                Lines = s.TaskResults.Where(tr => tr.AttemptNo == latest).SelectMany(tr => tr.Lines).ToList(),
-            };
+            var results = s.TaskResults.Where(tr => tr.AttemptNo == latest).ToList();
+            var add = results.SelectMany(tr => tr.Add).ToList();
+            // Commit-mapped submissions expose their code as diff "add" lines; a
+            // submission graded WITHOUT a commit map stores it as "ctx" (context) lines.
+            // Fall back to ctx so those full-file copies stay comparable — otherwise a
+            // student can dodge the check simply by not mapping commits.
+            var lines = add.Count > 0 ? add : results.SelectMany(tr => tr.Ctx).ToList();
+            return new { s.StudentId, s.Name, s.Group, Lines = lines };
         }).ToList();
 
         // normalize: drop whitespace; skip short/trivial lines (braces, usings…)
@@ -79,6 +83,41 @@ public class PlagiarismService(IDbContextFactory<AppDbContext> dbf)
     private static string Normalize(string line) =>
         new(line.Where(c => !char.IsWhiteSpace(c)).ToArray());
 
+    public record RepoConflict(string StudentName, string Group);
+
+    /// <summary>
+    /// Repository-substitution guard: is another student's profile pointing at the
+    /// SAME GitHub repo as this one? Legit students each have their own repo/fork, so a
+    /// shared URL means one student put another's repository in their profile.
+    /// Returns the first conflicting student, or null.
+    /// </summary>
+    public async Task<RepoConflict?> FindSharedRepoAsync(int studentId, string repoUrl)
+    {
+        var mine = NormalizeRepo(repoUrl);
+        if (string.IsNullOrEmpty(mine)) return null;
+
+        await using var db = await dbf.CreateDbContextAsync();
+        var others = await db.Students.AsNoTracking()
+            .Where(s => s.Id != studentId && s.Github != "")
+            .Select(s => new { s.LastName, s.FirstName, s.Group, s.Github })
+            .ToListAsync();
+
+        var hit = others.FirstOrDefault(o => NormalizeRepo(o.Github) == mine);
+        return hit is null ? null : new RepoConflict(hit.LastName + " " + hit.FirstName, hit.Group);
+    }
+
+    /// <summary>owner/repo, case-insensitive, without scheme/host/.git — for comparing two URLs.</summary>
+    private static string NormalizeRepo(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return "";
+        var s = raw.Trim().ToLowerInvariant()
+            .Replace("https://", "").Replace("http://", "").Replace("www.", "")
+            .TrimEnd('/');
+        if (s.StartsWith("github.com/")) s = s["github.com/".Length..];
+        if (s.EndsWith(".git")) s = s[..^4];
+        return s;
+    }
+
     public record ExactMatch(string StudentName, string Group, double Containment);
 
     /// <summary>
@@ -105,7 +144,8 @@ public class PlagiarismService(IDbContextFactory<AppDbContext> dbf)
                 TaskResults = s.TaskResults.Select(tr => new
                 {
                     tr.AttemptNo,
-                    Lines = tr.DiffLines.Where(d => d.Type == "add").Select(d => d.Text).ToList(),
+                    Add = tr.DiffLines.Where(d => d.Type == "add").Select(d => d.Text).ToList(),
+                    Ctx = tr.DiffLines.Where(d => d.Type == "ctx").Select(d => d.Text).ToList(),
                 }).ToList(),
             })
             .ToListAsync();
@@ -115,11 +155,10 @@ public class PlagiarismService(IDbContextFactory<AppDbContext> dbf)
         var others = rawOthers.Select(s =>
         {
             var latest = s.TaskResults.Count > 0 ? s.TaskResults.Max(tr => tr.AttemptNo) : 0;
-            return new
-            {
-                s.Name, s.Group,
-                Lines = s.TaskResults.Where(tr => tr.AttemptNo == latest).SelectMany(tr => tr.Lines).ToList(),
-            };
+            var results = s.TaskResults.Where(tr => tr.AttemptNo == latest).ToList();
+            var add = results.SelectMany(tr => tr.Add).ToList();
+            var lines = add.Count > 0 ? add : results.SelectMany(tr => tr.Ctx).ToList();
+            return new { s.Name, s.Group, Lines = lines };
         }).ToList();
 
         ExactMatch? best = null;

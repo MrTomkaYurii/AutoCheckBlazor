@@ -124,6 +124,7 @@ builder.Services.AddSingleton<GradingQueueService>();
 builder.Services.AddSingleton<EmailService>();
 builder.Services.AddSingleton<TokenProtector>();
 builder.Services.AddScoped<PlagiarismService>();
+builder.Services.AddScoped<CodeSimilarityService>();
 builder.Services.AddHostedService<DeadlineReminderService>();
 builder.Services.AddHostedService<BackupService>();
 builder.Services.AddSingleton<TeacherNotificationService>();

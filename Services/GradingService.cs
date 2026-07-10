@@ -68,6 +68,46 @@ public class GradingService(
             throw new InvalidOperationException(
                 "Система перевірки наразі недоступна. Зверніться до викладача.");
 
+        // ── Repository-substitution guard (fail fast, before the queue/Gemini) ──
+        // If another student's profile points at the SAME repo (submitting with a
+        // classmate's repository), this is a hard integrity fail: reject the lab, zero
+        // the defense and final grade, and consume the attempt. Teacher approval
+        // (PlagiarismApproved) bypasses it — used to clear an innocent owner whose URL
+        // was copied by a cheater (both collide, so the teacher decides who is legit).
+        if (!sub.PlagiarismApproved && !string.IsNullOrWhiteSpace(sub.Student.Github))
+        {
+            var repoConflict = await plagiarism.FindSharedRepoAsync(studentId, sub.Student.Github);
+            if (repoConflict != null)
+            {
+                var idx = sub.AttemptsUsed;
+                if      (idx == 0) sub.Attempt1Score = 0;
+                else if (idx == 1) sub.Attempt2Score = 0;
+                else if (idx == 2) sub.Attempt3Score = 0;
+                sub.AttemptsUsed++;
+                sub.SubmittedAt  = DateTime.UtcNow;
+                sub.Status       = (int)LabStatus.Rejected;
+                sub.AutoScore    = null;
+                sub.DefenseScore = 0;   // fail the defense
+                sub.FinalScore   = 0;
+                sub.PlagiarismFlag = true;
+                sub.PlagiarismNote = $"Підміна репозиторію — той самий репозиторій, що й у: {repoConflict.StudentName} ({repoConflict.Group})";
+                db.GradeAudits.Add(new GradeAudit
+                {
+                    SubmissionId = sub.Id, Actor = "система", Action = "repo-conflict",
+                    NewValue = sub.PlagiarismNote,
+                });
+                await db.SaveChangesAsync(ct);
+                await notif.SendAsync(studentId,
+                    $"Lab{sub.LabDef.Number:D2}: здачу відхилено",
+                    "Ваш GitHub-репозиторій збігається з репозиторієм іншого студента. " +
+                    "Лабораторну відхилено, захист провалено. Зверніться до викладача.",
+                    "grading");
+                throw new InvalidOperationException(
+                    "Здачу відхилено: вказаний репозиторій уже використовує інший студент. " +
+                    "Лабораторну відхилено, захист провалено. Спробу витрачено. Зверніться до викладача.");
+            }
+        }
+
         // One grading at a time — the rest wait in line
         using var _queueSlot = await queue.EnterAsync(progress, ct);
 
@@ -137,9 +177,15 @@ public class GradingService(
         {
             progress?.Report("Перевірка на збіги з іншими роботами…");
             // ParseDiff strips the +/- diff prefixes — the same form the stored
-            // DiffLines use, otherwise commit-mapped submissions never match
+            // DiffLines use, otherwise commit-mapped submissions never match.
+            // Use "add" lines (what the student wrote); fall back to "ctx" for
+            // non-mapped, full-file submissions — mirrors the corpus in PlagiarismService.
             var candidateLines = taskInputs.SelectMany(t =>
-                ParseDiff(t.Code).Where(d => d.Type is "add" or "ctx").Select(d => d.Text));
+            {
+                var parsed = ParseDiff(t.Code);
+                var add = parsed.Where(d => d.Type == "add").Select(d => d.Text).ToList();
+                return add.Count > 0 ? add : parsed.Where(d => d.Type == "ctx").Select(d => d.Text).ToList();
+            });
             var match = await plagiarism.FindExactMatchAsync(lab.Id, studentId, candidateLines);
             if (match != null)
             {

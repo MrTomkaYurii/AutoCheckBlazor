@@ -27,7 +27,7 @@ public static class LabMdParser
             title = h1.Groups[1].Value.Trim();
             title = Regex.Replace(title, @"^Лаба\s+\d+\s+[—–]\s+", "");
             title = Regex.Replace(title, @"^Лабораторна робота №?\s*\d+[.\s]+", "");
-            title = title.Trim();
+            title = Unescape(title.Trim());
         }
 
         // ## Мета → goal
@@ -48,7 +48,7 @@ public static class LabMdParser
         {
             var m = hits[i];
             int num = int.Parse(m.Groups[1].Value);
-            string taskTitle = m.Groups[2].Value.Trim().Replace("`", "");
+            string taskTitle = Unescape(m.Groups[2].Value.Trim()).Replace("`", "");
             int diff = m.Groups[3].Value.Count(c => c == '⭐');
             if (diff == 0) diff = 1;
 
@@ -69,4 +69,10 @@ public static class LabMdParser
 
         return new(title, goal, branch, merges, tasks);
     }
+
+    // Markdown escapes like `List\<T\>` are required inside the .md body (so Markdig
+    // renders `<T>` instead of eating it as an HTML tag), but titles are shown as
+    // PLAIN text — there the backslashes leak. Strip the escape for display fields.
+    private static string Unescape(string s) =>
+        Regex.Replace(s, @"\\([\\`*_{}\[\]()#+\-.!<>|])", "$1");
 }

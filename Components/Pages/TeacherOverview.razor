@@ -98,6 +98,7 @@
                             </div>
                             <span class="qrow-time">@q.When</span>
                             <button class="btn btn-ghost btn-sm qrow-action" title="Переглянути результати автоперевірки" @onclick:stopPropagation @onclick="@(() => OpenResults(q.StudentId, q.LabId))"><Icon Name="search" Size="14" />Результати</button>
+                            <button class="btn btn-ghost btn-sm qrow-action" title="Структурна схожість коду з іншими студентами (лише для викладача)" @onclick:stopPropagation @onclick="@(() => OpenSimilarity(q))"><Icon Name="users" Size="14" />Схожість</button>
                             <button class="btn btn-outline btn-sm qrow-action" @onclick:stopPropagation @onclick="@(() => OpenGrade(q.StudentId, q.LabId))">Оцінити</button>
                         </div>
                     }
@@ -124,6 +125,7 @@
                         </div>
                         <span class="qrow-time">@q.When</span>
                         <button class="btn btn-ghost btn-sm qrow-action" title="Переглянути результати автоперевірки" @onclick:stopPropagation @onclick="@(() => OpenResults(q.StudentId, q.LabId))"><Icon Name="search" Size="14" />Результати</button>
+                        <button class="btn btn-ghost btn-sm qrow-action" title="Структурна схожість коду з іншими студентами (лише для викладача)" @onclick:stopPropagation @onclick="@(() => OpenSimilarity(q))"><Icon Name="users" Size="14" />Схожість</button>
                         <button class="btn btn-outline btn-sm qrow-action" @onclick:stopPropagation @onclick="@(() => OpenGrade(q.StudentId, q.LabId))">Оцінити</button>
                     </div>
                 }
@@ -270,5 +272,23 @@
         await dlg.Result;
         await LoadData();
         StateHasChanged();
+    }
+
+    // Teacher-only structural code-similarity report (students never see this).
+    private async Task OpenSimilarity(ReviewItem q)
+    {
+        var p = new DialogParameters
+        {
+            ["StudentId"]   = q.StudentId,
+            ["LabNumber"]   = q.LabId,
+            ["StudentName"] = q.Name,
+            ["LabTitle"]    = q.LabTitle,
+        };
+        var opt = new DialogOptions
+        {
+            BackdropClick = true, NoHeader = true,
+            MaxWidth = MaxWidth.Large, FullWidth = true,
+        };
+        await Dialog.ShowAsync<AutoCheck.Components.Dialogs.SimilarityDialog>("", p, opt);
     }
 }

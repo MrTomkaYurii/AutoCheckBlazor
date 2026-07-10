@@ -15,6 +15,7 @@ public class DatabaseSeeder(
     RoleManager<IdentityRole> roleManager,
     IAuthService auth,
     IWebHostEnvironment env,
+    IConfiguration cfg,
     ILogger<DatabaseSeeder> log)
 {
     public async Task SeedAsync()
@@ -70,8 +71,14 @@ public class DatabaseSeeder(
 
         if (!await db.Labs.AnyAsync())     await SeedLabsAsync();
         if (!await db.Groups.AnyAsync())   await SeedGroupsAsync();
-        if (!await db.Teachers.AnyAsync()) await SeedTeachersAsync();
-        if (!await db.Students.AnyAsync()) await SeedStudentsAsync();
+
+        // Demo teacher + fake students/submissions are for LOCAL DEVELOPMENT only —
+        // production must start clean (real accounts only, no fabricated roster).
+        if (env.IsDevelopment())
+        {
+            if (!await db.Teachers.AnyAsync()) await SeedTeachersAsync();
+            if (!await db.Students.AnyAsync()) await SeedStudentsAsync();
+        }
 
         await SeedIdentityAsync();
 
@@ -103,15 +110,38 @@ public class DatabaseSeeder(
             await EnsureAccountAsync("teacher@test.com", "Test1234!", "teacher", "Олена", "Ковальчук");
             await EnsureAccountAsync("student@test.com", "Test1234!", "student", "Петро", "Іваненко");
         }
-        else if ((await userManager.GetUsersInRoleAsync("teacher")).Count == 0)
+        else
         {
-            // production bootstrap: one teacher with a random password, printed once
-            var password = "adm-" + Guid.NewGuid().ToString("N")[..10];
-            await EnsureAccountAsync("teacher@test.com", password, "teacher", "Олена", "Ковальчук");
-            log.LogWarning(
-                "Створено початковий акаунт викладача: teacher@test.com / {Password} — " +
-                "увійдіть і одразу змініть email та пароль у Кабінеті.", password);
+            await SeedDefaultAccountsAsync();
         }
+    }
+
+    // ── Production default accounts ────────────────────────────────────────
+    // Real teacher + student created on first production boot. The password comes from
+    // Seed:DefaultPassword (set SEED_DEFAULT_PASSWORD in the deploy secrets to override);
+    // the committed fallback works out of the box — CHANGE IT after first login.
+    private async Task SeedDefaultAccountsAsync()
+    {
+        var password = cfg["Seed:DefaultPassword"];
+        if (string.IsNullOrEmpty(password)) password = "VAItoma1983nocu13";
+
+        const string teacherEmail = "tomka.yurii@gmail.com";
+        const string studentEmail = "tomka.yuriy@gmail.com";
+
+        // Pre-create the teacher record with the right title so LinkTeacher matches it by email.
+        if (!await db.Teachers.AnyAsync(t => t.Email == teacherEmail))
+        {
+            db.Teachers.Add(new TeacherRecord
+            {
+                FirstName = "Юрій", LastName = "Томка", Initials = "ЮТ",
+                Title = "Доцент кафедри комп'ютерних наук", Course = "ООП на C#",
+                Email = teacherEmail,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await EnsureAccountAsync(teacherEmail, password, "teacher", "Юрій", "Томка");
+        await EnsureAccountAsync(studentEmail, password, "student", "Юрій", "Томка");
     }
 
     private async Task EnsureAccountAsync(string email, string password, string role,
