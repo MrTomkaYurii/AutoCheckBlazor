@@ -10,7 +10,7 @@ public static class AppInfo
 {
     public const string Name         = "AutoCheck";
     public const string Version      = "1.0.0";
-    public const string AcademicYear = "2025–2026";
+    public const string AcademicYear = "2026–2027";
     public const string Author       = "Tomka Yurii";
     public const string AuthorEmail  = "tomka.yuriy@gmail.com";
     public const string Repo         = "https://github.com/MrTomkaYurii/AutoCheckBlazor";
@@ -25,8 +25,8 @@ public static class AppInfo
     /// <summary>Newest first.</summary>
     public static readonly Release[] Changelog =
     [
-        new("1.0.0", "Липень 2026", [
-            "Перший публічний реліз — запуск у 2025–2026 навчальному році",
+        new("1.0.0", "2026", [
+            "Перший публічний реліз — запуск у 2026–2027 навчальному році",
             "Авто-перевірка коду через Gemini: git clone → витяг коду завдань → оцінка за вимогами",
             "Виявлення плагіату та підміни репозиторію між студентами",
             "Кабінет викладача: черга перевірки, журнал оцінок, аналітика, керування лабами й групами",

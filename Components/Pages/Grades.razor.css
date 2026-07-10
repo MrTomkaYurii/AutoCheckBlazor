@@ -237,6 +237,17 @@ thead tr {
     color: var(--acc-bright);
 }
 
+.progress-note-link {
+    color: var(--acc-bright);
+    text-decoration: none;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.progress-note-link:hover {
+    text-decoration: underline;
+}
+
 .avg-block {
     flex: none;
     display: flex;

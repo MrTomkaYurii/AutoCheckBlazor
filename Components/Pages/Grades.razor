@@ -11,7 +11,7 @@
     @* summary stat strip *@
     <div class="stat-strip">
         <StatCard Icon="target" Tone="var(--acc)" Value="@AvgStr" Label="Середній бал" Sub="по фінальних оцінках" />
-        <StatCard Icon="check" Tone="var(--st-green)" Value="@($"{Done} / {Rows.Count}")" Label="Зараховано" Sub="@($"мінімум {Needed} для заліку")" />
+        <StatCard Icon="trophy" Tone="var(--st-green)" Value="@Fmt(_bd.TotalEarned)" Label="Балів за курс" Sub="@($"з {Fmt(_bd.Threshold)} для допуску до екзамену")" />
         <StatCard Icon="spark" Tone="var(--st-yellow)" Value="@AvgAuto.ToString()" Label="Сер. авто-оцінка" Sub="точність коду" />
         <StatCard Icon="trophy" Tone="var(--st-blue)" Value="@Best.Final.ToString()" Label="Найкраща лаба" Sub="@($"Lab{Best.Id:D2} · {Best.Title}")" />
     </div>
@@ -93,33 +93,37 @@
         </div>
     </section>
 
-    @* залік progress *@
+    @* exam-admission progress (points) *@
     <section class="glass progress-card">
         <div class="progress-glow"></div>
         <div class="progress-inner">
             <div class="progress-text-block">
                 <div class="progress-head">
                     <Icon Name="flame" Size="19" Style="color:var(--acc)" Fill="true" />
-                    <h3 class="progress-head-title">Прогрес до заліку</h3>
-                    @if (Done >= Needed)
+                    <h3 class="progress-head-title">Прогрес до допуску до екзамену</h3>
+                    @if (_bd.Admitted)
                     {
                         <span class="badge badge-green"><span class="dot"></span>Допуск отримано</span>
                     }
                     else
                     {
-                        <span class="badge badge-yellow"><span class="dot pulse"></span>Ще @(Needed - Done) лаб</span>
+                        <span class="badge badge-yellow"><span class="dot pulse"></span>ще @Fmt(_bd.Remaining) балів</span>
                     }
                 </div>
                 <div class="progress-legend">
-                    <span><b class="progress-legend-done">@Done</b> зараховано</span>
-                    <span class="mono faint">поріг заліку: @Needed</span>
-                    <span>усього @Rows.Count</span>
+                    <span><b class="progress-legend-done">@Fmt(_bd.TotalEarned)</b> набрано</span>
+                    <span class="mono faint">поріг: @Fmt(_bd.Threshold)</span>
+                    <span>максимум @Fmt(_bd.TotalMax)</span>
                 </div>
                 <div class="progress-bar-wrap">
-                    <Progress Value="@(100.0 * Done / Rows.Count)" />
-                    <span class="progress-threshold" style="left:calc(@(100.0 * Needed / Rows.Count)% - 1px)"></span>
+                    <Progress Value="@_bd.Percent" />
+                    <span class="progress-threshold" style="left:calc(@(_bd.Threshold.ToString("0", Inv))% - 1px)"></span>
                 </div>
-                <p class="progress-note">Для допуску до заліку потрібно <b class="progress-note-strong">@Needed</b> зарахованих лабораторних. У тебе вже <b class="progress-note-accent">@Done</b> — продовжуй у тому ж темпі! 🎯</p>
+                <p class="progress-note">
+                    Ви набрали <b class="progress-note-accent">@Fmt(_bd.TotalEarned)</b> балів
+                    з <b class="progress-note-strong">@Fmt(_bd.Threshold)</b> необхідних для допуску до екзамену.
+                    <a href="/student/points" class="progress-note-link">Детальна розбаловка →</a>
+                </p>
             </div>
             <div class="avg-block">
                 <div class="avg-value-wrap">
@@ -138,19 +142,24 @@
 </div>
 
 @code {
+    private static readonly System.Globalization.CultureInfo Inv = System.Globalization.CultureInfo.InvariantCulture;
+
     private List<Lab> Rows = [];
-    private const int Needed = 7;
+    private PointsBreakdown _bd = new();
 
     protected override async Task OnInitializedAsync()
     {
         // default parameter = student #1 — must pass the logged-in student's id
-        Rows = await Data.GetStudentLabsAsync(App.StudentDbId ?? 1);
+        var sid = App.StudentDbId ?? 1;
+        Rows = await Data.GetStudentLabsAsync(sid);
+        _bd  = await Data.GetPointsBreakdownAsync(sid);
     }
+
+    private static string Fmt(double v) => v.ToString("0.0", Inv);
 
     private List<int> Finals => Rows.Where(r => r.Final.HasValue).Select(r => r.Final!.Value).ToList();
     private double Avg    => Finals.Count > 0 ? Finals.Average() : 0;
     private string AvgStr => Avg.ToString("0.0");
-    private int Done      => Rows.Count(r => r.Status == LabStatus.Done);
     private int AvgAuto   => Rows.Any(r => r.Auto.HasValue)
         ? (int)Math.Round(Rows.Where(r => r.Auto.HasValue).Average(r => r.Auto!.Value))
         : 0;

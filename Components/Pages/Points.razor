@@ -1,0 +1,172 @@
+@page "/student/points"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "student")]
+@inject IDataService Data
+@inject AppState App
+
+<TopBar Title="Бали за курс" Sub="Розбаловка по всіх лабораторних — скільки можна набрати і скільки набрано" />
+
+<div class="screen-anim page">
+
+    @* ── Headline: earned / threshold ──────────────────────────────────────── *@
+    <section class="glass pts-hero">
+        <div class="pts-hero-glow"></div>
+        <div class="pts-hero-inner">
+            <div class="pts-hero-text">
+                <div class="pts-hero-head">
+                    <Icon Name="target" Size="19" Style="color:var(--acc)" />
+                    <h3 class="pts-hero-title">Допуск до екзамену</h3>
+                    @if (_bd.Admitted)
+                    {
+                        <span class="badge badge-green"><span class="dot"></span>Допуск отримано</span>
+                    }
+                    else
+                    {
+                        <span class="badge badge-yellow"><span class="dot pulse"></span>ще @Fmt(_bd.Remaining) балів</span>
+                    }
+                </div>
+
+                <p class="pts-hero-sub">
+                    Ви набрали <b class="pts-strong">@Fmt(_bd.TotalEarned)</b> балів
+                    з <b class="pts-strong">@Fmt(_bd.Threshold)</b> необхідних для допуску до екзамену.
+                </p>
+
+                <div class="pts-bar-wrap">
+                    <Progress Value="@_bd.Percent" />
+                    <span class="pts-threshold" style="left:calc(@(_bd.Threshold.ToString("0", Inv))% - 1px)"></span>
+                </div>
+                <div class="pts-legend">
+                    <span><b class="pts-legend-earned">@Fmt(_bd.TotalEarned)</b> набрано</span>
+                    <span class="mono faint">поріг допуску: @Fmt(_bd.Threshold)</span>
+                    <span>максимум @Fmt(_bd.TotalMax)</span>
+                </div>
+            </div>
+
+            <div class="pts-ring-block">
+                <div class="mono tnum pts-ring-value">@_bd.Percent.ToString("0", Inv)%</div>
+                <div class="pts-ring-label">з 100 можливих</div>
+            </div>
+        </div>
+    </section>
+
+    @* ── Breakdown table ───────────────────────────────────────────────────── *@
+    <section class="glass table-card">
+        <div class="table-head">
+            <Icon Name="grades" Size="18" Style="color:var(--acc)" />
+            <h3 class="table-title">Розбаловка по лабораторних</h3>
+            <span class="mono table-updated">100 балів за курс</span>
+        </div>
+
+        <p class="pts-note">
+            💡 Загальні 100 балів розподілені між лабами пропорційно сумарній складності завдань (⭐).
+            Розбивка по <b>окремих завданнях</b> — гіпотетична, для наочності: викладач оцінює лабораторну
+            <b>цілісно</b>, а не кожне завдання окремо (розбивка враховується лише при авто-перевірці).
+        </p>
+
+        <div class="table-scroll">
+            <table class="pts-table">
+                <thead>
+                    <tr>
+                        <th class="th-lab">Лабораторна</th>
+                        <th class="th-num">Завдань</th>
+                        <th class="th-num">Макс. балів</th>
+                        <th class="th-num">Фінальна</th>
+                        <th class="th-num">Набрано</th>
+                        <th class="th-num">% взято</th>
+                        <th class="th-status">Статус</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var l in _bd.Labs)
+                    {
+                        var open = _open.Contains(l.Number);
+                        var locked = l.Status == LabStatus.Locked;
+                        <tr class="pts-row" @onclick="@(() => Toggle(l.Number))" style="opacity:@(locked ? "0.55" : "1")">
+                            <td class="cell-lab">
+                                <div class="cell-lab-inner">
+                                    <span class="pts-caret" style="transform:rotate(@(open ? "90" : "0")deg)">›</span>
+                                    <span class="mono lab-number">@l.Number.ToString("D2")</span>
+                                    <span class="lab-title">@l.Title</span>
+                                </div>
+                            </td>
+                            <td class="cell-num mono">@l.TaskCount</td>
+                            <td class="cell-num mono pts-max">@Fmt(l.MaxPoints)</td>
+                            <td class="cell-num mono">@(l.Final is not null ? l.Final + "%" : "—")</td>
+                            <td class="cell-num mono pts-earned">@Fmt(l.Earned)</td>
+                            <td class="cell-num mono">
+                                <span style="color:@PctColor(l)">@l.Percent.ToString("0", Inv)%</span>
+                            </td>
+                            <td class="cell-status">
+                                @if (locked) { <span class="locked-label"><Icon Name="lock" Size="13" />Не здано</span> }
+                                else { <Badge Status="l.Status" /> }
+                            </td>
+                        </tr>
+
+                        @if (open)
+                        {
+                            <tr class="pts-subrow-wrap">
+                                <td colspan="7">
+                                    <div class="pts-subtable">
+                                        @if (l.Tasks.Count == 0)
+                                        {
+                                            <div class="pts-subempty">Немає окремих завдань у цій лабі.</div>
+                                        }
+                                        else
+                                        {
+                                            @foreach (var t in l.Tasks)
+                                            {
+                                                <div class="pts-subitem">
+                                                    <span class="mono pts-subnum">@t.Number</span>
+                                                    <span class="pts-subtitle">@t.Title</span>
+                                                    <span class="pts-subdiff">@(new string('⭐', Math.Max(t.Difficulty, 1)))</span>
+                                                    <span class="mono pts-subpts">@Fmt(t.MaxPoints) б</span>
+                                                </div>
+                                            }
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+                <tfoot>
+                    <tr class="pts-total-row">
+                        <td class="cell-lab"><b>Разом</b></td>
+                        <td class="cell-num mono">@_bd.Labs.Sum(l => l.TaskCount)</td>
+                        <td class="cell-num mono pts-max">@Fmt(_bd.TotalMax)</td>
+                        <td class="cell-num">—</td>
+                        <td class="cell-num mono pts-earned">@Fmt(_bd.TotalEarned)</td>
+                        <td class="cell-num mono">@_bd.Percent.ToString("0", Inv)%</td>
+                        <td class="cell-status"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </section>
+</div>
+
+@code {
+    private static readonly System.Globalization.CultureInfo Inv = System.Globalization.CultureInfo.InvariantCulture;
+
+    private PointsBreakdown _bd = new();
+    private readonly HashSet<int> _open = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _bd = await Data.GetPointsBreakdownAsync(App.StudentDbId ?? 1);
+    }
+
+    private void Toggle(int n)
+    {
+        if (!_open.Remove(n)) _open.Add(n);
+    }
+
+    private static string Fmt(double v) => v.ToString("0.0", Inv);
+
+    private static string PctColor(LabPoints l) => l.Percent switch
+    {
+        >= 80 => "var(--st-green)",
+        >= 50 => "var(--st-yellow)",
+        > 0   => "var(--st-red)",
+        _     => "var(--tx-faint)",
+    };
+}

@@ -11,6 +11,8 @@ public interface IDataService
     Task<List<Lab>> GetStudentLabsAsync(int studentId);
     /// <param name="attemptNo">Which attempt's results to load; null = latest attempt with results.</param>
     Task<LabDetail?> GetLabDetailAsync(int labNumber, int studentId, int? attemptNo = null);
+    /// <summary>Course-wide 100-point breakdown across all labs, weighted by task difficulty.</summary>
+    Task<PointsBreakdown> GetPointsBreakdownAsync(int studentId);
 
     // ── Teacher view ──────────────────────────────────────────────────────
     Task<Teacher> GetTeacherAsync();

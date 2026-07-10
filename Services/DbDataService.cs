@@ -112,6 +112,60 @@ public class DbDataService(IDbContextFactory<AppDbContext> dbf, TokenProtector t
         return detail;
     }
 
+    public async Task<PointsBreakdown> GetPointsBreakdownAsync(int studentId)
+    {
+        await using var db = await dbf.CreateDbContextAsync();
+        var labs = await db.Labs.Include(l => l.Tasks).OrderBy(l => l.Number).ToListAsync();
+        var subs = await db.Submissions.Where(x => x.StudentId == studentId).ToListAsync();
+        var subByLab = subs.ToDictionary(s => s.LabDefId);
+
+        // A lab's weight = Σ of its task difficulties (⭐). Difficulty 0/unset counts
+        // as 1 so every task carries some weight; an empty lab falls back to 1.
+        static int TaskW(LabTask t) => Math.Max(t.Difficulty, 1);
+        static int LabW(LabDef l) { var w = l.Tasks.Sum(TaskW); return w > 0 ? w : 1; }
+
+        double totalWeight = labs.Sum(LabW);
+        if (totalWeight <= 0) totalWeight = 1;
+
+        var bd = new PointsBreakdown();
+        foreach (var l in labs)
+        {
+            int w = LabW(l);
+            double maxPts = 100.0 * w / totalWeight;
+            var sub = subByLab.GetValueOrDefault(l.Id);
+            int? final = sub?.FinalScore;
+
+            var lp = new LabPoints
+            {
+                Number    = l.Number,
+                Title     = l.Title,
+                Status    = sub is null ? LabStatus.Locked : (LabStatus)sub.Status,
+                TaskCount = l.Tasks.Count,
+                Weight    = w,
+                MaxPoints = maxPts,
+                Auto      = sub?.AutoScore,
+                Final     = final,
+                // Earned only from a finalised (defended) grade — "по факту".
+                Earned    = maxPts * (final ?? 0) / 100.0,
+            };
+
+            foreach (var t in l.Tasks.OrderBy(t => t.Number))
+            {
+                lp.Tasks.Add(new TaskPoints
+                {
+                    Number     = t.Number,
+                    Title      = t.Title,
+                    Difficulty = t.Difficulty,
+                    MaxPoints  = maxPts * TaskW(t) / w,
+                });
+            }
+
+            bd.Labs.Add(lp);
+        }
+
+        return bd;
+    }
+
     // ── Teacher ───────────────────────────────────────────────────────────────
 
     // NOTE: seeding/tests only — returns an arbitrary first teacher. The logged-in
