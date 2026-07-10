@@ -50,8 +50,8 @@
                     <div class="guide-title">Пошта (SMTP) <span class="guide-tag rec">рекомендовано</span></div>
                     <div class="guide-desc">
                         Потрібна для email-сповіщень (нагадування про дедлайни) та звернень студентів.
-                        Задається у файлі <span class="mono">appsettings.json</span> → секція <span class="mono">Email</span>
-                        (<span class="mono">SmtpHost, SmtpUser, SmtpPassword, From</span>). Для Gmail — App Password.
+                        Налаштовується нижче — <b>Налаштування системи → Пошта (SMTP)</b>. Для Gmail — App Password.
+                        (Або через змінні середовища при деплої — значення з кабінету їх перекриває.)
                     </div>
                 </div>
             </div>
@@ -248,6 +248,26 @@
                     </div>
                 </div>
             </div>
+            @* Email subsection *@
+            <div class="subsection">
+                <div class="subsection-label">Пошта (SMTP)</div>
+                <div class="settings-row">
+                    <span class="settings-label">Статус</span>
+                    <span class="settings-value" style="color:@(string.IsNullOrEmpty(Cfg["Email:SmtpHost"]) ? "var(--tx-faint)" : "var(--st-green)")">
+                        @(string.IsNullOrEmpty(Cfg["Email:SmtpHost"]) ? "не налаштовано" : "налаштовано")
+                    </span>
+                </div>
+                <div class="settings-row">
+                    <span class="settings-label">Сервер</span>
+                    <span class="mono settings-value" style="font-size:12px;color:@(string.IsNullOrEmpty(Cfg["Email:SmtpHost"]) ? "var(--tx-faint)" : "var(--tx-1)")">
+                        @(string.IsNullOrEmpty(Cfg["Email:SmtpHost"]) ? "—" : $"{Cfg["Email:SmtpHost"]}:{Cfg["Email:SmtpPort"] ?? "587"}")
+                    </span>
+                </div>
+                <div class="settings-row">
+                    <span class="settings-label">Відправник</span>
+                    <span class="mono settings-value" style="font-size:12px">@(!string.IsNullOrEmpty(Cfg["Email:From"]) ? Cfg["Email:From"] : (string.IsNullOrEmpty(Cfg["Email:SmtpUser"]) ? "—" : Cfg["Email:SmtpUser"]))</span>
+                </div>
+            </div>
             @* Grading subsection *@
             <div class="subsection-last">
                 <div class="subsection-label">Перевірка</div>
@@ -275,6 +295,35 @@
                     <div class="field">
                         <label>Денний ліміт запитів</label>
                         <input class="input" type="number" min="1" max="1000" @bind="_geminiLimit" />
+                    </div>
+                </div>
+                <div class="subsection-label" style="margin-top:4px">Пошта (SMTP)</div>
+                <div class="field">
+                    <label>SMTP-сервер <span class="hint">(напр. smtp.gmail.com; порожньо = вимкнути пошту)</span></label>
+                    <input class="input mono" @bind="_smtpHost" placeholder="smtp.gmail.com" />
+                </div>
+                <div class="edit-grid-2">
+                    <div class="field">
+                        <label>Порт</label>
+                        <input class="input" type="number" min="1" max="65535" @bind="_smtpPort" />
+                    </div>
+                    <div class="field">
+                        <label>Користувач</label>
+                        <input class="input mono" @bind="_smtpUser" placeholder="you@gmail.com" />
+                    </div>
+                </div>
+                <div class="field">
+                    <label>Пароль <span class="hint">(для Gmail — App Password)</span></label>
+                    <input class="input mono" type="password" @bind="_smtpPassword" autocomplete="off" placeholder="••••••••" />
+                </div>
+                <div class="edit-grid-2">
+                    <div class="field">
+                        <label>Відправник (From)</label>
+                        <input class="input mono" @bind="_smtpFrom" placeholder="you@gmail.com" />
+                    </div>
+                    <div class="field">
+                        <label>Ім'я відправника</label>
+                        <input class="input" @bind="_smtpFromName" placeholder="AutoCheck" />
                     </div>
                 </div>
                 <div class="subsection-label" style="margin-top:4px">Перевірка</div>
@@ -519,6 +568,8 @@
     private bool   _settingsEdit, _savingSettings;
     private string _geminiKey = "", _geminiModel = "", _workRoot = "", _settingsMsg = "";
     private int    _geminiLimit;
+    private string _smtpHost = "", _smtpUser = "", _smtpPassword = "", _smtpFrom = "", _smtpFromName = "AutoCheck";
+    private int    _smtpPort = 587;
 
     // ── Lab attempts ──────────────────────────────────────────────────────────
     private sealed class LabAttemptsRow
@@ -748,6 +799,14 @@
         _geminiModel = Cfg["Gemini:Model"]   ?? "gemini-2.5-flash";
         _geminiLimit = int.TryParse(Cfg["Gemini:DailyLimit"], out var v) ? v : 50;
         _workRoot    = Cfg["Grading:WorkRoot"] ?? "";
+        // Pre-fill with the currently-effective values (which include a GitHub-secret
+        // env var if set) — saving copies them into the override file, which then wins.
+        _smtpHost     = Cfg["Email:SmtpHost"] ?? "";
+        _smtpPort     = int.TryParse(Cfg["Email:SmtpPort"], out var sp) ? sp : 587;
+        _smtpUser     = Cfg["Email:SmtpUser"] ?? "";
+        _smtpPassword = Cfg["Email:SmtpPassword"] ?? "";
+        _smtpFrom     = Cfg["Email:From"] ?? "";
+        _smtpFromName = Cfg["Email:FromName"] ?? "AutoCheck";
     }
 
     // ── Toggle helpers ────────────────────────────────────────────────────────
@@ -937,6 +996,13 @@
                 node["Gemini"]!["DailyLimit"] = _geminiLimit > 0 ? _geminiLimit : 50;
                 node["Grading"] ??= new System.Text.Json.Nodes.JsonObject();
                 node["Grading"]!["WorkRoot"]  = _workRoot.Trim();
+                node["Email"] ??= new System.Text.Json.Nodes.JsonObject();
+                node["Email"]!["SmtpHost"]     = _smtpHost.Trim();
+                node["Email"]!["SmtpPort"]     = _smtpPort > 0 ? _smtpPort : 587;
+                node["Email"]!["SmtpUser"]     = _smtpUser.Trim();
+                node["Email"]!["SmtpPassword"] = _smtpPassword;
+                node["Email"]!["From"]         = _smtpFrom.Trim();
+                node["Email"]!["FromName"]     = string.IsNullOrWhiteSpace(_smtpFromName) ? "AutoCheck" : _smtpFromName.Trim();
             });
             _settingsMsg = "ok:Налаштування збережено та застосовано";
         }
