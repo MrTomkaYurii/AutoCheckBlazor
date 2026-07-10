@@ -6,7 +6,11 @@ COPY AutoCheck.csproj .
 RUN dotnet restore AutoCheck.csproj
 
 COPY . .
-RUN dotnet publish AutoCheck.csproj -c Release -o /app/publish --no-restore
+# NOTE: no --no-restore here. With a csproj-only `restore` above followed by
+# `publish --no-restore`, the SDK drops the Blazor framework static web assets
+# (_framework/blazor.web.js et al.) → the app 404s the script and the circuit never
+# starts. Letting publish run its own restore (NuGet is already cached) fixes it.
+RUN dotnet publish AutoCheck.csproj -c Release -o /app/publish
 
 # ── Runtime stage ────────────────────────────────────────────────────────────
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
