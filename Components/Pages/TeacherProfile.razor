@@ -30,6 +30,12 @@
         </div>
 
         <div class="guide-body">
+            <div class="guide-intro">
+                Ці параметри бачить і змінює <b>лише викладач</b> — усе заповнюється тут, у кабінеті.
+                Якщо лишити порожнім, використається значення, задане при розгортанні (секрет);
+                щойно впишете своє — воно перекриває секрет і зберігається між перезапусками.
+            </div>
+
             @* 1. Gemini — обов'язково *@
             <div class="guide-item">
                 <span class="guide-status @(HasGemini ? "g-ok" : "g-warn")"><Icon Name="@(HasGemini ? "check" : "warn")" Size="13" /></span>
@@ -38,7 +44,7 @@
                     <div class="guide-desc">
                         Без нього авто-перевірка коду не працює. Отримайте безкоштовний ключ у Google AI Studio
                         (<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>)
-                        і вставте його нижче — <b>Налаштування системи → API ключ</b>.
+                        і впишіть у <b>Налаштування системи → API ключ</b> (нижче).
                     </div>
                 </div>
             </div>
@@ -50,8 +56,7 @@
                     <div class="guide-title">Пошта (SMTP) <span class="guide-tag rec">рекомендовано</span></div>
                     <div class="guide-desc">
                         Потрібна для email-сповіщень (нагадування про дедлайни) та звернень студентів.
-                        Налаштовується нижче — <b>Налаштування системи → Пошта (SMTP)</b>. Для Gmail — App Password.
-                        (Або через змінні середовища при деплої — значення з кабінету їх перекриває.)
+                        Впишіть свій сервер у <b>Налаштування системи → Пошта (SMTP)</b> (нижче). Для Gmail — App Password.
                     </div>
                 </div>
             </div>
@@ -63,7 +68,7 @@
                     <div class="guide-title">Email для звернень <span class="guide-tag info mono">@FeedbackEmail</span></div>
                     <div class="guide-desc">
                         Куди надходять повідомлення з форми «Підтримка» у студентів.
-                        Змінюється в <span class="mono">appsettings.json</span> → <span class="mono">Feedback:Email</span>.
+                        Змінюється у <b>Налаштування системи → Пошта → Email для звернень</b>.
                         Працює лише разом із налаштованим SMTP (пункт вище).
                     </div>
                 </div>
@@ -75,9 +80,8 @@
                 <div class="guide-text">
                     <div class="guide-title">Вхід через Google <span class="guide-tag opt">опційно</span></div>
                     <div class="guide-desc">
-                        Кнопка «Увійти через Google» на сторінці входу. Вимкнена, поки порожньо.
-                        Вмикається в <span class="mono">appsettings.json</span> → <span class="mono">Authentication:Google</span>
-                        (<span class="mono">ClientId, ClientSecret</span>).
+                        Кнопка «Увійти через Google» на сторінці входу — щоб студенти входили без пароля.
+                        Потрібні ключі Google OAuth; наразі задаються при розгортанні. Вимкнена, поки не задано.
                     </div>
                 </div>
             </div>
@@ -267,6 +271,10 @@
                     <span class="settings-label">Відправник</span>
                     <span class="mono settings-value" style="font-size:12px">@(!string.IsNullOrEmpty(Cfg["Email:From"]) ? Cfg["Email:From"] : (string.IsNullOrEmpty(Cfg["Email:SmtpUser"]) ? "—" : Cfg["Email:SmtpUser"]))</span>
                 </div>
+                <div class="settings-row">
+                    <span class="settings-label">Звернення на</span>
+                    <span class="mono settings-value" style="font-size:12px">@FeedbackEmail</span>
+                </div>
             </div>
             @* Grading subsection *@
             <div class="subsection-last">
@@ -325,6 +333,10 @@
                         <label>Ім'я відправника</label>
                         <input class="input" @bind="_smtpFromName" placeholder="AutoCheck" />
                     </div>
+                </div>
+                <div class="field">
+                    <label>Email для звернень <span class="hint">(куди приходять звернення студентів)</span></label>
+                    <input class="input mono" @bind="_feedbackEmail" placeholder="you@gmail.com" />
                 </div>
                 <div class="subsection-label" style="margin-top:4px">Перевірка</div>
                 <div class="field">
@@ -570,6 +582,7 @@
     private int    _geminiLimit;
     private string _smtpHost = "", _smtpUser = "", _smtpPassword = "", _smtpFrom = "", _smtpFromName = "AutoCheck";
     private int    _smtpPort = 587;
+    private string _feedbackEmail = "";
 
     // ── Lab attempts ──────────────────────────────────────────────────────────
     private sealed class LabAttemptsRow
@@ -807,6 +820,7 @@
         _smtpPassword = Cfg["Email:SmtpPassword"] ?? "";
         _smtpFrom     = Cfg["Email:From"] ?? "";
         _smtpFromName = Cfg["Email:FromName"] ?? "AutoCheck";
+        _feedbackEmail = Cfg["Feedback:Email"] ?? AppInfo.AuthorEmail;
     }
 
     // ── Toggle helpers ────────────────────────────────────────────────────────
@@ -1003,6 +1017,8 @@
                 node["Email"]!["SmtpPassword"] = _smtpPassword;
                 node["Email"]!["From"]         = _smtpFrom.Trim();
                 node["Email"]!["FromName"]     = string.IsNullOrWhiteSpace(_smtpFromName) ? "AutoCheck" : _smtpFromName.Trim();
+                node["Feedback"] ??= new System.Text.Json.Nodes.JsonObject();
+                node["Feedback"]!["Email"]     = _feedbackEmail.Trim();
             });
             _settingsMsg = "ok:Налаштування збережено та застосовано";
         }
