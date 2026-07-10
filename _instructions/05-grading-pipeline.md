@@ -1,126 +1,95 @@
 # Grading Pipeline
 
-## Концепція
-
-Важка робота (білд, тести) виконується на **GitHub Actions** студента — наш сервер тільки читає результат через API. Студент здає конкретний коміт, не "що зараз на гілці".
+Уся логіка — в `Services/GradingService.cs` (одна `RunAsync`, без окремих step-класів).
+Сервер **клонує** репо студента локально й аналізує код через **Gemini**. Студент
+здає конкретний коміт, не «поточний стан гілки».
 
 ## Флоу здачі
 
 ```
-1. Студент пушить код на свою гілку
-   GitHub Actions запускається автоматично (dotnet build + test)
+1. Студент відкриває лабу → "Здати"
+   ├─ GitHub API тягне гілки/коміти репозиторію
+   ├─ Режим "Список комітів" або "Граф гіта"
+   └─ Маппінг коміт → завдання (CommitMappingJson: sha → taskNumber)
 
-2. Студент відкриває лабу → натискає "Здати"
-   ├─ GitHub API тягне гілки репозиторію
-   ├─ Режим "Список комітів": вибір гілки + коміти через API
-   └─ Режим "Граф гіта": main гілка, граф з fork/merge арками
+2. GradingService.RunAsync(submissionId, studentId):
 
-3. Студент обирає коміт і маппінг коміт → завдання (кастомний dropdown)
+   ── 0. Pre-flight (кидає, якщо не так — спроба НЕ витрачається) ──
+   • AttemptsUsed < AttemptsMax
+   • Deadline не минув (перевірка сервером, не лише disabled-кнопкою)
+   • Gemini денна квота не вичерпана (GeminiQuotaService)
+   • Gemini:ApiKey заданий
+   • Repo-substitution guard: FindSharedRepoAsync — якщо той самий репо в іншого
+     студента → hard-fail (Rejected, defense=0, final=0, спроба витрачена), окрім
+     PlagiarismApproved
 
-4. GradingPipeline (TODO: реалізувати):
-   CloneStep      → git clone/fetch репо
-   CheckoutStep   → git checkout {commitSha}
-   BuildStep      → dotnet build
-   TestStep       → checks.json I/O тести
-   GitHubActionsStep → читає check-runs через GitHub API
+   ── Черга ── GradingQueueService.EnterAsync — одна перевірка за раз;
+      після очікування ліміт спроб і дедлайн перевіряються ЩЕ раз
 
-5. Submission.Status = Review → Notification студенту
-   Викладач бачить в черзі на перевірку → GradeDialog
+   ── 1. git ── PrepareRepoAsync: clone (або set-url+fetch+reset) у WorkRoot/{hash};
+      private-репо клонуються через розшифрований токен (x-access-token)
+
+   ── 2. Витяг коду per-task ──
+   • є маппінг → git show {sha} --unified=5, фільтр хунків файлу taskN
+   • нема маппінгу → евристичний пошук файлу по назві завдання
+   • + вимоги з checks.json (LoadTaskChecks)
+
+   ── 2.5 Plagiarism-гейт ── FindExactMatchAsync (ДО Gemini, квота не витрачається):
+      повний збіг рядків з уже перевіреною роботою → Rejected + PlagiarismFlag
+
+   ── 3. Gemini ── GradeAllWithGeminiAsync: ОДИН batch-запит на всі завдання,
+      responseMimeType=application/json, temperature 0.1; 429 → чекає 30с і ретрай
+
+   ── 4. Оцінка ──
+      score_task = done/(done+issues) × 100      (число від Gemini ігнорується — прозорість)
+      state = pass ≥80 / warn ≥50 / fail
+      AutoScore = Scoring.Weighted(score, difficulty) — найкраща з усіх спроб
+      ≥ 50 → Status = Review; інакше AutoScore = null, Status = Rejected
+
+   ── 5. Persist ── TaskResult (+DiffLines) на кожне завдання, з AttemptNo;
+      нотифікація студенту
 ```
 
-## Структура Grading/
+## Чому системний збій не витрачає спробу
+`GradeAllWithGeminiAsync` кидає `InvalidOperationException` («систему недоступно…»),
+коли API впав, повернув не-масив або пропустив завдання. Спробу списує лише
+**реальний** результат перевірки (або підтверджений плагіат/підміна репо).
 
-```
-Grading/
-  Pipeline/
-    GradingPipeline.cs       ← оркестратор (основна логіка)
-    Steps/
-      IGradingStep.cs        ← інтерфейс кроку
-      CloneStep.cs           ← TODO
-      CheckoutStep.cs        ← TODO
-      BuildStep.cs           ← TODO
-      GitHubActionsStep.cs   ← TODO
-  Models/
-    GradingContext.cs        ← передається між кроками
-    GradingResult.cs         ← фінальний результат
-```
-
-## GradingContext — що передається між кроками
-
-```csharp
-SubmissionId, StudentId
-RepoUrl      // https://github.com/user/repo
-CommitSha    // конкретний хеш коміту
-Branch       // sandbox/intro
-SourceDir    // де шукати .csproj (sandbox/intro або src)
-LabNumber
-CommitMapping // Dictionary<string, int> sha → taskNumber
-
-// Заповнюється кроками:
-BuildPassed, BuildOutput
-TestsPassed, TestsOutput
-GitHubRunStatus, GitHubRunUrl
-HasError, ErrorMessage
-```
-
-## checks.json — визначення перевірок для кожної лаби
-
-Файл `content/labs/lab-NN-slug/checks.json`:
+## checks.json — вимоги на завдання
+Формат — перелік текстових **вимог** (не I/O-кейси). Gemini перевіряє кожну й
+розкладає у `done` / `issues`:
 
 ```json
 {
-  "sourceDir": "sandbox/intro",
   "tasks": [
     {
       "n": 1,
-      "commitPattern": "Task1",
-      "cases": [
-        { "input": "70\n1.75", "expect": "22.86" },
-        { "input": "90\n1.80", "expect": "27.78" }
+      "requirements": [
+        "Простір імен: namespace ClinicApp; (файловий стиль)",
+        "Поле private static int _nextId = 1;",
+        "Властивість Id: public int Id { get; } — лише гетер",
+        "..."
       ]
     }
   ]
 }
 ```
 
-- `input` — stdin (рядки розділені `\n`)
-- `expect` — що має бути у stdout (`Contains`, не `Equals`)
-- `commitPattern` — підрядок у commit message
+- `n` — номер завдання (= `LabTask.Number`)
+- `requirements[]` — конкретні перевірні вимоги; якщо блок є, Gemini перевіряє ТІЛЬКИ їх
+- заповнені для всіх 22 лаб
 
-## GitHub Actions у студента
+## Промпт до Gemini (стисло)
+Роль «суворий, але справедливий перевірник C#»; для кожного завдання — заголовок,
+складність (⭐), Brief, вимоги з checks.json, код студента. Відповідь — валідний
+JSON-масив `[{ n, done[], issues[], analysis }]` рівно з N елементів.
 
-Студент додає `.github/workflows/check.yml` один раз:
+## Кеш репозиторіїв
+Клони кешуються в `Grading:WorkRoot` (порожньо → temp) за хешем URL і переиспользуються.
+`RepoCleanupService` щодня видаляє ті, що простоюють > `Grading:RepoRetentionDays`
+(default 7) — видалений клон просто переклонується наступного разу.
 
-```yaml
-name: AutoCheck
-on: [push]
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0'
-      - run: dotnet build sandbox/intro
-```
-
-## Що НЕ перевіряємо
-- Назви класів і методів — у студентів різні домени
-- Точний текст виводу — `Contains`, не `Equals`
-- Внутрішню структуру коду
-
-## Поточний стан реалізації
-
-- [x] GradingContext, GradingResult моделі
-- [x] GradingPipeline оркестратор (структура)
-- [x] GitHubService (GetBranches, GetBranchCommitInfos)
-- [x] UI вибору гілки і коміту з маппінгом
-- [x] CommitMappingJson зберігається в Submission.CommitMappingJson
-- [x] BranchOverride зберігається в Submission.BranchOverride
-- [x] checks.json для lab-01-intro
-- [ ] CloneStep реалізація
-- [ ] CheckoutStep реалізація
-- [ ] BuildStep реалізація
-- [ ] GitHubActionsStep реалізація
-- [ ] Черга здач (BackgroundService або Channel<T>)
+## Чого НЕ перевіряємо
+- Назви класів/методів — у студентів різні домени (клініка, готель, ресторан)
+- Внутрішню структуру — тільки виконання вимог із checks.json
+- `TestsPassed/TestsTotal` наразі 0 — окремі xUnit-тести (lab-01) не підключені до пайплайну

@@ -53,27 +53,31 @@ Regex: `^#{2,3}\s+(?:Задача|Завдання)\s+(\d+)(?:\.|\s+[—–])\s+
 
 ## checks.json — формат
 
+Перелік **вимог** на кожне завдання — саме їх Gemini перевіряє й розкладає у
+`done`/`issues` (детальніше: [05-grading-pipeline](05-grading-pipeline.md)).
+Заповнені для всіх 22 лаб.
+
 ```json
 {
-  "sourceDir": "sandbox/intro",
   "tasks": [
     {
       "n": 1,
-      "commitPattern": "Task1",
-      "cases": [
-        { "input": "70\n1.75", "expect": "22.86" },
-        { "input": "90\n1.80", "expect": "27.78" }
+      "requirements": [
+        "Простір імен: namespace ClinicApp; (файловий стиль)",
+        "Поле private static int _nextId = 1;",
+        "Властивість Id: public int Id { get; } — лише гетер",
+        "ToString() перевизначений у форматі [Id] FullName | ..."
       ]
     }
   ]
 }
 ```
 
-- `sourceDir` — де знаходиться `.csproj` відносно кореня репо
 - `n` — номер задачі (відповідає `LabTask.Number`)
-- `commitPattern` — підрядок у commit message для ідентифікації задачі
-- `input` — stdin (рядки розділені `\n`)
-- `expect` — що має бути у stdout (перевірка через `Contains`, не `Equals`)
+- `requirements[]` — конкретні перевірні вимоги; якщо блок є, Gemini перевіряє ТІЛЬКИ їх
+
+> Історично тут були I/O-кейси (`input`/`expect`/`commitPattern`/`sourceDir`) для
+> запуску коду — від цього відмовились на користь requirements-перевірки через Gemini.
 
 ## Як викладач керує лабами
 
@@ -87,7 +91,6 @@ Regex: `^#{2,3}\s+(?:Задача|Завдання)\s+(\d+)(?:\.|\s+[—–])\s+
 
 ```
 студент/repo/
-  .github/workflows/check.yml   ← GitHub Actions (запускає build при пуші)
   .gitignore
   sandbox/intro/
     SandboxIntro.csproj
@@ -96,3 +99,7 @@ Regex: `^#{2,3}\s+(?:Задача|Завдання)\s+(\d+)(?:\.|\s+[—–])\s+
   src/                           ← починається з лаби 03
     Patient.cs, Doctor.cs...
 ```
+
+Grading клонує це репо локально й дивиться `git show {sha}` за маппінгом коміт→завдання
+(файли `taskN`), або шукає файл евристично по назві завдання. GitHub Actions **не**
+використовується — build/тести на сервері не запускаються, оцінює Gemini за вимогами.

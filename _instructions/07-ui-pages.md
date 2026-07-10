@@ -13,12 +13,14 @@
 
 | URL | Компонент | Що показує |
 |-----|-----------|-----------|
-| `/teacher` | TeacherOverview | Черга перевірки (авто-оновлення 20с), активність |
+| `/teacher` | TeacherOverview | Черга перевірки (авто-оновлення), активність, сигнали плагіату |
 | `/teacher/students` | Students | Список студентів з пошуком |
 | `/teacher/journal` | Journal | Журнал оцінок (сітка студенти × лаби, sticky-колонки) |
-| `/teacher/labs` | LabsAdmin | CRUD лаб і завдань |
+| `/teacher/results/{studentId}/{labId}` | TeacherLabResults | Детальні результати здачі: завдання, diff, схожість коду, коментарі |
+| `/teacher/labs` | LabsAdmin | CRUD лаб і завдань, імпорт з MD |
 | `/teacher/groups` | Groups | CRUD академічних груп |
 | `/teacher/monitoring` | Monitoring | Аналітика: розподіл оцінок, топ студентів |
+| `/teacher/profile` | TeacherProfile | Профіль викладача + системні налаштування (Gemini, WorkRoot, квота) |
 
 ## Ключові компоненти
 
@@ -50,9 +52,10 @@
 - Forks — arc праворуч (merge commit відкриває нову лану)
 - Кольори лан: green, blue, yellow, red, purple, cyan (циклічно)
 
-**Фаза `running`:** прогрес-кроки grading pipeline
+**Фаза `running`:** прогрес-повідомлення grading pipeline (`IProgress<string>`:
+черга, клонування, витяг коду, перевірка плагіату, аналіз через Gemini)
 
-**Фаза `done`:** нова авто-оцінка, дельта, кількість тестів
+**Фаза `done`:** нова авто-оцінка, дельта до попередньої спроби
 
 ### GradeDialog (Dialogs/GradeDialog.razor)
 MudBlazor діалог оцінювання для викладача.
@@ -71,7 +74,7 @@ MudBlazor діалог оцінювання для викладача.
 ## Sidebar (Layout/Sidebar.razor)
 Різні пункти меню залежно від ролі.
 - **Студент:** Дашборд, Оцінки, Профіль
-- **Викладач:** Огляд, Студенти, Журнал, Лаби, Групи, Моніторинг
+- **Викладач:** Огляд, Студенти, Журнал, Лаби, Групи, Моніторинг, Профіль
 
 ## CSS та стилі
 

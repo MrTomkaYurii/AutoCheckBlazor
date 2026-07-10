@@ -1,94 +1,91 @@
 # Сервіси
 
-## AppState (Services/AppState.cs)
-Per-circuit singleton. Кешує поточного юзера.
-- `Student` — дані поточного студента (з StudentRecord)
-- `Teacher` — дані поточного викладача
-- `StudentDbId` / `TeacherDbId` — Id в БД
+Усі — в `Services/`. Grading/plagiarism/notifications беруть `IDbContextFactory`
+(власний короткоживучий контекст), бо працюють поза або довше за UI-circuit.
+
+## AppState (scoped)
+Per-circuit кеш поточного юзера.
+- `Student` / `Teacher` — дані поточного користувача; `StudentDbId` / `TeacherDbId`
 - `IsTeacher(user)` — перевірка ролі по claim
 - `PreloadAsync(user)` — перезавантажити після оновлення профілю
 
-## IAuthService / AuthService (Services/AuthService.cs)
-Робота з Identity claims та зв'язком з БД.
+## IAuthService / AuthService
+Identity claims ↔ доменні записи.
+- `EnsureLinkedAsync(user)` — у MainLayout при кожному вході: шукає UserLink по UserId;
+  якщо запис має старий UserId → **оновлює** його; якщо студента нема → створює
+  StudentRecord + `Submission(Locked)` для всіх лаб. Race (SSR+SignalR) → `catch DbUpdateException` → `ChangeTracker.Clear()`.
+- `LinkStudentAsync(appUser, group)` / `LinkTeacherAsync(appUser)` — при реєстрації/Google/сідуванні
+- `GetStudentRecordAsync` / `GetTeacherRecordAsync` / `GetSub(user)`
 
-**`EnsureLinkedAsync(user)`** — викликається в MainLayout при кожному вході (страхувальна сітка;
-зазвичай лінк уже створений при реєстрації):
-1. Шукає UserLink по `UserId`
-2. Якщо знайдено — виходить (вже зв'язано)
-3. Якщо ні — бере AppUser з БД, лінкує як викладача або студента (по email)
-4. Якщо запис вже має UserLink зі старим UserId → **оновлює** UserId і Email
-5. Якщо студента немає → створює новий StudentRecord + Submission(Locked) для всіх лаб
-6. Зберігає UserLink
-7. Race condition (подвійний рендер SSR+SignalR): catch DbUpdateException → `ChangeTracker.Clear()`
-
-**`LinkStudentAsync(appUser, group)`** / **`LinkTeacherAsync(appUser)`** — створення зв'язку
-при реєстрації / Google-вході / сідуванні.
-
-**`GetStudentRecordAsync(user)`** / **`GetTeacherRecordAsync(user)`** — завантаження запису по UserId.
-
-**`GetSub(user)`** — витягує Id користувача (ClaimTypes.NameIdentifier).
-
-## IDataService / DbDataService (Services/DbDataService.cs)
-Читання даних для UI-компонентів.
-- `GetStudentLabsAsync(studentId)` → `List<Lab>`
-- `GetLabDetailAsync(labNumber, studentId)` → `LabDetail` з TaskResult і TaskItems
-- `GetRosterAsync()` → журнал студентів для викладача
-- `GetReviewQueueAsync()` → черга на перевірку (Status == Review)
-- `GetStatsAsync()` / `GetLabStatsAsync()` → статистика для Monitoring
+## IDataService / DbDataService
+Читання для UI.
+- `GetStudentLabsAsync` → `List<Lab>`; `GetLabDetailAsync` → `LabDetail`
+- `GetRosterAsync` → журнал; `GetReviewQueueAsync` → черга (Status == Review)
+- `GetStatsAsync` / `GetLabStatsAsync` → аналітика
 
 ## ILabManagementService / LabManagementService
-CRUD лаб і завдань для викладача.
-- `CreateAsync(dto)` / `UpdateAsync(id, dto)` / `DeleteAsync(id)`
-- При створенні лаби → автоматично додає `Submission(Locked)` для всіх студентів
-- `PreviewImportAsync()` / `ImportAsync()` → імпорт з MD файлів через LabMdParser
+CRUD лаб/завдань. `CreateAsync`/`UpdateAsync`/`DeleteAsync`; створення лаби додає
+`Submission(Locked)` усім студентам; `PreviewImportAsync`/`ImportAsync` (LabMdParser).
 
-## GitHubService (Services/GitHubService.cs)
-Читання даних з **GitHub REST API**. Не клонує репо.
+## IGradingService / GradingService  ← ядро перевірки
+Повністю реалізований pipeline (git clone + Gemini). Детально: [05-grading-pipeline](05-grading-pipeline.md).
+Коротко `RunAsync(submissionId, studentId)`:
+1. Pre-flight: ліміт спроб, дедлайн (сервером), денна квота Gemini, наявність ApiKey
+2. Guard підміни репо (`FindSharedRepoAsync`) → hard-fail
+3. Черга (`GradingQueueService.EnterAsync`) — одна перевірка за раз
+4. `git clone/fetch/reset` репо студента в `WorkRoot` (private-репо — через розшифрований токен)
+5. Витяг коду per-task: `git show {sha}` за маппінгом або евристика по назві файлу
+6. Plagiarism-гейт (`FindExactMatchAsync`) — до Gemini, квота не витрачається
+7. **Один** batch-запит до Gemini на всі завдання → done/issues/analysis
+8. score = done/(done+issues); Auto = `Scoring.Weighted`; статус Review/Rejected (поріг 50)
+9. Зберігає TaskResult+DiffLines, нотифікація студенту
 
-```
-ParseUrl(url)                      → (owner, repo)? — нормалізує різні формати URL
-GetBranchesAsync(repoUrl, token?)  → List<GitHubBranch> — всі гілки з пагінацією
-GetBranchCommitsAsync(...)         → List<GitHubCommit> — коміти (спрощена модель)
-GetBranchCommitInfosAsync(...)     → List<CommitInfo>   ← використовується в Lab.razor
-GetCommitTreeAsync(...)            → List<GitHubCommitNode> — для дерева гілок
-```
+Системні збої (Gemini впав / некоректна відповідь) — **кидають**, спроба не витрачається.
 
-`GetBranchCommitInfosAsync` повертає `CommitInfo` з **повними SHA** і **parents[]** — необхідно для побудови git-графу. Без токену: 60 req/год, з токеном: 5000 req/год.
+## GitHubService
+GitHub **REST API** (не клонує). `ParseUrl`, `GetBranchesAsync`, `GetBranchCommitsAsync`,
+`GetBranchCommitInfosAsync` (повні SHA + parents[] для git-графу), `GetCommitTreeAsync`.
+Без токену 60 req/год, з токеном 5000.
 
-## IGitBranchService / GitBranchService (Services/GitBranchService.cs)
-Локальні git-операції для **grading pipeline** (не для UI).
-- `GetCommitsAsync(repoUrl, branch)` → клонує/фетчить репо, читає `git log`
-- Fallback: якщо git недоступний → `GenerateMockCommits()` (7 демо-комітів)
-- Репо кешується в `WorkRoot` (temp або `Grading:WorkRoot` з конфігу)
+## PlagiarismService
+Пошук збігів коду між студентами (`IDbContextFactory`).
+- `CheckLabAsync(labNumber, threshold)` → `List<PlagPair>` — попарні збіги для звіту викладача
+- `FindSharedRepoAsync(studentId, repoUrl)` → `RepoConflict?` — інший студент із тим самим репо
+- `FindExactMatchAsync(labId, studentId, lines)` → `ExactMatch?` — повний збіг рядків із уже перевіреною роботою (containment)
 
-## IGradingService / GradingService
-Авто-перевірка здачі. **Pipeline кроки — заглушки**, реальна логіка не реалізована.
+## CodeSimilarityService
+Деталізація схожості для UI викладача.
+- `FindSimilarAsync(labNumber, studentId, topN)` → `List<SimilarStudent>` (percent, shared fragments)
+- `GetOverlapAsync(labNumber, studentId, otherStudentId)` → `CodeOverlap?` — порядкове порівняння з підсвіткою
 
-Флоу:
-1. Отримує Submission з БД
-2. Клонує репо (GitBranchService), checkout коміту
-3. `dotnet build` → `dotnet test` (TODO: реалізувати)
-4. Claude API для аналізу (якщо є ApiKey)
-5. Fallback на симуляцію
-6. Зберігає TaskResult, оновлює Submission.Status → Review
-7. Notification студенту
+## GradingQueueService (singleton)
+Серіалізує перевірки: `EnterAsync(progress, ct)` → `IDisposable` (звільняє слот у Dispose).
+Тим, хто чекає, репортить позицію в черзі.
 
-## INotificationService / NotificationService
-- `SendAsync(studentId, title, body, type)`
-- `GetUnreadAsync(studentId)` / `GetUnreadCountAsync(studentId)`
-- `MarkAllReadAsync(studentId)`
+## GeminiQuotaService (singleton)
+Денний ліміт викликів Gemini. `RecordCall()`, `IsExhausted`, `DailyLimit`, `Remaining`, `TodayCount` (скидається щодня).
+
+## TokenProtector (singleton)
+Шифрування GitHub-токенів через DataProtection: `Protect(plain)` / `Unprotect(stored)`.
+
+## NotificationService
+In-app + email нотифікації (через `EmailService`).
+`SendAsync(studentId, title, body, type)`, `GetUnreadAsync`, `GetUnreadCountAsync`, `MarkReadAsync`, `MarkAllReadAsync`.
+
+## TeacherNotificationService (singleton)
+In-memory стрічка подій для викладача: `Add(title, body, type)`, `GetAll`, `MarkAllRead`.
+
+## EmailService (singleton)
+SMTP-розсилка; `Enabled` лише коли задано `Email:SmtpHost`. `SendAsync(to, subject, body)`.
 
 ## ICommentService / CommentService
-Коментарі між викладачем і студентом до конкретної здачі.
+Коментарі викладач↔студент до здачі/завдання. `GetForSubmissionAsync`, `AddAsync`, `GetAllThreadsAsync`, `DeleteAsync`.
 
-## Profile — збереження даних
-В `Profile.razor` для збереження використовується **`ExecuteUpdateAsync`** (прямий SQL UPDATE) — минає EF change tracker, уникає конфліктів зі спільним `AppDbContext` у circuit:
+## Фонові сервіси (HostedService)
+- **DeadlineReminderService** — щогодини: нагадування про дедлайн (<24 год) тим, хто не здав (one-time по Title).
+- **BackupService** — щоденний бекап SQLite (`BackupHelper`, VACUUM INTO) + ротація + git-дзеркало.
+- **RepoCleanupService** — щоденне видалення клонів у `WorkRoot`, що простоюють > `Grading:RepoRetentionDays` (default 7); `PrepareRepoAsync` штампує mtime при кожному використанні.
 
-```csharp
-await Db.Students
-    .Where(s => s.Id == studentId)
-    .ExecuteUpdateAsync(s => s
-        .SetProperty(x => x.FirstName, _firstName.Trim())
-        .SetProperty(x => x.Email, _email.Trim())
-        ...);
-```
+## Профіль — збереження через ExecuteUpdateAsync
+`Profile.razor` зберігає прямим SQL UPDATE (`ExecuteUpdateAsync`) — обходить change tracker,
+уникає конфліктів зі спільним контекстом (див. [09-decisions](09-decisions.md)).

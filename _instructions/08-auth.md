@@ -5,7 +5,7 @@
 
 ## Схема
 
-- `AppUser : IdentityUser` (+ `FirstName`, `LastName`) — Data/Entities.cs
+- `AppUser : IdentityUser` (+ `FirstName`, `LastName`) — Infrastructure/Data/PeopleEntities.cs
 - `AppDbContext : IdentityDbContext<AppUser>` — Identity таблиці + доменні
 - Ролі: `teacher`, `student` (IdentityRole, сідяться при старті)
 - `UserLink.UserId` → `AppUser.Id` — місток до `StudentRecord` / `TeacherRecord`

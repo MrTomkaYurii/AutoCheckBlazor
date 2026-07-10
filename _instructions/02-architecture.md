@@ -6,34 +6,37 @@
 AutoCheckBlazor/
   Components/
     Pages/          ← Blazor сторінки (студент + викладач)
-    Layout/         ← MainLayout, LoginLayout, Sidebar, TopBar
-    Shared/         ← LabCard, Badge, Icon, Progress, ScorePill...
-    Dialogs/        ← GradeDialog, LabDialog, CommentDialog, TaskDialog...
-  Data/
-    AppDbContext.cs   ← EF Core контекст + індекси/зв'язки
-    Entities.cs       ← всі сутності БД
-    DatabaseSeeder.cs ← seed при старті (лаби з MD, групи, демо-студенти)
-    LabMdParser.cs    ← парсер MD файлів лаб
+    Layout/         ← MainLayout, Sidebar, TopBar…
+    Shared/         ← LabCard, Badge, Icon, Progress, ScorePill…
+    Dialogs/        ← GradeDialog, LabDialog, CommentDialog, TaskDialog…
+  Infrastructure/
+    Data/
+      AppDbContext.cs      ← EF Core + Identity контекст, індекси/зв'язки
+      LabEntities.cs       ← LabDef, LabTask, GroupRecord
+      PeopleEntities.cs    ← AppUser, StudentRecord, TeacherRecord, UserLink
+      SubmissionEntities.cs← Submission, TaskResult, DiffEntry, LabComment
+      AuditEntities.cs     ← GradeAudit, Notification
+      DatabaseSeeder.cs    ← seed при старті (лаби з MD, групи, демо-студенти, тест-акаунти)
+    Helpers/
+      LabMdParser.cs   ← парсер instructions.md
+      Scoring.cs       ← зважена за складністю оцінка
+      BackupHelper.cs  ← гарячий бекап SQLite (VACUUM INTO) + ротація
+      GitBackupSync.cs ← опційне дзеркалювання бекапів у git-remote
+      KyivTime.cs      ← UTC → Europe/Kyiv для відображення
+      StatusMeta.cs / FeedbackJson.cs / GradingPaths.cs
   Models/
-    Models.cs         ← DTO для UI (не сутності БД)
-  Services/
-    AppState.cs           ← per-circuit кеш поточного юзера
-    AuthService.cs        ← Identity claims → StudentRecord/TeacherRecord
-    DbDataService.cs      ← читання даних для UI
-    GitHubService.cs      ← GitHub API (гілки, коміти)
-    GitBranchService.cs   ← локальний git (для grading pipeline)
-    GradingService.cs     ← авто-перевірка (pipeline)
-    NotificationService.cs
-    CommentService.cs
-    LabManagementService.cs
-  Grading/
-    Pipeline/       ← кроки пайплайну перевірки
-    Models/         ← GradingContext, GradingResult
+    CommitModels.cs / LabModels.cs / PeopleModels.cs / RosterModels.cs  ← UI DTO (не сутності БД)
+  Services/           ← бізнес-логіка (див. 04-services)
   content/
-    labs/           ← MD файли лаб + checks.json
-  _instructions/    ← цей каталог
-  _design/          ← прототипи UI (виключені з компіляції)
+    labs/             ← instructions.md + checks.json (+ lab-01 tests/)
+  wwwroot/            ← css, статичні файли
+  deploy/             ← Docker/compose для production
+  _instructions/      ← ця документація
 ```
+
+> Історична примітка: раніше існував каталог `Grading/` з кроками-заглушками
+> (CloneStep/BuildStep/…) і сервіс `GitBranchService`. Їх **немає** — уся логіка
+> перевірки живе в `GradingService`.
 
 ## Потік даних
 
@@ -43,40 +46,48 @@ Login.razor (/) або Register.razor (/register)
 ASP.NET Core Identity (cookie, ролі teacher/student у SQLite)
     ↓
 MainLayout.OnInitializedAsync()
-    ├─ AuthService.EnsureLinkedAsync()  ← пов'язує AppUser.Id → StudentRecord
-    └─ AppState.PreloadAsync()          ← кешує дані поточного юзера в скоупі
+    ├─ AuthService.EnsureLinkedAsync()  ← пов'язує AppUser.Id → StudentRecord/TeacherRecord
+    └─ AppState.PreloadAsync()          ← кешує дані поточного юзера в circuit-скоупі
     ↓
 Blazor компоненти
-    ├─ AppState.Student / AppState.Teacher  (ім'я, email, github...)
-    └─ IDataService / ILabManagementService  (запити до БД)
+    ├─ AppState.Student / AppState.Teacher
+    └─ IDataService / ILabManagementService / IGradingService  (робота з БД + grading)
 ```
 
 ## Blazor Server
 
-- Все рендериться на сервері, SignalR між браузером і сервером.
-- Немає WebAssembly — всі C# сервіси доступні напряму з компонентів.
-- `AppDbContext` зареєстрований як `Scoped` → один екземпляр на SignalR circuit.
-- **Важливо:** для збереження даних використовувати `ExecuteUpdateAsync` або окремо отримувати сутність через той самий `DbContext` що і `SaveChangesAsync`.
+- Рендер на сервері, SignalR між браузером і сервером; C#-сервіси доступні напряму.
+- **DbContext через фабрику:** `AddDbContextFactory<AppDbContext>` — кожна логічна
+  операція бере свій короткоживучий контекст (інакше довгий grading і фонові таймери
+  «зіштовхнулись» би на спільному scoped-контексті → *"A second operation started"*).
+  Додатково зареєстровано scoped-shim `AppDbContext` (резолвиться з фабрики) — лише
+  щоб ASP.NET Identity працював у per-request auth-ендпоінтах.
+- Для збереження з UI використовується `ExecuteUpdateAsync` (прямий SQL UPDATE),
+  щоб не конфліктувати з відстежуваними сутностями (див. 09-decisions).
+
+## Фонові сервіси (HostedService)
+
+- `DeadlineReminderService` — щогодини: нагадування про дедлайн (<24 год) тим, хто не здав.
+- `BackupService` — щоденний бекап SQLite (VACUUM INTO) + ротація + опційне git-дзеркало.
+- `RepoCleanupService` — щоденне видалення кешованих клонів репо, що простоюють > `Grading:RepoRetentionDays`.
+
+## HTTP-клієнти
+
+Іменовані `IHttpClientFactory`-клієнти (уникають socket exhaustion):
+`gemini` (timeout 120с), `gemini-health` (10с), `github`.
 
 ## БД
 
-- SQLite файл `autocheck.db` в кореневій теці.
-- При старті `DatabaseSeeder.SeedAsync()` перевіряє чи є дані та сідує якщо немає.
-- Умови сідування: `if (!await db.Labs.AnyAsync())`, `if (!await db.Students.AnyAsync())` тощо.
-- При зміні схеми (нова колонка, новий індекс) — видалити `autocheck.db` і перезапустити.
-- У dev-режимі seeder автоматично виявляє застарілу схему і пересоздає БД.
+- SQLite `autocheck.db` у кореневій теці; схема через `EnsureCreated` (без міграцій).
+- При старті `DatabaseSeeder.SeedAsync()` сідує лаби/групи/демо-дані, якщо порожньо.
+- **Зміна схеми** (нова колонка/індекс) → видалити `autocheck.db` і перезапустити.
 
 ## Автентифікація
 
-- ASP.NET Core Identity в тій самій SQLite базі — без контейнерів і зовнішніх сервісів.
-- Google OAuth опційний (Authentication:Google у appsettings.json).
+- ASP.NET Core Identity у тій самій SQLite базі; Google OAuth опційний.
 - Деталі: [08-auth](08-auth.md).
 
-## GitHub API
+## GitHub
 
-Використовується для UI (без локального git):
-- `GitHubService.GetBranchesAsync()` — список гілок репозиторію студента
-- `GitHubService.GetBranchCommitInfosAsync()` — коміти гілки з SHA, батьками, автором
-
-Для grading pipeline (локальне клонування):
-- `GitBranchService.GetCommitsAsync()` — клонує/фетчить репо, читає `git log`
+- **UI:** `GitHubService` — REST API для гілок/комітів (без локального git).
+- **Grading:** `GradingService` — локальний `git clone/fetch/show` у `Grading:WorkRoot`.
