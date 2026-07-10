@@ -398,6 +398,18 @@
                         <a class="btn btn-ghost btn-sm backup-dl" href="/teacher/backup/download?name=@Uri.EscapeDataString(b.Name)">
                             <Icon Name="upload" Size="13" />Завантажити
                         </a>
+                        @if (_deleteConfirm == b.Name)
+                        {
+                            <span class="backup-confirm">Видалити?</span>
+                            <button class="btn btn-sm backup-del-yes" @onclick="@(() => DeleteBackup(b.Name))">Так</button>
+                            <button class="btn btn-ghost btn-sm" @onclick="@(() => _deleteConfirm = null)">Ні</button>
+                        }
+                        else
+                        {
+                            <button class="btn btn-ghost btn-sm backup-del" @onclick="@(() => _deleteConfirm = b.Name)" title="Видалити бекап">
+                                <Icon Name="x" Size="13" />
+                            </button>
+                        }
                     </div>
                 }
             }
@@ -626,6 +638,7 @@
     private long   _dbSize;
     private sealed record BackupFile(string Name, long SizeBytes, DateTime Modified);
     private List<BackupFile> _backups = [];
+    private string? _deleteConfirm;   // name of the backup awaiting delete confirmation
 
     private string _mirrorUrl = "", _mirrorToken = "", _mirrorMsg = "";
     private int    _mirrorKeep = 14;
@@ -651,6 +664,27 @@
                 .Select(f => new BackupFile(f.Name, f.Length, f.LastWriteTime))
                 .ToList()
             : [];
+    }
+
+    private async Task DeleteBackup(string name)
+    {
+        _deleteConfirm = null;
+        try
+        {
+            var dir = Cfg["Backup:Dir"];
+            if (string.IsNullOrEmpty(dir)) dir = Path.Combine(Env.ContentRootPath, "backups");
+            // Guard: only ever delete a bare backup filename inside Backup:Dir (no traversal).
+            if (name == Path.GetFileName(name) && name.StartsWith("autocheck-") && name.EndsWith(".db"))
+            {
+                var full = Path.Combine(dir, name);
+                if (File.Exists(full)) File.Delete(full);
+                _backupMsg = "ok:Бекап видалено";
+            }
+            LoadBackupInfo();
+        }
+        catch (Exception ex) { _backupMsg = $"err:{ex.Message}"; }
+        StateHasChanged();
+        await Task.Delay(2500); _backupMsg = ""; StateHasChanged();
     }
 
     private void LoadMirrorFields()
