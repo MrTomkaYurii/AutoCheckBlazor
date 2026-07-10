@@ -14,6 +14,100 @@
 <div class="screen-anim page">
 <div class="grid-2">
 
+    @* ── Інструкція: що і де налаштувати ───────────────────────────────────── *@
+    <section class="glass guide-card">
+        <div class="section-head">
+            <Icon Name="target" Size="18" Style="color:var(--acc)" />
+            <h3 class="section-title">Що заповнити для коректної роботи</h3>
+            @if (HasGemini)
+            {
+                <span class="badge badge-green push-right"><span class="dot"></span>готово до перевірки</span>
+            }
+            else
+            {
+                <span class="badge badge-yellow push-right"><span class="dot pulse"></span>потрібне налаштування</span>
+            }
+        </div>
+
+        <div class="guide-body">
+            @* 1. Gemini — обов'язково *@
+            <div class="guide-item">
+                <span class="guide-status @(HasGemini ? "g-ok" : "g-warn")"><Icon Name="@(HasGemini ? "check" : "warn")" Size="13" /></span>
+                <div class="guide-text">
+                    <div class="guide-title">Ключ Gemini API <span class="guide-tag req">обов'язково</span></div>
+                    <div class="guide-desc">
+                        Без нього авто-перевірка коду не працює. Отримайте безкоштовний ключ у Google AI Studio
+                        (<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>)
+                        і вставте його нижче — <b>Налаштування системи → API ключ</b>.
+                    </div>
+                </div>
+            </div>
+
+            @* 2. SMTP — для email *@
+            <div class="guide-item">
+                <span class="guide-status @(HasSmtp ? "g-ok" : "g-warn")"><Icon Name="@(HasSmtp ? "check" : "warn")" Size="13" /></span>
+                <div class="guide-text">
+                    <div class="guide-title">Пошта (SMTP) <span class="guide-tag rec">рекомендовано</span></div>
+                    <div class="guide-desc">
+                        Потрібна для email-сповіщень (нагадування про дедлайни) та звернень студентів.
+                        Задається у файлі <span class="mono">appsettings.json</span> → секція <span class="mono">Email</span>
+                        (<span class="mono">SmtpHost, SmtpUser, SmtpPassword, From</span>). Для Gmail — App Password.
+                    </div>
+                </div>
+            </div>
+
+            @* 3. Feedback email — info *@
+            <div class="guide-item">
+                <span class="guide-status g-info"><Icon Name="mail" Size="13" /></span>
+                <div class="guide-text">
+                    <div class="guide-title">Email для звернень <span class="guide-tag info mono">@FeedbackEmail</span></div>
+                    <div class="guide-desc">
+                        Куди надходять повідомлення з форми «Підтримка» у студентів.
+                        Змінюється в <span class="mono">appsettings.json</span> → <span class="mono">Feedback:Email</span>.
+                        Працює лише разом із налаштованим SMTP (пункт вище).
+                    </div>
+                </div>
+            </div>
+
+            @* 4. Google — опційно *@
+            <div class="guide-item">
+                <span class="guide-status @(HasGoogle ? "g-ok" : "g-off")"><Icon Name="@(HasGoogle ? "check" : "lock")" Size="13" /></span>
+                <div class="guide-text">
+                    <div class="guide-title">Вхід через Google <span class="guide-tag opt">опційно</span></div>
+                    <div class="guide-desc">
+                        Кнопка «Увійти через Google» на сторінці входу. Вимкнена, поки порожньо.
+                        Вмикається в <span class="mono">appsettings.json</span> → <span class="mono">Authentication:Google</span>
+                        (<span class="mono">ClientId, ClientSecret</span>).
+                    </div>
+                </div>
+            </div>
+
+            @* 5. In-app: дедлайни + спроби *@
+            <div class="guide-item">
+                <span class="guide-status g-info"><Icon Name="settings" Size="13" /></span>
+                <div class="guide-text">
+                    <div class="guide-title">Дедлайни та ліміти спроб <span class="guide-tag app">у застосунку</span></div>
+                    <div class="guide-desc">
+                        Дедлайн кожної лаби — на сторінці <b>Лаби</b> (редагування лаби). Кількість спроб авто-перевірки —
+                        нижче, у блоці <b>«Ліміти авто-перевірок»</b>.
+                    </div>
+                </div>
+            </div>
+
+            @* 6. Students GitHub reminder *@
+            <div class="guide-item">
+                <span class="guide-status g-info"><Icon Name="github" Size="13" /></span>
+                <div class="guide-text">
+                    <div class="guide-title">Студенти: GitHub-репозиторій</div>
+                    <div class="guide-desc">
+                        Кожен студент має вказати URL свого репозиторію у профілі — інакше системі нема що клонувати
+                        й перевіряти. Приватні репо потребують також персонального токена (у профілі студента).
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
     @* ── Профіль викладача ─────────────────────────────────────────────────── *@
     <section class="glass card">
         <div class="card-hero">
@@ -314,6 +408,12 @@
 
 @code {
     [CascadingParameter] private Task<AuthenticationState> AuthStateTask { get; set; } = default!;
+
+    // ── Setup-guide status (read live from config) ───────────────────────────
+    private bool   HasGemini    => !string.IsNullOrEmpty(Cfg["Gemini:ApiKey"]);
+    private bool   HasSmtp      => !string.IsNullOrEmpty(Cfg["Email:SmtpHost"]);
+    private bool   HasGoogle    => !string.IsNullOrEmpty(Cfg["Authentication:Google:ClientId"]);
+    private string FeedbackEmail => Cfg["Feedback:Email"] ?? AppInfo.AuthorEmail;
 
     // ── Profile ──────────────────────────────────────────────────────────────
     private bool   _profileEdit, _savingProfile;

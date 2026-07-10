@@ -367,3 +367,83 @@
     color: var(--acc-bright);
     letter-spacing: 0.04em;
 }
+
+/* ── Setup guide (full-width) ── */
+.guide-card {
+    grid-column: 1 / -1;
+    padding: 0;
+    overflow: hidden;
+}
+
+.guide-body {
+    padding: 4px 26px 14px;
+}
+
+.guide-item {
+    display: flex;
+    gap: 14px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--line);
+}
+
+.guide-item:last-child { border-bottom: none; }
+
+.guide-status {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    flex: none;
+    margin-top: 1px;
+}
+
+.g-ok   { color: var(--st-green);  background: var(--st-green-bg); }
+.g-warn { color: var(--st-yellow); background: var(--st-yellow-bg); }
+.g-info { color: var(--tx-2);      background: rgba(255, 255, 255, 0.05); }
+.g-off  { color: var(--tx-faint);  background: rgba(255, 255, 255, 0.04); }
+
+.guide-text { min-width: 0; }
+
+.guide-title {
+    font-size: 14px;
+    font-weight: 650;
+    color: var(--tx-1);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.guide-desc {
+    font-size: 13px;
+    color: var(--tx-3);
+    line-height: 1.55;
+    margin-top: 4px;
+}
+
+.guide-desc a { color: var(--acc-bright); text-decoration: none; }
+.guide-desc a:hover { text-decoration: underline; }
+.guide-desc .mono { color: var(--tx-2); font-size: 12px; }
+.guide-desc b { color: var(--tx-2); font-weight: 600; }
+
+.guide-tag {
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.guide-tag.req  { color: var(--st-red);    background: var(--st-red-bg); }
+.guide-tag.rec  { color: var(--st-yellow); background: var(--st-yellow-bg); }
+.guide-tag.opt  { color: var(--tx-3);      background: rgba(255, 255, 255, 0.05); }
+.guide-tag.app  { color: var(--st-blue);   background: var(--st-blue-bg); }
+.guide-tag.info {
+    color: var(--acc-bright);
+    background: var(--acc-dim);
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 600;
+}
