@@ -116,10 +116,15 @@ if (!string.IsNullOrEmpty(googleCfg["ClientId"]))
 builder.Services.AddAuthorization();
 builder.Services.AddHttpContextAccessor();
 
-// Data Protection with a fixed key folder — encrypted GitHub tokens survive restarts
+// Data Protection with a fixed key folder — encrypted GitHub tokens survive restarts.
+// Default: <ContentRoot>/dp-keys (Docker mounts a volume there). On a native
+// release-swap deploy ContentRoot changes every release, so DataProtection:KeyPath
+// points it at a stable directory outside the release (see deploy/README.md).
+var dpKeyPath = builder.Configuration["DataProtection:KeyPath"];
+if (string.IsNullOrWhiteSpace(dpKeyPath))
+    dpKeyPath = Path.Combine(builder.Environment.ContentRootPath, "dp-keys");
 builder.Services.AddDataProtection()
-    .PersistKeysToFileSystem(new DirectoryInfo(
-        Path.Combine(builder.Environment.ContentRootPath, "dp-keys")))
+    .PersistKeysToFileSystem(new DirectoryInfo(dpKeyPath))
     .SetApplicationName("AutoCheck");
 
 // ── App services ──────────────────────────────────────────────────────────────

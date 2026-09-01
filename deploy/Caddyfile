@@ -1,7 +1,8 @@
-# Caddy auto-provisions and renews a real Let's Encrypt certificate for this domain
-# (works with nip.io because it resolves to the server's public IP). All plain-HTTP
-# traffic is redirected to HTTPS automatically.
+# Native Caddy (apt package) — terminates TLS (auto Let's Encrypt) and reverse-proxies
+# to the AutoCheck systemd service on localhost. APP_DOMAIN is injected as an environment
+# variable via /etc/systemd/system/caddy.service.d/override.conf (written by the deploy workflow).
+# Works with sslip.io / nip.io because they resolve to the server's public IP.
 {$APP_DOMAIN} {
 	encode zstd gzip
-	reverse_proxy autocheck:8080
+	reverse_proxy 127.0.0.1:8080
 }
