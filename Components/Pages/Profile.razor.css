@@ -2,13 +2,13 @@
     padding: 0 34px 40px;
     position: relative;
     z-index: 1;
-    max-width: 1140px;
+    max-width: 1680px;
 }
 
-/* Дві колонки: ліворуч — поля, праворуч — інструкція */
+/* Три колонки на всю ширину: поля | навіщо це | як створити токен */
 .profile-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 400px;
+    grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1fr) minmax(0, 1fr);
     gap: 20px;
     align-items: start;
 }
@@ -20,7 +20,18 @@
     min-width: 0;
 }
 
-@media (max-width: 940px) {
+/* Середні екрани: поля на всю ширину зверху, дві довідкові колонки під ними */
+@media (max-width: 1180px) {
+    .profile-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+    .profile-main {
+        grid-column: 1 / -1;
+    }
+}
+
+/* Вузькі екрани: усе в одну колонку */
+@media (max-width: 720px) {
     .profile-grid {
         grid-template-columns: 1fr;
     }
@@ -42,7 +53,7 @@
     top: 20px;
 }
 
-@media (max-width: 940px) {
+@media (max-width: 1180px) {
     .guide {
         position: static;
     }

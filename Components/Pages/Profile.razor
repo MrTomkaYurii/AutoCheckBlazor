@@ -137,31 +137,30 @@
     </section>
     </div>@* /.profile-main *@
 
-    @* ── Інструкція: GitHub-репозиторій і токен ──────────────────────────── *@
+    @* ── Колонка 2: навіщо репозиторій і токен ──────────────────────────── *@
     <aside class="glass card guide">
         <div class="guide-head">
             <Icon Name="github" Size="18" Style="color:var(--acc)" />
-            <h3 class="guide-title">GitHub: репозиторій і токен</h3>
+            <h3 class="guide-title">Навіщо це</h3>
         </div>
         <div class="guide-body">
 
             <div class="guide-sect">
-                <h4><Icon Name="braces" Size="14" Style="color:var(--acc)" />Навіщо репозиторій</h4>
+                <h4><Icon Name="braces" Size="14" Style="color:var(--acc)" />GitHub-репозиторій</h4>
                 <p>
                     Кожну лабораторну ти виконуєш у <b>власному GitHub-репозиторії</b>. Коли
                     натискаєш «Здати», система клонує його, прогоняє авто-перевірку коду й
-                    звіряє твої коміти із завданнями лаби. Посилання вказується у полі
-                    <span class="mono">GitHub репо</span> у форматі
-                    <span class="mono">https://github.com/username/repo</span>.
+                    звіряє твої коміти із завданнями лаби.
                 </p>
-                <p class="guide-note">
-                    Без репозиторію перевірка працює в режимі симуляції (мок-коміти) —
-                    лише щоб побачити, як усе влаштовано.
+                <p>
+                    Посилання вказується у полі <span class="mono">GitHub репо</span> у форматі
+                    <span class="mono">https://github.com/username/repo</span>. Без нього здати
+                    роботу не можна — кнопка «Здати» веде сюди, у профіль.
                 </p>
             </div>
 
             <div class="guide-sect">
-                <h4><Icon Name="lock" Size="14" Style="color:var(--acc)" />Навіщо токен</h4>
+                <h4><Icon Name="lock" Size="14" Style="color:var(--acc)" />GitHub-токен</h4>
                 <p>
                     Токен (Personal Access Token) <b>необов'язковий</b>, але потрібен, якщо:
                 </p>
@@ -175,8 +174,18 @@
                 </p>
             </div>
 
+        </div>
+    </aside>
+
+    @* ── Колонка 3: як створити токен + безпека ─────────────────────────── *@
+    <aside class="glass card guide">
+        <div class="guide-head">
+            <Icon Name="spark" Size="18" Style="color:var(--acc)" />
+            <h3 class="guide-title">Як створити токен</h3>
+        </div>
+        <div class="guide-body">
+
             <div class="guide-sect">
-                <h4><Icon Name="spark" Size="14" Style="color:var(--acc)" />Як створити токен</h4>
                 <ol class="guide-steps">
                     <li>GitHub → <span class="mono">Settings</span> → <span class="mono">Developer settings</span>
                         → <span class="mono">Personal access tokens</span> → <span class="mono">Fine-grained tokens</span>.</li>

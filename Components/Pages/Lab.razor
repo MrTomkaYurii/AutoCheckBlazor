@@ -70,6 +70,12 @@
                 {
                     <button class="btn btn-ghost btn-sm locked-btn" disabled><Icon Name="lock" Size="15" />Спроби вичерпано</button>
                 }
+                else if (string.IsNullOrWhiteSpace(App.Student.Github))
+                {
+                    <button class="btn btn-ghost btn-sm locked-btn" @onclick='() => Nav.NavigateTo("/student/profile")'>
+                        <Icon Name="github" Size="15" />Вкажіть репозиторій у профілі
+                    </button>
+                }
                 else
                 {
                     <button class="btn btn-primary" @onclick="OpenResubmit"><Icon Name="refresh" Size="17" />Здати</button>
@@ -333,7 +339,7 @@
                         <Icon Name="warn" Size="16" Style="color:var(--st-red);flex:none;margin-top:1px" />
                         <div class="warn-box-text">
                             <b style="color:var(--st-red)">GitHub репозиторій не вказано.</b><br/>
-                            Додайте URL у <a href="/student/profile" style="color:var(--acc)">профілі</a>. Без репо буде використано мок-коміти (режим симуляції).
+                            Додайте URL репозиторію у <a href="/student/profile" style="color:var(--acc)">профілі</a>, щоб здати роботу на перевірку.
                         </div>
                     </div>
                 }
@@ -417,7 +423,6 @@
                         <p class="map-sub">
                             <span class="mono" style="color:var(--acc)">@_branchInput</span>
                             · @_commits.Count комітів
-                            @if (string.IsNullOrWhiteSpace(App.Student.Github)) { <span style="color:var(--st-yellow)"> · симуляція</span> }
                         </p>
                     </div>
                     <div class="map-progress">
