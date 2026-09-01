@@ -6,8 +6,8 @@
         "Файл AppointmentStatus.cs: namespace ClinicApp; public enum AppointmentStatus { Scheduled, Cancelled, Completed }",
         "Файл BloodType.cs: public enum BloodType з 9 значеннями: Unknown, APositive, ANegative, BPositive, BNegative, ABPositive, ABNegative, OPositive, ONegative",
         "Файл Speciality.cs: public enum Speciality з 8 значеннями: General, Cardiology, Neurology, Pediatrics, Surgery, Orthopedics, Dermatology, Emergency",
-        "Кожен enum оголошений у namespace ClinicApp; (файловий стиль без фігурних дужок простору імен)",
-        "Клас Appointment: поле Status має тип AppointmentStatus (не string)",
+        { "text": "Кожен enum оголошений у namespace ClinicApp; (файловий стиль без фігурних дужок простору імен)", "w": "minor" },
+        { "text": "Клас Appointment: поле Status має тип AppointmentStatus (не string)", "w": "critical" },
         "Appointment конструктор: Status = AppointmentStatus.Scheduled (не рядок \"Scheduled\")",
         "Appointment.Cancel(): перевіряє if (Status != AppointmentStatus.Scheduled) return false; встановлює Status = AppointmentStatus.Cancelled",
         "Appointment.Complete(): перевіряє if (Status != AppointmentStatus.Scheduled) return false; встановлює Status = AppointmentStatus.Completed",
@@ -15,14 +15,14 @@
         "Patient конструктор за замовчуванням: BloodType = BloodType.Unknown",
         "Клас Doctor: поле Speciality має тип Speciality (не string)",
         "Doctor конструктор за замовчуванням: Speciality = Speciality.General (або інше значення за замовчуванням)",
-        "У коді відсутні рядкові літерали \"Scheduled\", \"Cancelled\", \"Completed\" для статусів — тільки enum значення",
-        "Program.cs: демонстрація enum (наприклад appointment.Status == AppointmentStatus.Scheduled)"
+        { "text": "У коді відсутні рядкові літерали \"Scheduled\", \"Cancelled\", \"Completed\" для статусів — тільки enum значення", "w": "critical" },
+        { "text": "Program.cs: демонстрація enum (наприклад appointment.Status == AppointmentStatus.Scheduled)", "w": "minor" }
       ]
     },
     {
       "n": 2,
       "requirements": [
-        "Файл WorkSchedule.cs: public struct WorkSchedule у namespace ClinicApp;",
+        { "text": "Файл WorkSchedule.cs: public struct WorkSchedule у namespace ClinicApp;", "w": "critical" },
         "Властивість Start: public int Start { get; } — тільки get, без set",
         "Властивість End: public int End { get; } — тільки get, без set",
         "Конструктор WorkSchedule(int start, int end): ініціалізує Start та End",
@@ -31,45 +31,45 @@
         "Обчислювана властивість IsNow: { get => Contains(DateTime.Now.Hour); }",
         "Метод Contains(int hour): повертає hour >= Start && hour < End",
         "ToString() перевизначений: повертає Display + \" (\" + HoursPerDay + \" год)\" (наприклад '08:00–17:00 (9 год)')",
-        "Клас Doctor: поле Schedule типу WorkSchedule замість двох полів WorkStartHour і WorkEndHour",
+        { "text": "Клас Doctor: поле Schedule типу WorkSchedule замість двох полів WorkStartHour і WorkEndHour", "w": "critical" },
         "Doctor конструктор: Schedule = new WorkSchedule(8, 17) у тілі конструктора",
         "Doctor.IsAvailableNow: { get => Schedule.IsNow; } (делегує до struct)",
         "Doctor.CanAcceptAt(int hour): повертає Schedule.Contains(hour)",
         "Program.cs: налаштування через d1.Schedule = new WorkSchedule(8, 16) (не WorkStartHour/WorkEndHour)",
-        "Program.cs: демонстрація value type — WorkSchedule copy = morning; зміна copy не впливає на morning"
+        { "text": "Program.cs: демонстрація value type — WorkSchedule copy = morning; зміна copy не впливає на morning", "w": "critical" }
       ]
     },
     {
       "n": 3,
       "requirements": [
         "Файл ClinicFormatter.cs: public static class ClinicFormatter у namespace ClinicApp;",
-        "static class — жодного конструктора, тільки static методи (неможливо створити new ClinicFormatter())",
+        { "text": "static class — жодного конструктора, тільки static методи (неможливо створити new ClinicFormatter())", "w": "critical" },
         "Метод FormatBloodType(BloodType bt): switch expression, повертає 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'Невідомо' для Unknown",
         "Метод FormatSpeciality(Speciality s): switch expression, повертає українські назви ('Кардіологія', 'Неврологія', 'Педіатрія', 'Хірургія', 'Ортопедія', 'Дерматологія', 'Терапевт' або 'Загальна', 'Швидка допомога')",
-        "Метод FormatAge(int age): правила відмінювання — age%100 в [11..19] → 'N років'; age%10==1 → 'N рік'; age%10 в [2,3,4] → 'N роки'; інше → 'N років'",
+        { "text": "Метод FormatAge(int age): правила відмінювання — age%100 в [11..19] → 'N років'; age%10==1 → 'N рік'; age%10 в [2,3,4] → 'N роки'; інше → 'N років'", "w": "critical" },
         "FormatAge: 1 → '1 рік', 3 → '3 роки', 11 → '11 років', 21 → '21 рік', 22 → '22 роки'",
         "Метод FormatPhone(string phone): якщо phone.Length == 10 — форматує як '(050) 123-4567'; інакше повертає phone без змін",
         "Patient.ToString() оновлений: використовує ClinicFormatter.FormatBloodType(BloodType) замість рядкового поля",
         "Doctor.ToString() оновлений: використовує ClinicFormatter.FormatSpeciality(Speciality) замість рядкового поля",
-        "PatientManager: індексатор public Patient this[int index] { get { if (index < 0 || index >= _count) return null!; return _patients[index]; } }",
+        { "text": "PatientManager: індексатор public Patient this[int index] { get { if (index < 0 || index >= _count) return null!; return _patients[index]; } }", "w": "critical" },
         "DoctorManager: індексатор public Doctor this[int index] — аналогічна логіка з _doctors",
         "AppointmentManager: індексатор public Appointment this[int index] — аналогічна логіка з _appointments",
-        "Program.cs: демонстрація clinic.Patients[0], clinic.Doctors[1] (звернення через індексатор)",
-        "Program.cs: демонстрація ClinicFormatter.FormatAge та FormatBloodType"
+        { "text": "Program.cs: демонстрація clinic.Patients[0], clinic.Doctors[1] (звернення через індексатор)", "w": "minor" },
+        { "text": "Program.cs: демонстрація ClinicFormatter.FormatAge та FormatBloodType", "w": "minor" }
       ]
     },
     {
       "n": 4,
       "requirements": [
         "DoctorManager: два методи FindBySpeciality — string версія (існуюча, Contains) і Speciality версія (нова, точне ==)",
-        "FindBySpeciality(Speciality speciality): двопрохідний патерн, умова _doctors[i].Speciality == speciality (точне enum порівняння)",
+        { "text": "FindBySpeciality(Speciality speciality): двопрохідний патерн, умова _doctors[i].Speciality == speciality (точне enum порівняння)", "w": "critical" },
         "AppointmentManager: метод GetByDate(int year, int month, int day) — делегує до GetByDate(new DateTime(year, month, day))",
-        "PatientManager: метод bool TryFindById(int id, out Patient patient) — patient = FindById(id); return patient != null;",
+        { "text": "PatientManager: метод bool TryFindById(int id, out Patient patient) — patient = FindById(id); return patient != null;", "w": "critical" },
         "DoctorManager: метод bool TryFindById(int id, out Doctor doctor) — doctor = FindById(id); return doctor != null;",
-        "PatientManager: метод FindByBloodType(BloodType bloodType) — двопрохідний патерн, умова _patients[i].BloodType == bloodType (точне enum порівняння)",
+        { "text": "PatientManager: метод FindByBloodType(BloodType bloodType) — двопрохідний патерн, умова _patients[i].BloodType == bloodType (точне enum порівняння)", "w": "critical" },
         "TryFindById у Program.cs: if (clinic.Patients.TryFindById(id, out Patient p)) Console.WriteLine(p.FullName); else Console.WriteLine(\"не знайдено\");",
-        "Program.cs: демонстрація ?. оператора — clinic.Patients.FindById(99)?.FullName",
-        "Program.cs: демонстрація ?? оператора — clinic.Patients.FindById(99)?.FullName ?? \"не знайдено\"",
+        { "text": "Program.cs: демонстрація ?. оператора — clinic.Patients.FindById(99)?.FullName", "w": "minor" },
+        { "text": "Program.cs: демонстрація ?? оператора — clinic.Patients.FindById(99)?.FullName ?? \"не знайдено\"", "w": "minor" },
         "Program.cs: виклик enum-версії FindBySpeciality(Speciality.Cardiology) та рядкової версії FindBySpeciality(\"кардіо\")",
         "Program.cs: виклик GetByDate(2026, 5, 10) (три числа замість new DateTime)"
       ]

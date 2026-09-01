@@ -3,15 +3,15 @@
     {
       "n": 1,
       "requirements": [
-        "dotnet add package Spectre.Console виконано — PackageReference Spectre.Console присутній у src/*.csproj",
-        "Директорія src/UI/ створена",
+        { "text": "dotnet add package Spectre.Console виконано — PackageReference Spectre.Console присутній у src/*.csproj", "w": "minor" },
+        { "text": "Директорія src/UI/ створена", "w": "minor" },
         "Файл src/UI/ClinicRenderer.cs: public static class ClinicRenderer у namespace ClinicApp.UI",
         "PrintHeader(string title): AnsiConsole.Write(new Rule(...) { Justification = Justify.Left }) з Markup.Escape(title)",
         "PrintSuccess(string message): AnsiConsole.MarkupLine з зеленим кольором і префіксом ✓; Markup.Escape(message)",
         "PrintError(string message): AnsiConsole.MarkupLine з червоним кольором і префіксом ✗; Markup.Escape(message)",
         "PrintWarning(string message): AnsiConsole.MarkupLine з жовтим кольором і префіксом ⚠; Markup.Escape(message)",
         "PrintInfo(string message): AnsiConsole.MarkupLine з [dim] або сірим; Markup.Escape(message)",
-        "Markup.Escape(text) застосовується для ВСІХ рядків від user/даних — жодного прямого $\"[red]{userText}[/]\" без Escape",
+        { "text": "Markup.Escape(text) застосовується для ВСІХ рядків від user/даних — жодного прямого $\"[red]{userText}[/]\" без Escape", "w": "critical" },
         "Program.cs: рядки типу Console.WriteLine(\"── Пацієнти ──\") замінені на ClinicRenderer.PrintHeader(...)",
         "Program.cs: catch-блоки Console.WriteLine з помилкою замінені на ClinicRenderer.PrintError(...)",
         "Program.cs: повідомлення про успіх замінені на ClinicRenderer.PrintSuccess(...)"
@@ -22,14 +22,14 @@
       "requirements": [
         "ClinicRenderer: public static string SelectMenu(string title, string[] options) — повертає рядок вибраного пункту",
         "SelectMenu: new SelectionPrompt<string>().Title(...).AddChoices(options) з .HighlightStyle(new Style(Color.SteelBlue1, decoration: Decoration.Bold)) або аналог",
-        "ClinicRenderer: public static int PromptInt(string label) — new TextPrompt<int>(label) з .ValidationErrorMessage; авто-повтор при невалідному вводі",
+        { "text": "ClinicRenderer: public static int PromptInt(string label) — new TextPrompt<int>(label) з .ValidationErrorMessage; авто-повтор при невалідному вводі", "w": "critical" },
         "ClinicRenderer: public static string PromptString(string label, bool allowEmpty = false) — TextPrompt<string>; якщо allowEmpty: .AllowEmpty()",
         "ClinicRenderer: public static decimal PromptDecimal(string label) — TextPrompt<decimal>",
         "ClinicRenderer: public static bool PromptConfirm(string question) — new ConfirmationPrompt(question)",
         "Program.cs: патерни int.TryParse(Console.ReadLine()) замінені на ClinicRenderer.PromptInt(...)",
         "Program.cs: запити 'y/n' (Console.ReadLine()?.ToLower() == \"y\") замінені на ClinicRenderer.PromptConfirm(...)",
         "Program.cs: числові меню замінені на ClinicRenderer.SelectMenu(...) з switch по рядку",
-        "Пункт 'назад' представлений рядком '← Назад' або еквівалентом у кожному підменю"
+        { "text": "Пункт 'назад' представлений рядком '← Назад' або еквівалентом у кожному підменю", "w": "minor" }
       ]
     },
     {
@@ -38,14 +38,14 @@
         "ClinicRenderer: public static void RenderPatients(IEnumerable<Patient> patients)",
         "RenderPatients: new Table().Border(TableBorder.Rounded).AddColumn([bold]ID[/]).AddColumn([bold]Ім'я[/]).AddColumn([bold]Вік[/]).AddColumn([bold]Кров[/]).AddColumn([bold]Телефон[/])",
         "RenderPatients: для неповнолітнього (вік < 18) — вік виводиться [yellow]{age}[/]; дорослий — без стилю",
-        "RenderPatients: Markup.Escape для всіх рядкових значень у AddRow()",
+        { "text": "RenderPatients: Markup.Escape для всіх рядкових значень у AddRow()", "w": "critical" },
         "ClinicRenderer: public static void RenderDoctors(IEnumerable<Doctor> doctors)",
         "RenderDoctors: колонки ID, Ім'я, Спеціальність, Доступний, Розклад",
         "RenderDoctors: IsAvailableNow → [green]Так[/]; інакше [dim]Ні[/]",
         "ClinicRenderer: public static void RenderAppointments(IEnumerable<Appointment> appointments)",
         "RenderAppointments: колонки ID, Тип, Пацієнт/Лікар, Дата, Вартість, Статус",
         "RenderAppointments: скасовано → [red]; оплачено → [green]; прострочено → [dim]; заплановано → [yellow]; UrgentAppointment → [bold red] у колонці Тип",
-        "RenderAppointments: тип визначається через switch expression або is (UrgentAppointment, SpecialistAppointment, RegularAppointment)",
+        { "text": "RenderAppointments: тип визначається через switch expression або is (UrgentAppointment, SpecialistAppointment, RegularAppointment)", "w": "critical" },
         "Program.cs: DisplayAll() виклики замінені на ClinicRenderer.RenderPatients/Doctors/Appointments(.GetAll())"
       ]
     },
@@ -57,15 +57,15 @@
         "ClinicRenderer: public static void RenderDoctorCard(Doctor doctor) — Panel з полями: ID, Speciality, LicenseNumber, Phone, Schedule, IsAvailableNow",
         "ClinicRenderer: public static void RenderMedicalRecord(Patient patient, IEnumerable<MedicalRecord> records) — Tree",
         "RenderMedicalRecord: корінь Tree = ім'я пацієнта; три гілки: Діагнози, Аналізи, Рецепти",
-        "RenderMedicalRecord: .OfType<Diagnosis>(), .OfType<LabResult>(), .OfType<Prescription>() для розкладання по типах",
+        { "text": "RenderMedicalRecord: .OfType<Diagnosis>(), .OfType<LabResult>(), .OfType<Prescription>() для розкладання по типах", "w": "critical" },
         "RenderMedicalRecord: порожня гілка показує вузол [dim]немає[/]",
         "ClinicRenderer: public static void RenderSpecialityStats(IEnumerable<SpecialityReport> reports) — Table",
         "ClinicRenderer: public static void RenderMonthlyRevenue(IEnumerable<(int Year, int Month, decimal Total)> data) — BarChart",
         "RenderMonthlyRevenue: chart.AddItem(\"YYYY/MM\", (double)total, Color.SteelBlue1) або аналогічний колір",
         "ClinicRenderer: public static void WithSpinner(string message, Action action) — AnsiConsole.Status().Spinner(Spinner.Known.Dots).Start(message, _ => action())",
-        "MedicalRecordsMenu: 'Картка пацієнта' використовує RenderMedicalRecord",
-        "WaitingRoomMenu: 'Хто перший?' використовує RenderPatientCard",
-        "FilesMenu: 'Експортувати всі' обгорнутий у WithSpinner",
+        { "text": "MedicalRecordsMenu: 'Картка пацієнта' використовує RenderMedicalRecord", "w": "minor" },
+        { "text": "WaitingRoomMenu: 'Хто перший?' використовує RenderPatientCard", "w": "minor" },
+        { "text": "FilesMenu: 'Експортувати всі' обгорнутий у WithSpinner", "w": "minor" },
         "ReportsMenu: спеціальності через RenderSpecialityStats; місячна виручка через RenderMonthlyRevenue"
       ]
     }

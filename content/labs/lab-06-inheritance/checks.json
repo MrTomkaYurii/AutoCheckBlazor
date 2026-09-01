@@ -3,23 +3,23 @@
     {
       "n": 1,
       "requirements": [
-        "Файл src/Models/MedicalRecord.cs: public abstract class MedicalRecord у namespace ClinicApp.Models;",
+        { "text": "Файл src/Models/MedicalRecord.cs: public abstract class MedicalRecord у namespace ClinicApp.Models;", "w": "critical" },
         "Статичний лічильник private static int _nextId та властивість public int Id { get; } (readonly, автоінкремент)",
         "Властивості PatientId та DoctorId мають тільки get (readonly, призначаються в конструкторі)",
         "Властивість Date: public DateTime Date { get; } — get only, призначається в конструкторі",
         "Властивість Notes: public string Notes { get; set; } — публічний get і set",
         "protected конструктор MedicalRecord(int patientId, int doctorId, DateTime date): викликає ClinicValidator.ValidatePositive(patientId, ...) і ClinicValidator.ValidatePositive(doctorId, ...)",
-        "public abstract string GetSummary(); — без тіла, підкласи зобов'язані реалізувати",
+        { "text": "public abstract string GetSummary(); — без тіла, підкласи зобов'язані реалізувати", "w": "critical" },
         "public virtual string GetRecordType() => \"Медичний запис\"; — базова реалізація, підкласи можуть перевизначити",
         "public virtual bool IsActive() → дата запису давніша не більше 6 місяців: Date >= DateTime.Today.AddMonths(-6)",
         "override ToString(): \"[Id] GetRecordType() | Date.ToString(\\\"dd.MM.yyyy\\\") | GetSummary()\"",
         "Файл src/Models/Diagnosis.cs: public class Diagnosis : MedicalRecord",
         "Diagnosis: private string _diagnosisCode, _description з явними сеттерами через ClinicValidator.ValidateName",
         "Diagnosis: публічні властивості DiagnosisCode, Description, IsChronic (bool, auto-property)",
-        "Diagnosis конструктор: Diagnosis(int patientId, int doctorId, DateTime date, string code, string desc, bool isChronic = false) — викликає : base(patientId, doctorId, date)",
+        { "text": "Diagnosis конструктор: Diagnosis(int patientId, int doctorId, DateTime date, string code, string desc, bool isChronic = false) — викликає : base(patientId, doctorId, date)", "w": "critical" },
         "Diagnosis: override GetSummary() → \"I10: Гіпертонічна хвороба [хронічне]\" (якщо IsChronic) або без суфіксу",
         "Diagnosis: override GetRecordType() → \"Діагноз\"",
-        "new MedicalRecord(...) неможливий — abstract class (перевірка: компілятор кидає помилку)"
+        { "text": "new MedicalRecord(...) неможливий — abstract class (перевірка: компілятор кидає помилку)", "w": "critical" }
       ]
     },
     {
@@ -38,19 +38,19 @@
         "Prescription: обчислювана властивість ExpiresAt → Date.AddDays(DurationDays)",
         "Prescription: override GetSummary() → \"Лізиноприл 10 мг × 30 днів (вранці)\" де 'вранці' — Instructions",
         "Prescription: override GetRecordType() → \"Рецепт\"",
-        "Prescription: override IsActive() → ExpiresAt >= DateTime.Today (замінює 6-місячне правило бази)",
+        { "text": "Prescription: override IsActive() → ExpiresAt >= DateTime.Today (замінює 6-місячне правило бази)", "w": "critical" },
         "Файл src/Managers/MedicalRecordManager.cs у namespace ClinicApp.Managers;",
         "MedicalRecordManager: private MedicalRecord[] _records = new MedicalRecord[1000]; private int _count;",
         "MedicalRecordManager: методи Add(MedicalRecord), FindById(int), GetByPatient(int), GetByDoctor(int)",
         "MedicalRecordManager: методи DisplayAll(), DisplayList(MedicalRecord[]), індексатор this[int index]",
-        "DisplayList: простий цикл Console.WriteLine(_records[i]) без жодного is/as — поліморфізм через ToString()"
+        { "text": "DisplayList: простий цикл Console.WriteLine(_records[i]) без жодного is/as — поліморфізм через ToString()", "w": "critical" }
       ]
     },
     {
       "n": 3,
       "requirements": [
-        "MedicalRecordManager: метод GetDiagnoses(int patientId) → Diagnosis[] — двопрохідний патерн, умова: _records[i].PatientId == patientId && _records[i] is Diagnosis",
-        "GetDiagnoses використовує is pattern variable: if (_records[i] is Diagnosis d) result[idx++] = d; (не явне приведення (Diagnosis)_records[i])",
+        { "text": "MedicalRecordManager: метод GetDiagnoses(int patientId) → Diagnosis[] — двопрохідний патерн, умова: _records[i].PatientId == patientId && _records[i] is Diagnosis", "w": "critical" },
+        { "text": "GetDiagnoses використовує is pattern variable: if (_records[i] is Diagnosis d) result[idx++] = d; (не явне приведення (Diagnosis)_records[i])", "w": "critical" },
         "MedicalRecordManager: метод GetLabResults(int patientId) → LabResult[] — аналогічний патерн з is LabResult",
         "MedicalRecordManager: метод GetPrescriptions(int patientId) → Prescription[] — аналогічний патерн з is Prescription",
         "MedicalRecordManager: метод GetChronicDiagnoses(int patientId) → Diagnosis[] — умова: is Diagnosis d && d.IsChronic",
@@ -60,7 +60,7 @@
         "DisplayPatientSummary: виводить кількість: \"Всього записів: N (діагнозів: X, аналізів: Y, рецептів: Z)\"",
         "DisplayPatientSummary: виводить хронічні діагнози через GetChronicDiagnoses (секція пропускається якщо список порожній)",
         "DisplayPatientSummary: виводить активні рецепти з датою закінчення через GetActivePrescriptions (секція пропускається якщо список порожній)",
-        "Program.cs: демонстрація is та as операторів у довільному тестовому коді"
+        { "text": "Program.cs: демонстрація is та as операторів у довільному тестовому коді", "w": "minor" }
       ]
     },
     {
@@ -68,15 +68,15 @@
       "requirements": [
         "Clinic.cs: властивість public MedicalRecordManager MedicalRecords { get; }",
         "Clinic конструктор: MedicalRecords = new MedicalRecordManager();",
-        "Program.cs: тестові дані містять мінімум один Diagnosis, один LabResult, один Prescription",
-        "Program.cs: тестові дані містять хронічний діагноз (isChronic: true) і гострий (isChronic: false)",
-        "Program.cs: тестові дані містять LabResult з isNormal: false (поза нормою)",
-        "Program.cs: тестові дані містять активний рецепт (DateAddDays(-5), DurationDays: 30) і завершений (DateAddDays(-40), DurationDays: 10)",
+        { "text": "Program.cs: тестові дані містять мінімум один Diagnosis, один LabResult, один Prescription", "w": "minor" },
+        { "text": "Program.cs: тестові дані містять хронічний діагноз (isChronic: true) і гострий (isChronic: false)", "w": "minor" },
+        { "text": "Program.cs: тестові дані містять LabResult з isNormal: false (поза нормою)", "w": "minor" },
+        { "text": "Program.cs: тестові дані містять активний рецепт (DateAddDays(-5), DurationDays: 30) і завершений (DateAddDays(-40), DurationDays: 10)", "w": "minor" },
         "Program.cs: меню 'Медична картка' — окрема static void MedicalRecordsMenu(Clinic clinic) функція",
-        "Меню містить мінімум: Картка пацієнта (DisplayPatientSummary), Всі записи (GetByPatient + DisplayList), Додати діагноз, Додати аналіз, Додати рецепт",
+        { "text": "Меню містить мінімум: Картка пацієнта (DisplayPatientSummary), Всі записи (GetByPatient + DisplayList), Додати діагноз, Додати аналіз, Додати рецепт", "w": "minor" },
         "Пункти 'Додати' огорнуті у try/catch (ArgumentOutOfRangeException перший, ArgumentException другий)",
-        "DisplayList(MedicalRecord[]) не містить жодного if/is перевірок — чистий поліморфізм через ToString()",
-        "Program.cs: явна демонстрація поліморфізму — цикл по MedicalRecord[] викликає GetRecordType() та GetSummary(), кожен запис дає свій тип і зміст"
+        { "text": "DisplayList(MedicalRecord[]) не містить жодного if/is перевірок — чистий поліморфізм через ToString()", "w": "critical" },
+        { "text": "Program.cs: явна демонстрація поліморфізму — цикл по MedicalRecord[] викликає GetRecordType() та GetSummary(), кожен запис дає свій тип і зміст", "w": "critical" }
       ]
     }
   ]

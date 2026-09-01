@@ -3,16 +3,16 @@
     {
       "n": 1,
       "requirements": [
-        "AnalyticsManager.ComputeDoctorStats(): for-цикли по прийомах замінені на LINQ",
-        "Перед .Select(): Appointment[] appointments = _appointments.GetAll() — масив формується один раз, не всередині SELECT",
+        { "text": "AnalyticsManager.ComputeDoctorStats(): for-цикли по прийомах замінені на LINQ", "w": "critical" },
+        { "text": "Перед .Select(): Appointment[] appointments = _appointments.GetAll() — масив формується один раз, не всередині SELECT", "w": "critical" },
         "Для кожного лікаря: var own = appointments.Where(a => a.DoctorId == d.Id) — фільтрація через .Where",
         "AppointmentCount: own.Count()",
         "TotalRevenue: own.Sum(a => a.GetCost())",
-        "LastAppointmentDate: перевірка own.Any() перед .Max(a => a.ScheduledAt); якщо порожньо → DateTime.MinValue",
+        { "text": "LastAppointmentDate: перевірка own.Any() перед .Max(a => a.ScheduledAt); якщо порожньо → DateTime.MinValue", "w": "critical" },
         "Результат через .Select(d => new DoctorStats(...)) або аналогічний LINQ-вираз",
         "AnalyticsManager.ComputePatientStats(): аналогічний рефакторинг для пацієнтів",
         "Сигнатури методів не змінились: IEnumerable<DoctorStats> і IEnumerable<PatientStats>",
-        "Пункт '8. Аналітика' після рефакторингу: всі сортування дають ті самі результати"
+        { "text": "Пункт '8. Аналітика' після рефакторингу: всі сортування дають ті самі результати", "w": "minor" }
       ]
     },
     {
@@ -30,14 +30,14 @@
       "requirements": [
         "Файл src/Managers/ReportManager.cs: клас ReportManager",
         "ReportManager конструктор: ReportManager(AppointmentManager appointments, DoctorManager doctors, PatientManager patients)",
-        "GetSpecialityStats(): .GroupBy(d => d.Speciality) на лікарях → для кожної групи знайти прийоми через .Where(a => doctorIds.Contains(a.DoctorId)) → SpecialityReport → .OrderByDescending(r => r.TotalRevenue)",
+        { "text": "GetSpecialityStats(): .GroupBy(d => d.Speciality) на лікарях → для кожної групи знайти прийоми через .Where(a => doctorIds.Contains(a.DoctorId)) → SpecialityReport → .OrderByDescending(r => r.TotalRevenue)", "w": "critical" },
         "GetSpecialityStats: doctorIds отримуються через .Select(d => d.Id).ToArray() або аналог",
         "FindBusiestDoctorName(): .OrderByDescending(d => appointments.Count(a => a.DoctorId == d.Id)) → .FirstOrDefault()?.FullName; тип повернення string?",
-        "GetPatientsWithMultipleVisits(int minVisits): GroupBy(a => a.PatientId) → .Where(g => g.Count() >= minVisits) → .Join(patients, g.Key == p.Id) → p.FullName",
+        { "text": "GetPatientsWithMultipleVisits(int minVisits): GroupBy(a => a.PatientId) → .Where(g => g.Count() >= minVisits) → .Join(patients, g.Key == p.Id) → p.FullName", "w": "critical" },
         "GetTopEarners(int n): обчислює виручку для кожного лікаря → .OrderByDescending(...) → .Take(n) → DoctorStats[]",
-        "HasAnyUrgentAppointments(): appointments.Any(a => a is UrgentAppointment) → bool",
-        "GetActiveSpecialities(): .Select(d => d.Speciality).Distinct().OrderBy(...) → IEnumerable<Speciality>",
-        "GetMonthlyRevenue(): .GroupBy(a => new { a.ScheduledAt.Year, a.ScheduledAt.Month }) → (g.Key.Year, g.Key.Month, g.Sum(a => a.GetCost())) → .OrderBy(x => x.Year).ThenBy(x => x.Month)",
+        { "text": "HasAnyUrgentAppointments(): appointments.Any(a => a is UrgentAppointment) → bool", "w": "critical" },
+        { "text": "GetActiveSpecialities(): .Select(d => d.Speciality).Distinct().OrderBy(...) → IEnumerable<Speciality>", "w": "critical" },
+        { "text": "GetMonthlyRevenue(): .GroupBy(a => new { a.ScheduledAt.Year, a.ScheduledAt.Month }) → (g.Key.Year, g.Key.Month, g.Sum(a => a.GetCost())) → .OrderBy(x => x.Year).ThenBy(x => x.Month)", "w": "critical" },
         "GetMonthlyRevenue: тип повернення IEnumerable<(int Year, int Month, decimal Total)> або аналог"
       ]
     },
@@ -46,15 +46,15 @@
       "requirements": [
         "Clinic.cs: public ReportManager Reports { get; }",
         "Clinic конструктор: Reports = new ReportManager(Appointments, Doctors, Patients);",
-        "Program.cs: у головному меню присутній пункт '11. Звіти'",
-        "Program.cs: статична функція ReportsMenu(Clinic clinic) з 7 пунктами",
-        "Пункт 1: GetSpecialityStats() — виводить спеціальності відсортовані за виручкою",
-        "Пункт 2: FindBusiestDoctorName() — виводить ім'я або '—' якщо null",
-        "Пункт 3: запит minVisits у користувача → GetPatientsWithMultipleVisits(minVisits)",
-        "Пункт 4: GetTopEarners(3) — виводить 3 лікарів з нумерацією",
-        "Пункт 5: HasAnyUrgentAppointments() — виводить 'Так' або 'Ні'",
-        "Пункт 6: GetActiveSpecialities()",
-        "Пункт 7: GetMonthlyRevenue() — формат 'YYYY/MM — NNNN.NN грн'"
+        { "text": "Program.cs: у головному меню присутній пункт '11. Звіти'", "w": "minor" },
+        { "text": "Program.cs: статична функція ReportsMenu(Clinic clinic) з 7 пунктами", "w": "minor" },
+        { "text": "Пункт 1: GetSpecialityStats() — виводить спеціальності відсортовані за виручкою", "w": "minor" },
+        { "text": "Пункт 2: FindBusiestDoctorName() — виводить ім'я або '—' якщо null", "w": "minor" },
+        { "text": "Пункт 3: запит minVisits у користувача → GetPatientsWithMultipleVisits(minVisits)", "w": "minor" },
+        { "text": "Пункт 4: GetTopEarners(3) — виводить 3 лікарів з нумерацією", "w": "minor" },
+        { "text": "Пункт 5: HasAnyUrgentAppointments() — виводить 'Так' або 'Ні'", "w": "minor" },
+        { "text": "Пункт 6: GetActiveSpecialities()", "w": "minor" },
+        { "text": "Пункт 7: GetMonthlyRevenue() — формат 'YYYY/MM — NNNN.NN грн'", "w": "minor" }
       ]
     }
   ]

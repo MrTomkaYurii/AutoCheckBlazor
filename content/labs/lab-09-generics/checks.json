@@ -3,31 +3,31 @@
     {
       "n": 1,
       "requirements": [
-        "PatientManager: поле _patients змінено з Patient[] на List<Patient>",
+        { "text": "PatientManager: поле _patients змінено з Patient[] на List<Patient>", "w": "critical" },
         "PatientManager: поле _count і константа MaxPatients (або аналог) видалені",
         "PatientManager.Count (або аналог): повертає _patients.Count",
         "PatientManager.Add(): використовує _patients.Add(patient) без перевірки ліміту",
-        "PatientManager.Remove(): використовує _patients.RemoveAt(i) замість ручного зсуву",
+        { "text": "PatientManager.Remove(): використовує _patients.RemoveAt(i) замість ручного зсуву", "w": "critical" },
         "PatientManager.FindByName() або FindByBloodType(): використовує проміжний List<Patient>, в кінці .ToArray()",
         "PatientManager.GetAll(): повертає _patients.ToArray() без циклу",
         "Зовнішній API PatientManager не змінився: Add, FindById, DisplayAll, Remove, GetAll — сигнатури ті самі",
-        "dotnet run: меню '1. Пацієнти' працює ідентично до попередньої версії"
+        { "text": "dotnet run: меню '1. Пацієнти' працює ідентично до попередньої версії", "w": "minor" }
       ]
     },
     {
       "n": 2,
       "requirements": [
-        "Файл src/Models/WaitingQueue.cs: public class WaitingQueue<T>",
+        { "text": "Файл src/Models/WaitingQueue.cs: public class WaitingQueue<T>", "w": "critical" },
         "WaitingQueue<T>: приватне поле Queue<T> _queue = new Queue<T>()",
         "WaitingQueue<T>: властивість int Count => _queue.Count",
         "WaitingQueue<T>: властивість bool IsEmpty => Count == 0",
         "WaitingQueue<T>: void Enqueue(T item) → _queue.Enqueue(item)",
-        "WaitingQueue<T>: T Dequeue() → якщо IsEmpty: throw new InvalidOperationException(\"Черга порожня\"); інакше _queue.Dequeue()",
-        "WaitingQueue<T>: T Peek() → якщо IsEmpty: throw new InvalidOperationException(\"Черга порожня\"); інакше _queue.Peek()",
+        { "text": "WaitingQueue<T>: T Dequeue() → якщо IsEmpty: throw new InvalidOperationException(\"Черга порожня\"); інакше _queue.Dequeue()", "w": "critical" },
+        { "text": "WaitingQueue<T>: T Peek() → якщо IsEmpty: throw new InvalidOperationException(\"Черга порожня\"); інакше _queue.Peek()", "w": "critical" },
         "WaitingQueue<T>: T[] ToArray() → _queue.ToArray()",
-        "WaitingQueue<T> не має constraint — WaitingQueue<string>, WaitingQueue<int>, WaitingQueue<Patient> — все компілюється",
-        "Тест: Enqueue 3 рядки → Count == 3; Peek повертає перший; Dequeue повертає перший і Count == 2",
-        "Тест: Dequeue на порожній черзі → InvalidOperationException (не крашиться)"
+        { "text": "WaitingQueue<T> не має constraint — WaitingQueue<string>, WaitingQueue<int>, WaitingQueue<Patient> — все компілюється", "w": "critical" },
+        { "text": "Тест: Enqueue 3 рядки → Count == 3; Peek повертає перший; Dequeue повертає перший і Count == 2", "w": "minor" },
+        { "text": "Тест: Dequeue на порожній черзі → InvalidOperationException (не крашиться)", "w": "minor" }
       ]
     },
     {
@@ -35,13 +35,13 @@
       "requirements": [
         "Clinic.cs: public WaitingQueue<Patient> WaitingRoom { get; }",
         "Clinic конструктор: WaitingRoom = new WaitingQueue<Patient>();",
-        "Program.cs: у головному меню присутній пункт '6. Черга' (або '6. Черга — очікування, прийом')",
-        "Program.cs: статична функція WaitingRoomMenu(Clinic clinic) або аналог",
-        "WaitingRoomMenu: пункт '1. Додати пацієнта до черги' — читає ID, знаходить через Patients.FindById, викликає WaitingRoom.Enqueue(patient)",
-        "WaitingRoomMenu: пункт '2. Прийняти першого' — WaitingRoom.Dequeue() у try/catch InvalidOperationException",
-        "WaitingRoomMenu: пункт '3. Хто перший?' — WaitingRoom.Peek() у try/catch InvalidOperationException",
-        "WaitingRoomMenu: пункт '4. Переглянути всю чергу' — WaitingRoom.ToArray() з нумерованим виводом",
-        "Dequeue на порожній черзі: виводить повідомлення про помилку, програма не падає"
+        { "text": "Program.cs: у головному меню присутній пункт '6. Черга' (або '6. Черга — очікування, прийом')", "w": "minor" },
+        { "text": "Program.cs: статична функція WaitingRoomMenu(Clinic clinic) або аналог", "w": "minor" },
+        { "text": "WaitingRoomMenu: пункт '1. Додати пацієнта до черги' — читає ID, знаходить через Patients.FindById, викликає WaitingRoom.Enqueue(patient)", "w": "minor" },
+        { "text": "WaitingRoomMenu: пункт '2. Прийняти першого' — WaitingRoom.Dequeue() у try/catch InvalidOperationException", "w": "minor" },
+        { "text": "WaitingRoomMenu: пункт '3. Хто перший?' — WaitingRoom.Peek() у try/catch InvalidOperationException", "w": "minor" },
+        { "text": "WaitingRoomMenu: пункт '4. Переглянути всю чергу' — WaitingRoom.ToArray() з нумерованим виводом", "w": "minor" },
+        { "text": "Dequeue на порожній черзі: виводить повідомлення про помилку, програма не падає", "w": "critical" }
       ]
     },
     {
@@ -51,15 +51,15 @@
         "Patient реалізує IIdentifiable: public class Patient : IIdentifiable (або Patient : ..., IIdentifiable)",
         "Doctor реалізує IIdentifiable: public class Doctor : IIdentifiable",
         "Appointment реалізує IIdentifiable: public class Appointment : IIdentifiable",
-        "Файл src/Managers/Repository.cs: public class Repository<T> where T : IIdentifiable",
+        { "text": "Файл src/Managers/Repository.cs: public class Repository<T> where T : IIdentifiable", "w": "critical" },
         "Repository<T>: приватне поле List<T> _items = new List<T>()",
         "Repository<T>: void Add(T item) → _items.Add(item)",
         "Repository<T>: T GetById(int id) → шукає _items[i].Id == id, повертає знайдений або default!",
         "Repository<T>: T[] GetAll() → _items.ToArray()",
         "Repository<T>: bool Remove(int id) → знаходить за Id, RemoveAt та повертає true; false якщо не знайдено",
         "Repository<T>: int Count => _items.Count",
-        "Repository<Patient> компілюється; Repository<string> НЕ компілюється (string не реалізує IIdentifiable)",
-        "Program.cs або тест: демонстрація Repository<Patient> — Add, GetById, Remove"
+        { "text": "Repository<Patient> компілюється; Repository<string> НЕ компілюється (string не реалізує IIdentifiable)", "w": "critical" },
+        { "text": "Program.cs або тест: демонстрація Repository<Patient> — Add, GetById, Remove", "w": "minor" }
       ]
     }
   ]

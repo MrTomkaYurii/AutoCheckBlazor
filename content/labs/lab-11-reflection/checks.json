@@ -3,17 +3,17 @@
     {
       "n": 1,
       "requirements": [
-        "Директорія src/Attributes/ створена",
-        "Файл src/Attributes/RequiredAttribute.cs: public sealed class RequiredAttribute : Attribute",
-        "[AttributeUsage(AttributeTargets.Property, AllowMultiple = false)] присутній над RequiredAttribute",
+        { "text": "Директорія src/Attributes/ створена", "w": "minor" },
+        { "text": "Файл src/Attributes/RequiredAttribute.cs: public sealed class RequiredAttribute : Attribute", "w": "critical" },
+        { "text": "[AttributeUsage(AttributeTargets.Property, AllowMultiple = false)] присутній над RequiredAttribute", "w": "critical" },
         "RequiredAttribute: public string ErrorMessage { get; } та конструктор з дефолтом \"Field is required.\"",
         "Файл src/Attributes/MaxLengthAttribute.cs: public sealed class MaxLengthAttribute : Attribute",
-        "[AttributeUsage(AttributeTargets.Property, AllowMultiple = false)] присутній над MaxLengthAttribute",
+        { "text": "[AttributeUsage(AttributeTargets.Property, AllowMultiple = false)] присутній над MaxLengthAttribute", "w": "critical" },
         "MaxLengthAttribute: public int Length { get; }, public string ErrorMessage { get; }, конструктор(int length, string errorMessage = \"\")",
         "Файл src/Attributes/MinValueAttribute.cs: public sealed class MinValueAttribute : Attribute",
-        "[AttributeUsage(AttributeTargets.Property, AllowMultiple = false)] присутній над MinValueAttribute",
+        { "text": "[AttributeUsage(AttributeTargets.Property, AllowMultiple = false)] присутній над MinValueAttribute", "w": "critical" },
         "MinValueAttribute: public double Min { get; }, public string ErrorMessage { get; }, конструктор(double min, string errorMessage = \"\")",
-        "Усі три класи є sealed — не підлягають подальшому спадкуванню"
+        { "text": "Усі три класи є sealed — не підлягають подальшому спадкуванню", "w": "minor" }
       ]
     },
     {
@@ -23,7 +23,7 @@
         "Файл src/Models/TreatmentPlan.cs: клас TreatmentPlan з using YourApp.Attributes (або аналог)",
         "TreatmentPlan: private static int _nextId = 1; public int Id { get; } — автоінкремент",
         "TreatmentPlan: [Required(\"Patient ID is required.\")] public int PatientId { get; set; }",
-        "TreatmentPlan: [Required(\"Diagnosis cannot be empty.\")] [MaxLength(200, \"...\")] public string Diagnosis { get; set; } — обидва атрибути на одній властивості",
+        { "text": "TreatmentPlan: [Required(\"Diagnosis cannot be empty.\")] [MaxLength(200, \"...\")] public string Diagnosis { get; set; } — обидва атрибути на одній властивості", "w": "critical" },
         "TreatmentPlan: [MinValue(1, \"...\")] public int DurationDays { get; set; }",
         "TreatmentPlan: public TreatmentStatus Status { get; private set; } = TreatmentStatus.Planned",
         "TreatmentPlan: bool Activate() → якщо Status == Planned: Status = Active, return true; інакше return false",
@@ -42,12 +42,12 @@
         "ValidationResult: void Print() → для кожної помилки виводить '[!] {error}'",
         "Файл src/Utils/ModelValidator.cs: public static class ModelValidator",
         "ModelValidator: public static ValidationResult Validate(object obj)",
-        "Validate: var type = obj.GetType(); — не typeof(TreatmentPlan), саме GetType() щоб працювало з будь-яким типом",
-        "Validate: foreach (var prop in type.GetProperties()) → prop.GetValue(obj) → перевірка атрибутів",
-        "Validate: prop.GetCustomAttribute<RequiredAttribute>() — якщо не null: перевіряє null або IsNullOrWhiteSpace, додає помилку",
+        { "text": "Validate: var type = obj.GetType(); — не typeof(TreatmentPlan), саме GetType() щоб працювало з будь-яким типом", "w": "critical" },
+        { "text": "Validate: foreach (var prop in type.GetProperties()) → prop.GetValue(obj) → перевірка атрибутів", "w": "critical" },
+        { "text": "Validate: prop.GetCustomAttribute<RequiredAttribute>() — якщо не null: перевіряє null або IsNullOrWhiteSpace, додає помилку", "w": "critical" },
         "Validate: prop.GetCustomAttribute<MaxLengthAttribute>() — якщо не null: перевіряє довжину рядка",
         "Validate: prop.GetCustomAttribute<MinValueAttribute>() — якщо не null: перевіряє числове значення >= Min",
-        "Validate: жодного if (plan.Diagnosis == null) — валідація через рефлексію, не hardcoded поля",
+        { "text": "Validate: жодного if (plan.Diagnosis == null) — валідація через рефлексію, не hardcoded поля", "w": "critical" },
         "ModelValidator: public static void PrintInfo(Type type) → виводить назву типу і список властивостей з їх атрибутами"
       ]
     },
@@ -62,11 +62,11 @@
         "TreatmentPlanManager: TreatmentPlan[] GetByStatus(TreatmentStatus status)",
         "TreatmentPlanManager: TreatmentPlan[] GetAll() → _plans.ToArray()",
         "Файл src/Utils/FormBuilder.cs: public static class FormBuilder",
-        "FormBuilder: public static T Build<T>() where T : new()",
+        { "text": "FormBuilder: public static T Build<T>() where T : new()", "w": "critical" },
         "FormBuilder: var obj = new T(); var type = typeof(T);",
-        "FormBuilder: foreach по type.GetProperties() де prop.CanWrite — пропускає readonly властивості",
+        { "text": "FormBuilder: foreach по type.GetProperties() де prop.CanWrite — пропускає readonly властивості", "w": "critical" },
         "FormBuilder: зчитує атрибути для hint (RequiredAttribute, MaxLengthAttribute, MinValueAttribute) і виводить підказку поруч з іменем поля",
-        "FormBuilder: Console.ReadLine() → Convert.ChangeType(input, prop.PropertyType) у try/catch → prop.SetValue(obj, converted)",
+        { "text": "FormBuilder: Console.ReadLine() → Convert.ChangeType(input, prop.PropertyType) у try/catch → prop.SetValue(obj, converted)", "w": "critical" },
         "FormBuilder: повертає заповнений об'єкт"
       ]
     },
@@ -75,11 +75,11 @@
       "requirements": [
         "Clinic.cs: public TreatmentPlanManager TreatmentPlans { get; }",
         "Clinic конструктор: TreatmentPlans = new TreatmentPlanManager();",
-        "Program.cs: у головному меню присутній пункт '9. Плани лікування' або аналог",
-        "Program.cs: функція TreatmentPlansMenu(Clinic clinic) або аналог",
-        "Меню містить: Показати всі плани, Додати план, Плани пацієнта, Активувати план, Завершити план, Скасувати план, Інформація про тип",
-        "Пункт 'Додати план': використовує FormBuilder.Build<TreatmentPlan>() — форма генерується автоматично з атрибутів",
-        "Пункт 'Інформація про тип': викликає ModelValidator.PrintInfo(typeof(TreatmentPlan)) — без екземпляра об'єкта",
+        { "text": "Program.cs: у головному меню присутній пункт '9. Плани лікування' або аналог", "w": "minor" },
+        { "text": "Program.cs: функція TreatmentPlansMenu(Clinic clinic) або аналог", "w": "minor" },
+        { "text": "Меню містить: Показати всі плани, Додати план, Плани пацієнта, Активувати план, Завершити план, Скасувати план, Інформація про тип", "w": "minor" },
+        { "text": "Пункт 'Додати план': використовує FormBuilder.Build<TreatmentPlan>() — форма генерується автоматично з атрибутів", "w": "critical" },
+        { "text": "Пункт 'Інформація про тип': викликає ModelValidator.PrintInfo(typeof(TreatmentPlan)) — без екземпляра об'єкта", "w": "critical" },
         "Спроба додати план без обов'язкових полів: виводить повідомлення з помилками, програма не падає"
       ]
     }
