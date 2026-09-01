@@ -28,7 +28,11 @@
         <div class="card-head">
             <Icon Name="settings" Size="18" Style="color:var(--acc)" />
             <h3 class="card-title">Лабораторні роботи</h3>
-            <span class="badge badge-grey"><span class="dot"></span>@Filtered.Count лаб</span>
+            <span class="badge badge-grey"><span class="dot"></span>@Filtered.Count(l => l.IsActive) активних</span>
+            @if (Filtered.Any(l => !l.IsActive))
+            {
+                <span class="badge badge-grey"><span class="dot"></span>@Filtered.Count(l => !l.IsActive) вимкнено</span>
+            }
         </div>
 
         @if (Filtered.Count == 0 && !_loading)
@@ -40,12 +44,18 @@
         {
             var stat = _stats.FirstOrDefault(s => s.Id == lab.Number);
             var isExpanded = _expanded == lab.Id;
-            <div class="lab-block">
+            <div class="lab-block @(lab.IsActive ? "" : "lab-block--inactive")">
                 @* Lab row *@
                 <div class="lab-row">
                     <span class="mono lab-number">@lab.Number.ToString("D2")</span>
                     <div>
-                        <div class="lab-title">@lab.Title</div>
+                        <div class="lab-title">
+                            @lab.Title
+                            @if (!lab.IsActive)
+                            {
+                                <span class="badge badge-grey lab-inactive-badge"><span class="dot"></span>вимкнено</span>
+                            }
+                        </div>
                         <div class="lab-sub">
                             @if (!string.IsNullOrEmpty(lab.BranchName))
                             {
@@ -111,6 +121,10 @@
                         <button class="btn btn-ghost btn-sm" @onclick="@(() => ToggleExpand(lab.Id))" title="@(isExpanded ? "Закрити" : "Завдання")">
                             <Icon Name="@(isExpanded ? "x" : "spark")" Size="14" />
                             @(isExpanded ? "Закрити" : "Завдання")
+                        </button>
+                        <button class="btn btn-ghost btn-sm" @onclick="@(() => ToggleActive(lab))" title="@(lab.IsActive ? "Вимкнути з курсу" : "Повернути в курс")">
+                            <Icon Name="@(lab.IsActive ? "lock" : "refresh")" Size="14" />
+                            @(lab.IsActive ? "Вимкнути" : "Увімкнути")
                         </button>
                         <button class="btn btn-ghost btn-sm" @onclick="@(() => EditLab(lab))" title="Редагувати"><Icon Name="settings" Size="14" /></button>
                         <button class="btn btn-ghost btn-sm delete-btn" @onclick="@(() => DeleteLab(lab))" title="Видалити"><Icon Name="x" Size="14" /></button>
@@ -206,6 +220,26 @@
         if (!ok) return;
 
         await LabSvc.DeleteAsync(lab.Id);
+        await Reload();
+    }
+
+    private async Task ToggleActive(LabDef lab)
+    {
+        if (lab.IsActive)
+        {
+            // deactivating: warn if students already have work on this lab — it will
+            // vanish from their journals/points/stats, but the data itself is kept
+            var submitted = _stats.FirstOrDefault(s => s.Id == lab.Number)?.Submitted ?? 0;
+            var warn = submitted > 0
+                ? $"\n\n{submitted} студент(ів) вже мають здачі по цій лабі. Вона зникне з їхніх "
+                + "журналів, балів і статистики. Здачі та оцінки збережуться і повернуться, якщо ввімкнути назад."
+                : "";
+            var ok = await JS.InvokeAsync<bool>("confirm",
+                $"Вимкнути Lab{lab.Number:D2} «{lab.Title}»? Її буде виключено з курсу.{warn}");
+            if (!ok) return;
+        }
+
+        await LabSvc.SetActiveAsync(lab.Id, !lab.IsActive);
         await Reload();
     }
 

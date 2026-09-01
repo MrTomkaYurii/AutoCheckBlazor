@@ -17,6 +17,11 @@ public class LabDef
     public DateTime? Deadline { get; set; }
     public int AttemptsMax { get; set; } = 3;
 
+    // Коли false — лабу виключено з курсу: студенти її не бачать, вона не входить
+    // у підрахунки та в бали для допуску. Дані (здачі, оцінки) зберігаються;
+    // керується кнопкою на /teacher/labs.
+    public bool IsActive { get; set; } = true;
+
     public List<LabTask> Tasks { get; set; } = [];
     public List<Submission> Submissions { get; set; } = [];
 }

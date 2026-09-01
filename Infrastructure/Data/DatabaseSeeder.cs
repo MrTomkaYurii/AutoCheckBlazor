@@ -50,6 +50,7 @@ public class DatabaseSeeder(
         await AddColumnIfMissingAsync("Submissions", "Attempt2Score", "INTEGER");
         await AddColumnIfMissingAsync("Submissions", "Attempt3Score", "INTEGER");
         await AddColumnIfMissingAsync("Labs",    "AttemptsMax", "INTEGER NOT NULL DEFAULT 3");
+        await AddColumnIfMissingAsync("Labs",    "IsActive",    "INTEGER NOT NULL DEFAULT 1");
         await AddColumnIfMissingAsync("Teachers", "Email",       "TEXT NOT NULL DEFAULT ''");
         await AddColumnIfMissingAsync("TaskResults", "AttemptNo", "INTEGER NOT NULL DEFAULT 1");
         await AddColumnIfMissingAsync("Submissions", "PlagiarismFlag",     "INTEGER NOT NULL DEFAULT 0");

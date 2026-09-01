@@ -53,6 +53,16 @@
     border-bottom: 1px solid var(--line);
 }
 
+/* Вимкнена з курсу лаба — приглушена, але дії лишаються клікабельними */
+.lab-block--inactive .lab-row > :not(.lab-actions) {
+    opacity: 0.5;
+}
+
+.lab-inactive-badge {
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
 .lab-row {
     display: grid;
     grid-template-columns: 50px 1fr 95px 110px 180px auto;

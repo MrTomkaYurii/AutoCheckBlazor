@@ -87,6 +87,39 @@ public class LabManagementServiceTests : IDisposable
         labs[2].Number.Should().Be(3);
     }
 
+    [Fact]
+    public async Task SetActiveAsync_TogglesFlagButKeepsLab()
+    {
+        _db.Labs.Add(new LabDef { Number = 1, Slug = "lab-01", Title = "Lab", OrderIndex = 0 });
+        await _db.SaveChangesAsync();
+        var id = _db.Labs.First().Id;
+
+        await _svc.SetActiveAsync(id, false);
+
+        _db.ChangeTracker.Clear();   // service saved via its own context — re-read from store
+        var lab = await _db.Labs.FindAsync(id);
+        lab.Should().NotBeNull();            // не видалено
+        lab!.IsActive.Should().BeFalse();
+
+        await _svc.SetActiveAsync(id, true);
+        _db.ChangeTracker.Clear();
+        (await _db.Labs.FindAsync(id))!.IsActive.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetAllAsync_IncludesInactiveLabs()
+    {
+        _db.Labs.AddRange(
+            new LabDef { Number = 1, Slug = "lab-01", Title = "Активна",  OrderIndex = 0, IsActive = true },
+            new LabDef { Number = 2, Slug = "lab-02", Title = "Вимкнена", OrderIndex = 1, IsActive = false }
+        );
+        await _db.SaveChangesAsync();
+
+        var labs = await _svc.GetAllAsync();
+
+        labs.Should().HaveCount(2);   // сторінка керування бачить усі
+    }
+
     // ── Task CRUD ─────────────────────────────────────────────────────────────
 
     [Fact]

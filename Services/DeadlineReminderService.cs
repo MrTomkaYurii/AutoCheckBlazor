@@ -37,7 +37,7 @@ public class DeadlineReminderService(
         var soon = now.AddHours(24);
 
         var labs = await db.Labs.AsNoTracking()
-            .Where(l => l.Deadline != null && l.Deadline > now && l.Deadline <= soon)
+            .Where(l => l.IsActive && l.Deadline != null && l.Deadline > now && l.Deadline <= soon)
             .ToListAsync(ct);
 
         foreach (var lab in labs)

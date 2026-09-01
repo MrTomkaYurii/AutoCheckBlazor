@@ -15,6 +15,9 @@ public interface ILabManagementService
     Task UpdateAsync(int id, CreateLabDto dto);
     Task DeleteAsync(int id);
 
+    /// <summary>Увімкнути / вимкнути лабу в курсі (без видалення даних).</summary>
+    Task SetActiveAsync(int id, bool active);
+
     // ── Task CRUD ─────────────────────────────────────────────────────────────
     Task<List<LabTask>> GetTasksAsync(int labId);
     Task<LabTask> CreateTaskAsync(int labId, CreateTaskDto dto);

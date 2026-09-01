@@ -284,7 +284,12 @@
     {
         // Teacher sees the best attempt by default — that's where AutoScore came from
         var detail = await Data.GetLabDetailAsync(LabId, StudentId, attemptNo);
-        if (detail is null) return;
+        if (detail is null)
+        {
+            // лабу вимкнено з курсу (або немає) — повертаємо в журнал
+            Nav.NavigateTo("/teacher/journal", replace: true);
+            return;
+        }
 
         if (attemptNo is null && detail.Attempts.Count > 0)
         {

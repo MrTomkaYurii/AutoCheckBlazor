@@ -654,6 +654,11 @@
             LabInfo   = detail;
             _activeId = "task" + (detail.Tasks.FirstOrDefault()?.N ?? 1);
         }
+        else
+        {
+            // лаби немає або її вимкнено з курсу — повертаємо на дашборд
+            Nav.NavigateTo("/student", replace: true);
+        }
     }
 
     private async Task SelectAttempt(int no)

@@ -22,7 +22,7 @@ public class DbDataService(IDbContextFactory<AppDbContext> dbf, TokenProtector t
         await using var db = await dbf.CreateDbContextAsync();
         var subs = await db.Submissions
             .Include(x => x.LabDef)
-            .Where(x => x.StudentId == studentId)
+            .Where(x => x.StudentId == studentId && x.LabDef.IsActive)
             .OrderBy(x => x.LabDef.Number)
             .ToListAsync();
 
@@ -49,7 +49,7 @@ public class DbDataService(IDbContextFactory<AppDbContext> dbf, TokenProtector t
             .Include(x => x.LabDef).ThenInclude(l => l.Tasks)
             .Include(x => x.TaskResults).ThenInclude(tr => tr.LabTask)
             .Include(x => x.TaskResults).ThenInclude(tr => tr.DiffLines)
-            .FirstOrDefaultAsync(x => x.StudentId == studentId && x.LabDef.Number == labNumber);
+            .FirstOrDefaultAsync(x => x.StudentId == studentId && x.LabDef.Number == labNumber && x.LabDef.IsActive);
 
         if (sub is null) return null;
 
@@ -115,7 +115,9 @@ public class DbDataService(IDbContextFactory<AppDbContext> dbf, TokenProtector t
     public async Task<PointsBreakdown> GetPointsBreakdownAsync(int studentId)
     {
         await using var db = await dbf.CreateDbContextAsync();
-        var labs = await db.Labs.Include(l => l.Tasks).OrderBy(l => l.Number).ToListAsync();
+        // Лише активні лаби: вимкнена лаба не додає ваги, тож бали за курс
+        // перерозподіляються між рештою, а поріг допуску лишається незмінним.
+        var labs = await db.Labs.Include(l => l.Tasks).Where(l => l.IsActive).OrderBy(l => l.Number).ToListAsync();
         var subs = await db.Submissions.Where(x => x.StudentId == studentId).ToListAsync();
         var subByLab = subs.ToDictionary(s => s.LabDefId);
 
@@ -187,7 +189,7 @@ public class DbDataService(IDbContextFactory<AppDbContext> dbf, TokenProtector t
     public async Task<List<(int Id, string Short, string Title)>> GetLabColumnsAsync()
     {
         await using var db = await dbf.CreateDbContextAsync();
-        var rows = await db.Labs.OrderBy(l => l.Number).Select(l => new { l.Number, l.Title }).ToListAsync();
+        var rows = await db.Labs.Where(l => l.IsActive).OrderBy(l => l.Number).Select(l => new { l.Number, l.Title }).ToListAsync();
         return rows.Select(r => (r.Number, "L" + r.Number.ToString("D2"), r.Title)).ToList();
     }
 
@@ -195,7 +197,7 @@ public class DbDataService(IDbContextFactory<AppDbContext> dbf, TokenProtector t
     {
         await using var db = await dbf.CreateDbContextAsync();
         var students = await db.Students.OrderBy(s => s.Id).ToListAsync();
-        var labs     = await db.Labs.OrderBy(l => l.Number).ToListAsync();
+        var labs     = await db.Labs.Where(l => l.IsActive).OrderBy(l => l.Number).ToListAsync();
         var allSubs  = await db.Submissions.ToListAsync();
 
         // Index submissions by (student, lab) so the per-cell lookup is O(1) instead
@@ -231,7 +233,7 @@ public class DbDataService(IDbContextFactory<AppDbContext> dbf, TokenProtector t
     public async Task<TeacherStats> GetStatsAsync()
     {
         await using var db = await dbf.CreateDbContextAsync();
-        var subs = await db.Submissions.ToListAsync();
+        var subs = await db.Submissions.Where(x => x.LabDef.IsActive).ToListAsync();
         var done = subs.Where(x => x.Status == (int)LabStatus.Done).ToList();
         var nonLocked = subs.Where(x => x.Status != (int)LabStatus.Locked).ToList();
 
@@ -251,7 +253,7 @@ public class DbDataService(IDbContextFactory<AppDbContext> dbf, TokenProtector t
     public async Task<List<LabStat>> GetLabStatsAsync()
     {
         await using var db = await dbf.CreateDbContextAsync();
-        var labs    = await db.Labs.OrderBy(l => l.Number).ToListAsync();
+        var labs    = await db.Labs.Where(l => l.IsActive).OrderBy(l => l.Number).ToListAsync();
         var allSubs = await db.Submissions.ToListAsync();
         int total   = await db.Students.CountAsync();
 
@@ -281,7 +283,7 @@ public class DbDataService(IDbContextFactory<AppDbContext> dbf, TokenProtector t
         await using var db = await dbf.CreateDbContextAsync();
         var subs = await db.Submissions
             .Include(x => x.Student).Include(x => x.LabDef)
-            .Where(x => x.Status == (int)LabStatus.Review)
+            .Where(x => x.Status == (int)LabStatus.Review && x.LabDef.IsActive)
             .OrderByDescending(x => x.SubmittedAt)
             .ToListAsync();
 
@@ -305,7 +307,7 @@ public class DbDataService(IDbContextFactory<AppDbContext> dbf, TokenProtector t
         await using var db = await dbf.CreateDbContextAsync();
         var subs = await db.Submissions
             .Include(x => x.Student).Include(x => x.LabDef)
-            .Where(x => x.Status == (int)LabStatus.Rejected)
+            .Where(x => x.Status == (int)LabStatus.Rejected && x.LabDef.IsActive)
             .OrderByDescending(x => x.SubmittedAt)
             .ToListAsync();
 

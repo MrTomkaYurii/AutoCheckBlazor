@@ -60,6 +60,14 @@ public class LabManagementService(IDbContextFactory<AppDbContext> dbf, IWebHostE
         await db.SaveChangesAsync();
     }
 
+    public async Task SetActiveAsync(int id, bool active)
+    {
+        await using var db = await dbf.CreateDbContextAsync();
+        var lab = await db.Labs.FindAsync(id) ?? throw new KeyNotFoundException();
+        lab.IsActive = active;
+        await db.SaveChangesAsync();
+    }
+
     // ── Task CRUD ─────────────────────────────────────────────────────────────
 
     public async Task<List<LabTask>> GetTasksAsync(int labId)

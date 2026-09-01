@@ -49,6 +49,10 @@ public class GradingService(
             ?? throw new InvalidOperationException("Submission not found");
 
         // ── 0. Pre-flight ────────────────────────────────────────────────────
+        // Лабу вимкнено з курсу — студент не мав дістатися сюди через UI, це страховка
+        if (!sub.LabDef.IsActive)
+            throw new InvalidOperationException("Лабораторну вимкнено — здача закрита.");
+
         if (sub.AttemptsUsed >= sub.AttemptsMax)
             throw new InvalidOperationException(
                 $"Ліміт спроб вичерпано ({sub.AttemptsMax} з {sub.AttemptsMax}). Зверніться до викладача.");
