@@ -202,7 +202,7 @@
                         <span class="feedback-summary">
                             <span class="feedback-done-count">@fbDone.Length виконано</span>
                             @if (fbIssues.Length > 0) { <span> · <span class="feedback-issue-count">@fbIssues.Length з помилкою</span></span> }
-                            <span> · оцінка = @fbDone.Length/@(fbDone.Length + fbIssues.Length) × 100 = <b style="color:@tv.Tone">@task.Score</b></span>
+                            <span> · оцінка: <b style="color:@tv.Tone">@task.Score</b></span>
                         </span>
                     }
                 </div>

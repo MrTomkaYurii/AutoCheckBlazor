@@ -3,20 +3,20 @@
     {
       "n": 1,
       "requirements": [
-        "Простір імен: namespace ClinicApp; (без фігурних дужок, файловий стиль)",
+        { "text": "Простір імен: namespace ClinicApp; (без фігурних дужок, файловий стиль)", "w": "minor" },
         "Поля: private static int _nextId = 1; — статичне, одне для всіх екземплярів",
         "Властивість Id: public int Id { get; } — лише гетер, ініціалізується тільки в конструкторі",
-        "Властивість Email оголошена і ініціалізується порожнім рядком за замовчуванням",
-        "Повний конструктор Patient(firstName, lastName, dob, bloodType, phone) присвоює Id = _nextId++ (постінкремент)",
+        { "text": "Властивість Email оголошена і ініціалізується порожнім рядком за замовчуванням", "w": "minor" },
+        { "text": "Повний конструктор Patient(firstName, lastName, dob, bloodType, phone) присвоює Id = _nextId++ (постінкремент)", "w": "critical" },
         "Конструктор Patient() викликає : this(\"Невідомий\", \"Пацієнт\") — ланцюжок без власного тіла",
         "Конструктор Patient(firstName, lastName) викликає : this(f, l, new DateTime(2000,1,1), \"Невідомо\", \"0000000000\") — ланцюжок",
         "Властивість FullName: { get => FirstName + \" \" + LastName; } — обчислювана, без поля",
-        "Властивість Age: враховує чи вже минув день народження цього року (порівняння через AddYears або DateOfBirth.Date > DateTime.Today.AddYears(-age))",
-        "Властивість IsAdult: { get => Age >= 18; }",
+        { "text": "Властивість Age: враховує чи вже минув день народження цього року (порівняння через AddYears або DateOfBirth.Date > DateTime.Today.AddYears(-age))", "w": "critical" },
+        { "text": "Властивість IsAdult: { get => Age >= 18; }", "w": "minor" },
         "Метод GetAgeCategory(): повертає \"дитина\" для Age < 18, \"дорослий\" для Age < 60, \"літній\" для решти",
         "ToString() перевизначений: формат \"[Id] FullName | Вік: Age (GetAgeCategory()) | Кров: BloodType | Тел: Phone\"",
         "Program.cs: мінімум 5 пацієнтів створено різними конструкторами (хоча б один без параметрів, один з (firstName,lastName), три повних)",
-        "Пацієнти виводяться на екран через Console.WriteLine (ToString() викликається неявно або явно)"
+        { "text": "Пацієнти виводяться на екран через Console.WriteLine (ToString() викликається неявно або явно)", "w": "minor" }
       ]
     },
     {

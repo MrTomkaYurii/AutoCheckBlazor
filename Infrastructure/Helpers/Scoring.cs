@@ -13,6 +13,20 @@ public static class Scoring
     }
 
     /// <summary>
+    /// Per-task score from weighted acceptance criteria:
+    /// score = Σ(weight of met requirements) / Σ(weight of all requirements) × 100.
+    /// All-equal weights reduce to a plain met/total ratio.
+    /// </summary>
+    public static int FromRequirements(
+        IReadOnlyCollection<double> metWeights,
+        IReadOnlyCollection<double> unmetWeights)
+    {
+        double total = metWeights.Sum() + unmetWeights.Sum();
+        if (total <= 0) return 0;
+        return Math.Clamp((int)Math.Round(metWeights.Sum() / total * 100), 0, 100);
+    }
+
+    /// <summary>
     /// Final lab grade from the auto-check and defence scores: 40% auto + 60% defence,
     /// rounded and clamped to 0–100. Single source of truth for the formula shown in
     /// the grade dialog and used when seeding demo data.

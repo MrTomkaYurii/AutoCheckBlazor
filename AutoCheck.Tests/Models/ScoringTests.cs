@@ -36,6 +36,41 @@ public class ScoringTests
     public void Weighted_Theory(int s1, int d1, int s2, int d2, int expected) =>
         Scoring.Weighted(new[] { (s1, d1), (s2, d2) }).Should().Be(expected);
 
+    // ── FromRequirements: Σw(met) / Σw(all) × 100 ───────────────────────────
+
+    [Fact]
+    public void FromRequirements_NoRequirements_ReturnsZero() =>
+        Scoring.FromRequirements([], []).Should().Be(0);
+
+    [Fact]
+    public void FromRequirements_AllMet_Returns100() =>
+        Scoring.FromRequirements([1, 1, 3], []).Should().Be(100);
+
+    [Fact]
+    public void FromRequirements_AllUnmet_ReturnsZero() =>
+        Scoring.FromRequirements([], [1, 1, 3]).Should().Be(0);
+
+    [Fact]
+    public void FromRequirements_EqualWeights_IsPlainRatio() =>
+        // 3 met of 4 → 75
+        Scoring.FromRequirements([1, 1, 1], [1]).Should().Be(75);
+
+    [Fact]
+    public void FromRequirements_MinorMissesBarelyDent()
+    {
+        // core done (critical 3 + normal 1 + normal 1), missed only 3 minor (0.3 each)
+        var score = Scoring.FromRequirements([3, 1, 1], [0.3, 0.3, 0.3]);
+        score.Should().BeGreaterThan(84);   // ~84.7 → 85, not the 63 an unweighted count would give
+    }
+
+    [Fact]
+    public void FromRequirements_MissedCriticalHurts()
+    {
+        // did all the easy stuff (5 × normal), missed one critical (weight 3)
+        var score = Scoring.FromRequirements([1, 1, 1, 1, 1], [3]);
+        score.Should().Be(62);   // 5 / 8 = 62.5 → 62 (banker's rounding)
+    }
+
     // ── Final = 0.4·auto + 0.6·defense ──────────────────────────────────────
 
     [Theory]

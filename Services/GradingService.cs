@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using AutoCheck.Data;
@@ -30,6 +31,20 @@ public class GradingService(
     private string Model    => cfg["Gemini:Model"]   ?? "gemini-2.5-flash";
     private string WorkRoot => GradingPaths.WorkRoot(cfg);
     private int MaxLines => int.TryParse(cfg["Grading:MaxLinesPerFile"], out var v) ? v : 250;
+
+    // Ваги рівнів вимог у checks.json (калібруються в appsettings без деплою коду)
+    private double WeightFor(string level)
+    {
+        var key = level switch
+        {
+            "critical" => "Grading:Weight:Critical",
+            "minor"    => "Grading:Weight:Minor",
+            _          => "Grading:Weight:Normal",
+        };
+        var fallback = level switch { "critical" => 3.0, "minor" => 0.3, _ => 1.0 };
+        return double.TryParse(cfg[key], NumberStyles.Any, CultureInfo.InvariantCulture, out var w) && w > 0
+            ? w : fallback;
+    }
 
     // ── Entry point ───────────────────────────────────────────────────────────
 
@@ -353,11 +368,14 @@ public class GradingService(
             if (!string.IsNullOrWhiteSpace(task.Brief))
                 sb.AppendLine(task.Brief);
             sb.AppendLine();
-            if (checks?.Requirements.Length > 0)
+            if (checks is { Requirements.Count: > 0 })
             {
-                sb.AppendLine("Обов'язкові вимоги (перевір кожну — вона має потрапити або в done, або в issues):");
+                sb.AppendLine("Обов'язкові вимоги — познач КОЖНУ за її ідентифікатором [rN] як виконану (done) або ні (issues):");
                 foreach (var req in checks.Requirements)
-                    sb.AppendLine($"- {req}");
+                {
+                    var mark = req.Level switch { "critical" => " (критично)", "minor" => " (дрібне)", _ => "" };
+                    sb.AppendLine($"[{req.Id}]{mark} {req.Text}");
+                }
                 sb.AppendLine();
             }
             sb.AppendLine("Код студента:");
@@ -373,19 +391,17 @@ public class GradingService(
 [
   {
     "n": <номер завдання>,
-    "done": ["<конкретна вимога з умови — виконана>", "..."],
-    "issues": ["<конкретна вимога з умови — НЕ виконана або виконана з помилкою>", "..."],
+    "done": ["<id вимоги, напр. r1>", "..."],
+    "issues": ["<id вимоги, НЕ виконаної або з помилкою>", "..."],
     "analysis": "<2-3 речення загальної оцінки коду>"
   },
   ...
 ]
 """);
         sb.AppendLine("Правила:");
-        sb.AppendLine("• Якщо для завдання наведено 'Обов'язкові вимоги' — перевіряй ТІЛЬКИ їх, не додавай своїх");
-        sb.AppendLine("• Якщо вимог немає — сам виведи конкретні вимоги з умови завдання");
-        sb.AppendLine("• done/issues — лише конкретні вимоги, не загальні фрази на кшталт 'код написаний' чи 'є помилки'");
-        sb.AppendLine("• Кожна вимога потрапляє або в done, або в issues — без пропусків");
-        sb.AppendLine("• Оцінка буде розрахована автоматично: score = done.length / (done.length + issues.length) × 100");
+        sb.AppendLine("• Якщо для завдання наведено вимоги [rN] — у done/issues повертай ТІЛЬКИ їх ідентифікатори (r1, r2, ...), кожен рівно один раз, нічого не пропускай і не додавай своїх");
+        sb.AppendLine("• Якщо вимог [rN] немає — сам виведи конкретні вимоги з умови завдання ТЕКСТОМ (не загальні фрази)");
+        sb.AppendLine("• Оцінку рахує система за вагами вимог — поле 'score' не повертай");
         sb.AppendLine($"• Поверни масив рівно з {inputs.Length} елементами (n=1..{inputs.Length})");
 
         try
@@ -442,23 +458,66 @@ public class GradingService(
                     ? el.EnumerateArray().Select(x => x.GetString() ?? "").Where(s => s.Length > 0).ToArray()
                     : [];
 
+            var checksByN = inputs.ToDictionary(i => i.Task.Number, i => i.Checks);
+
             var byN = new Dictionary<int, GradeResult>();
             foreach (var item in parsed.RootElement.EnumerateArray())
             {
                 if (!item.TryGetProperty("n", out var nEl)) continue;
                 var n        = nEl.GetInt32();
-                var done     = Arr(item, "done");
-                var issues   = Arr(item, "issues");
+                var rawDone  = Arr(item, "done");
+                var rawIssue = Arr(item, "issues");
                 var analysis = item.TryGetProperty("analysis", out var an) ? an.GetString() ?? "" : "";
 
-                // Score is calculated from done/issues ratio for transparency.
-                // Gemini's own "score" field is ignored to avoid arbitrary numbers.
-                var total = done.Length + issues.Length;
-                var score = total > 0
-                    ? Math.Clamp((int)Math.Round((double)done.Length / total * 100), 0, 100)
-                    : (item.TryGetProperty("score", out var sc) ? Math.Clamp(sc.GetInt32(), 0, 100) : 0);
-                var state = score >= 80 ? "pass" : score >= 50 ? "warn" : "fail";
+                string[] done, issues;
+                int score;
 
+                if (checksByN.GetValueOrDefault(n) is { Requirements.Count: > 0 } checks)
+                {
+                    // id-режим: Gemini повертає id вимог → детермінований зважений бал
+                    var byId = checks.Requirements.ToDictionary(r => r.Id, StringComparer.OrdinalIgnoreCase);
+                    var byText = checks.Requirements
+                        .GroupBy(r => r.Text, StringComparer.OrdinalIgnoreCase)
+                        .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+                    Requirement? Resolve(string tok) =>
+                        byId.TryGetValue(tok.Trim(), out var a) ? a
+                        : byText.TryGetValue(tok.Trim(), out var b) ? b : null;
+
+                    var doneIds  = new HashSet<string>();
+                    var issueIds = new HashSet<string>();
+                    foreach (var tok in rawDone)  if (Resolve(tok) is { } r) doneIds.Add(r.Id);
+                    foreach (var tok in rawIssue) if (Resolve(tok) is { } r) issueIds.Add(r.Id);
+                    doneIds.ExceptWith(issueIds);   // згадана в обох → вважаємо невиконаною
+
+                    // вимоги, які Gemini не класифікувала → консервативно в issues
+                    var unclassified = checks.Requirements
+                        .Where(r => !doneIds.Contains(r.Id) && !issueIds.Contains(r.Id)).ToList();
+                    if (unclassified.Count > 0)
+                    {
+                        log.LogWarning("Gemini task {N}: {C} вимог без класифікації — рахуємо як невиконані", n, unclassified.Count);
+                        foreach (var r in unclassified) issueIds.Add(r.Id);
+                    }
+
+                    var met   = checks.Requirements.Where(r => doneIds.Contains(r.Id)).ToList();
+                    var unmet = checks.Requirements.Where(r => issueIds.Contains(r.Id)).ToList();
+                    score  = Scoring.FromRequirements(
+                        met.Select(r => r.Weight).ToList(),
+                        unmet.Select(r => r.Weight).ToList());
+                    done   = met.Select(r => r.Text).ToArray();
+                    issues = unmet.Select(r => r.Level == "critical" ? $"{r.Text} (критично)" : r.Text).ToArray();
+                }
+                else
+                {
+                    // fallback: вимоги не задані — Gemini вивела їх текстом, ваг немає → проста частка
+                    done   = rawDone;
+                    issues = rawIssue;
+                    var total = done.Length + issues.Length;
+                    score = total > 0
+                        ? Math.Clamp((int)Math.Round((double)done.Length / total * 100), 0, 100)
+                        : (item.TryGetProperty("score", out var sc) ? Math.Clamp(sc.GetInt32(), 0, 100) : 0);
+                }
+
+                var state = score >= 80 ? "pass" : score >= 50 ? "warn" : "fail";
                 byN[n] = new GradeResult(state, score, done, issues, analysis);
             }
 
@@ -501,11 +560,39 @@ public class GradingService(
             {
                 if (!taskEl.TryGetProperty("n", out var nEl) || nEl.GetInt32() != taskNumber)
                     continue;
-                string[] reqs = [];
-                if (taskEl.TryGetProperty("requirements", out var reqsEl) && reqsEl.ValueKind == JsonValueKind.Array)
-                    reqs = reqsEl.EnumerateArray().Select(x => x.GetString() ?? "").Where(s => s.Length > 0).ToArray();
+                if (!taskEl.TryGetProperty("requirements", out var reqsEl) || reqsEl.ValueKind != JsonValueKind.Array)
+                    return new TaskCheckInfo([]);
 
-                return new TaskCheckInfo(reqs);
+                var list = new List<Requirement>();
+                int i = 0;
+                foreach (var r in reqsEl.EnumerateArray())
+                {
+                    i++;
+                    string text, level, id;
+
+                    if (r.ValueKind == JsonValueKind.String)
+                    {
+                        // старий формат: просто рядок → звичайна вага
+                        text = r.GetString() ?? "";
+                        level = "normal";
+                        id = $"r{i}";
+                    }
+                    else if (r.ValueKind == JsonValueKind.Object)
+                    {
+                        text = (r.TryGetProperty("text", out var t) ? t.GetString()
+                              : r.TryGetProperty("t", out var t2) ? t2.GetString() : null) ?? "";
+                        level = ((r.TryGetProperty("w", out var w) ? w.GetString()
+                              : r.TryGetProperty("weight", out var w2) ? w2.GetString() : null)
+                              ?? "normal").Trim().ToLowerInvariant();
+                        id = (r.TryGetProperty("id", out var idEl) ? idEl.GetString() : null)?.Trim() ?? $"r{i}";
+                    }
+                    else continue;
+
+                    if (string.IsNullOrWhiteSpace(text)) continue;
+                    if (level is not ("critical" or "minor")) level = "normal";
+                    list.Add(new Requirement(id, text.Trim(), level, WeightFor(level)));
+                }
+                return new TaskCheckInfo(list);
             }
         }
         catch (Exception ex)
@@ -515,7 +602,9 @@ public class GradingService(
         return null;
     }
 
-    private record TaskCheckInfo(string[] Requirements);
+    // Одна вимога приймання: стабільний id, текст, рівень ваги ("critical"/"normal"/"minor")
+    private sealed record Requirement(string Id, string Text, string Level, double Weight);
+    private sealed record TaskCheckInfo(IReadOnlyList<Requirement> Requirements);
 
     private record GradeResult(string State, int Score, string[] Done, string[] Issues, string Analysis);
 
