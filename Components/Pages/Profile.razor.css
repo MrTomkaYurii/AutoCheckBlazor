@@ -2,7 +2,28 @@
     padding: 0 34px 40px;
     position: relative;
     z-index: 1;
-    max-width: 720px;
+    max-width: 1140px;
+}
+
+/* Дві колонки: ліворуч — поля, праворуч — інструкція */
+.profile-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 400px;
+    gap: 20px;
+    align-items: start;
+}
+
+.profile-main {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-width: 0;
+}
+
+@media (max-width: 940px) {
+    .profile-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 .card {
@@ -11,7 +32,112 @@
 }
 
 .card-second {
-    margin-top: 20px;
+    margin-top: 0;
+}
+
+/* ── Права колонка: інструкція ── */
+
+.guide {
+    position: sticky;
+    top: 20px;
+}
+
+@media (max-width: 940px) {
+    .guide {
+        position: static;
+    }
+}
+
+.guide-head {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--line);
+    background: radial-gradient(400px 160px at 0% 0%, rgba(118, 199, 173, 0.10), transparent 60%);
+}
+
+.guide-title {
+    margin: 0;
+    font-size: 14.5px;
+    font-weight: 720;
+}
+
+.guide-body {
+    padding: 20px 22px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+}
+
+.guide-sect h4 {
+    margin: 0 0 8px;
+    font-size: 12.5px;
+    font-weight: 730;
+    color: var(--tx-1);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.guide-sect p {
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 1.65;
+    color: var(--tx-3);
+}
+
+.guide-sect p + p {
+    margin-top: 8px;
+}
+
+.guide-list,
+.guide-steps {
+    margin: 8px 0 0;
+    padding-left: 17px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--tx-3);
+}
+
+.guide-steps {
+    counter-reset: step;
+}
+
+.guide-note {
+    font-size: 11.5px !important;
+    line-height: 1.55 !important;
+    color: var(--tx-faint) !important;
+    margin-top: 8px !important;
+}
+
+.guide-body .mono {
+    font-size: 11px;
+    background: rgba(255, 255, 255, 0.055);
+    padding: 1px 5px;
+    border-radius: 5px;
+    color: var(--tx-2);
+    white-space: nowrap;
+}
+
+.guide-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 12px;
+    font-size: 12.5px;
+    font-weight: 640;
+    color: var(--acc-bright);
+    text-decoration: none;
+}
+
+.guide-link:hover {
+    text-decoration: underline;
 }
 
 .head {

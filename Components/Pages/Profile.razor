@@ -10,6 +10,8 @@
 <TopBar Title="Профіль" Sub="Дані студента" />
 
 <div class="screen-anim page">
+  <div class="profile-grid">
+    <div class="profile-main">
     <section class="glass card">
         <div class="head">
             <div class="avatar">@App.Student.Initials</div>
@@ -58,7 +60,7 @@
                     <div class="field"><label>GitHub репо</label><input class="input mono" @bind="_github" placeholder="https://github.com/username/repo" /></div>
                 </div>
                 <div class="field">
-                    <label>GitHub токен <span class="field-hint">(необов'язково — для вищого rate limit)</span></label>
+                    <label>GitHub токен <span class="field-hint">(необов'язково — для приватного репо або вищого ліміту; як отримати — в інструкції поруч)</span></label>
                     <input class="input mono" type="password" @bind="_githubToken" placeholder="ghp_xxxxxxxxxxxx" />
                 </div>
                 @if (!string.IsNullOrEmpty(_msg))
@@ -133,6 +135,82 @@
             </div>
         }
     </section>
+    </div>@* /.profile-main *@
+
+    @* ── Інструкція: GitHub-репозиторій і токен ──────────────────────────── *@
+    <aside class="glass card guide">
+        <div class="guide-head">
+            <Icon Name="github" Size="18" Style="color:var(--acc)" />
+            <h3 class="guide-title">GitHub: репозиторій і токен</h3>
+        </div>
+        <div class="guide-body">
+
+            <div class="guide-sect">
+                <h4><Icon Name="braces" Size="14" Style="color:var(--acc)" />Навіщо репозиторій</h4>
+                <p>
+                    Кожну лабораторну ти виконуєш у <b>власному GitHub-репозиторії</b>. Коли
+                    натискаєш «Здати», система клонує його, прогоняє авто-перевірку коду й
+                    звіряє твої коміти із завданнями лаби. Посилання вказується у полі
+                    <span class="mono">GitHub репо</span> у форматі
+                    <span class="mono">https://github.com/username/repo</span>.
+                </p>
+                <p class="guide-note">
+                    Без репозиторію перевірка працює в режимі симуляції (мок-коміти) —
+                    лише щоб побачити, як усе влаштовано.
+                </p>
+            </div>
+
+            <div class="guide-sect">
+                <h4><Icon Name="lock" Size="14" Style="color:var(--acc)" />Навіщо токен</h4>
+                <p>
+                    Токен (Personal Access Token) <b>необов'язковий</b>, але потрібен, якщо:
+                </p>
+                <ul class="guide-list">
+                    <li><b>репозиторій приватний</b> — без токена система не зможе його клонувати;</li>
+                    <li><b>ти впираєшся в ліміт GitHub API</b> — без токена це 60 запитів/год
+                        на весь сервер (спільно з іншими студентами), з токеном — 5000/год особисто для тебе.</li>
+                </ul>
+                <p class="guide-note">
+                    Якщо репо публічне і «Перевірка недоступна» не з'являється — токен не потрібен.
+                </p>
+            </div>
+
+            <div class="guide-sect">
+                <h4><Icon Name="spark" Size="14" Style="color:var(--acc)" />Як створити токен</h4>
+                <ol class="guide-steps">
+                    <li>GitHub → <span class="mono">Settings</span> → <span class="mono">Developer settings</span>
+                        → <span class="mono">Personal access tokens</span> → <span class="mono">Fine-grained tokens</span>.</li>
+                    <li><span class="mono">Generate new token</span>. Вкажи назву та термін дії
+                        (<i>Expiration</i>) — напр. до кінця семестру.</li>
+                    <li><b>Repository access</b> → <span class="mono">Only select repositories</span>
+                        → обери свій репозиторій із лабами.</li>
+                    <li><b>Permissions</b> → <span class="mono">Repository permissions</span> →
+                        <span class="mono">Contents</span> = <span class="mono">Read-only</span>. Більше нічого не треба.</li>
+                    <li><span class="mono">Generate token</span> → скопіюй рядок
+                        <span class="mono">github_pat_…</span> і встав у поле <span class="mono">GitHub токен</span>.</li>
+                </ol>
+                <p class="guide-note">
+                    Класичний варіант: <span class="mono">Tokens (classic)</span> → scope
+                    <span class="mono">repo</span> (для приватних) або без scope (лише заради ліміту).
+                </p>
+                <a class="guide-link" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">
+                    Відкрити сторінку створення токена <Icon Name="arrowR" Size="13" />
+                </a>
+            </div>
+
+            <div class="guide-sect">
+                <h4><Icon Name="check" Size="14" Style="color:var(--acc)" />Безпека</h4>
+                <p>
+                    Токен зберігається зашифрованим, у профілі показується як
+                    <span class="mono">••••</span> і маскується в логах. Дай йому мінімальні
+                    права (<span class="mono">Contents: Read-only</span>) — цього достатньо
+                    для перевірки, і його не можна використати, щоб щось змінити у твоєму акаунті.
+                </p>
+            </div>
+
+        </div>
+    </aside>
+  </div>@* /.profile-grid *@
 </div>
 
 @code {
