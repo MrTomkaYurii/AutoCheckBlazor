@@ -65,13 +65,12 @@ jobs:
           SMTP_FROM_NAME: ${{ vars.SMTP_FROM_NAME }}
           BACKUP_GIT_REMOTE_URL: ${{ secrets.BACKUP_GIT_REMOTE_URL }}
           BACKUP_GIT_TOKEN: ${{ secrets.BACKUP_GIT_TOKEN }}
-          APP_DOMAIN: ${{ secrets.APP_DOMAIN }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
-          envs: SEED_DEFAULT_PASSWORD,GEMINI_API_KEY,GEMINI_MODEL,GEMINI_DAILY_LIMIT,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,SMTP_HOST,SMTP_PORT,SMTP_USER,SMTP_PASSWORD,SMTP_FROM,SMTP_FROM_NAME,BACKUP_GIT_REMOTE_URL,BACKUP_GIT_TOKEN,APP_DOMAIN
+          envs: SEED_DEFAULT_PASSWORD,GEMINI_API_KEY,GEMINI_MODEL,GEMINI_DAILY_LIMIT,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,SMTP_HOST,SMTP_PORT,SMTP_USER,SMTP_PASSWORD,SMTP_FROM,SMTP_FROM_NAME,BACKUP_GIT_REMOTE_URL,BACKUP_GIT_TOKEN
           script: |
             set -euo pipefail
             APP=/opt/autocheck
@@ -122,13 +121,10 @@ jobs:
             # systemd unit
             install -m644 "$IN/deploy/autocheck.service" /etc/systemd/system/autocheck.service
 
-            # Caddy config + domain (injected as an env var for the caddy service)
+            # Caddy = local HTTP reverse proxy only; WebGate does TLS. Drop any old
+            # ACME drop-in from the sslip.io setup.
             install -m644 "$IN/deploy/Caddyfile" /etc/caddy/Caddyfile
-            mkdir -p /etc/systemd/system/caddy.service.d
-            cat > /etc/systemd/system/caddy.service.d/override.conf <<EOF
-            [Service]
-            Environment=APP_DOMAIN=${{ secrets.APP_DOMAIN }}
-            EOF
+            rm -f /etc/systemd/system/caddy.service.d/override.conf
 
             # Activate the new release
             ln -sfn "$REL" "$APP/current"

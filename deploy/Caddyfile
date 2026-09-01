@@ -1,8 +1,17 @@
-# Native Caddy (apt package) — terminates TLS (auto Let's Encrypt) and reverse-proxies
-# to the AutoCheck systemd service on localhost. APP_DOMAIN is injected as an environment
-# variable via /etc/systemd/system/caddy.service.d/override.conf (written by the deploy workflow).
-# Works with sslip.io / nip.io because they resolve to the server's public IP.
-{$APP_DOMAIN} {
+# The VPS sits behind the provider's WebGate (IPv4/IPv6 ingress + Let's Encrypt TLS
+# termination). WebGate forwards plain HTTP to this VPS on port 80 — so Caddy here is
+# just a local reverse proxy: NO TLS, NO ACME, no public domain.
+#
+# trusted_proxies makes Caddy preserve the X-Forwarded-Proto/-For that WebGate sets,
+# so the app knows the original request was HTTPS (secure cookies, redirects, links).
+{
+	auto_https off
+	servers {
+		trusted_proxies static 0.0.0.0/0 ::/0
+	}
+}
+
+:80 {
 	encode zstd gzip
 	reverse_proxy 127.0.0.1:8080
 }
