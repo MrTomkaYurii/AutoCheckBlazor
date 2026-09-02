@@ -5,6 +5,7 @@
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject IAuthService Auth
 @inject AppState App
+@inject PlagiarismService Plagiarism
 @using Microsoft.EntityFrameworkCore
 
 <div class="page">
@@ -131,6 +132,14 @@
         { _error = "Оберіть групу."; return; }
 
         _saving = true; _error = ""; StateHasChanged();
+
+        var repoConflict = await Plagiarism.FindSharedRepoAsync(_student!.Id, _github.Trim());
+        if (repoConflict != null)
+        {
+            _error = $"Цей репозиторій вже вказано у студента {repoConflict.StudentName} ({repoConflict.Group}). Вкажіть власний.";
+            _saving = false; StateHasChanged();
+            return;
+        }
 
         var initials = _firstName.Trim()[0].ToString() + _lastName.Trim()[0];
         await using var Db = await DbFactory.CreateDbContextAsync();

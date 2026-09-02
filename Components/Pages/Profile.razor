@@ -6,6 +6,7 @@
 @inject UserManager<AppUser> UserManager
 @inject NavigationManager Nav
 @inject TokenProtector Tokens
+@inject PlagiarismService Plagiarism
 
 <TopBar Title="Профіль" Sub="Дані студента" />
 
@@ -320,6 +321,18 @@
                                      .FirstOrDefaultAsync(l => l.UserId == sub);
         if (link?.StudentId is int studentId)
         {
+            // Repo-substitution guard: another student can't already have this repo.
+            // Catching it here (before any write) is gentler than at grading time,
+            // where a collision burns an attempt.
+            var repoConflict = await Plagiarism.FindSharedRepoAsync(studentId, _github.Trim());
+            if (repoConflict != null)
+            {
+                _msg = $"Помилка: цей репозиторій вже вказано у студента {repoConflict.StudentName} ({repoConflict.Group})";
+                _saving = false; StateHasChanged();
+                await Task.Delay(3500); _msg = ""; StateHasChanged();
+                return;
+            }
+
             // Email is the login — keep the Identity account and the link in sync
             var newEmail = _email.Trim();
             var user = await UserManager.FindByIdAsync(sub);

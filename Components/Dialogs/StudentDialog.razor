@@ -76,6 +76,7 @@
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject IDataService DataSvc
 @inject UserManager<AppUser> UserManager
+@inject PlagiarismService Plagiarism
 
 @code {
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
@@ -107,6 +108,15 @@
 
         _saving = true; StateHasChanged();
         var initials = (_first.Length > 0 ? _first[0].ToString() : "") + (_last.Length > 0 ? _last[0].ToString() : "");
+
+        // No two students may point at the same GitHub repo.
+        var repoConflict = await Plagiarism.FindSharedRepoAsync(Existing?.Id ?? 0, _github.Trim());
+        if (repoConflict != null)
+        {
+            _error = $"Цей репозиторій вже вказано у студента {repoConflict.StudentName} ({repoConflict.Group})";
+            _saving = false; StateHasChanged();
+            return;
+        }
 
         try
         {
