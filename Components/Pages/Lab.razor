@@ -577,9 +577,15 @@
                     }
                 </div>
 
+                @if (!_mapping.Values.Any(v => v > 0))
+                {
+                    <p class="map-sub" style="color:var(--st-yellow);text-align:center">
+                        Призначте коміт хоча б одному завданню — інакше перевіряти нічого.
+                    </p>
+                }
                 <div class="modal-actions">
                     <button class="btn btn-ghost btn-block" @onclick='() => _phase = "branch"'>← Назад</button>
-                    <button class="btn btn-primary btn-block" @onclick="RunCheck">
+                    <button class="btn btn-primary btn-block" @onclick="RunCheck" disabled="@(!_mapping.Values.Any(v => v > 0))">
                         <Icon Name="upload" Size="16" />Запустити перевірку
                     </button>
                 </div>

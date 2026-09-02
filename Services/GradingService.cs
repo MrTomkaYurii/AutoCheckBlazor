@@ -30,7 +30,6 @@ public class GradingService(
     private string ApiKey   => cfg["Gemini:ApiKey"]  ?? "";
     private string Model    => cfg["Gemini:Model"]   ?? "gemini-2.5-flash";
     private string WorkRoot => GradingPaths.WorkRoot(cfg);
-    private int MaxLines => int.TryParse(cfg["Grading:MaxLinesPerFile"], out var v) ? v : 250;
 
     // Ваги рівнів вимог у checks.json (калібруються в appsettings без деплою коду)
     private double WeightFor(string level)
@@ -84,6 +83,23 @@ public class GradingService(
         if (string.IsNullOrEmpty(ApiKey))
             throw new InvalidOperationException(
                 "Система перевірки наразі недоступна. Зверніться до викладача.");
+
+        // ── Commit mapping ───────────────────────────────────────────────────
+        // Every graded task must be pinned to a commit. Parsed here (before the
+        // queue / clone / attempt) so a submission with nothing mapped fails fast.
+        List<CommitTaskMap>? commitMap = null;
+        if (!string.IsNullOrEmpty(sub.CommitMappingJson))
+        {
+            try { commitMap = JsonSerializer.Deserialize<List<CommitTaskMap>>(sub.CommitMappingJson); }
+            catch { /* ignore malformed map */ }
+        }
+        string? MappedSha(int taskNumber) => commitMap?
+            .FirstOrDefault(m => m.TaskNumber == taskNumber && !string.IsNullOrEmpty(m.Sha))?.Sha;
+
+        if (!sub.LabDef.Tasks.Any(t => MappedSha(t.Number) is not null))
+            throw new InvalidOperationException(
+                "Жодному завданню не призначено коміт. Відкрийте історію комітів, " +
+                "призначте коміт хоча б одному завданню і повторіть — спробу не витрачено.");
 
         // ── Repository-substitution guard (fail fast, before the queue/Gemini) ──
         // If another student's profile points at the SAME repo (submitting with a
@@ -151,13 +167,6 @@ public class GradingService(
             throw new InvalidOperationException(
                 "GitHub репозиторій не вказано у профілі. Оновіть профіль та спробуйте знову.");
 
-        List<CommitTaskMap>? commitMap = null;
-        if (!string.IsNullOrEmpty(sub.CommitMappingJson))
-        {
-            try { commitMap = JsonSerializer.Deserialize<List<CommitTaskMap>>(sub.CommitMappingJson); }
-            catch { /* ignore malformed map */ }
-        }
-
         // ── 1. Prepare repo ──────────────────────────────────────────────────
         progress?.Report("Клонування репозиторію…");
         // the student's token (decrypted) lets us clone private repos
@@ -166,27 +175,22 @@ public class GradingService(
             ?? throw new InvalidOperationException(
                 "Не вдалося отримати репозиторій. Перевірте URL та права доступу.");
 
-        // ── 2. Fetch code/diff for each task (parallel git reads) ────────────
+        // ── 2. Fetch the diff for every commit-mapped task (parallel git reads) ──
+        // Tasks with no mapped commit are treated as "not submitted": they score 0
+        // and never reach Gemini (see the merge below). Grading a fuzzy filename
+        // match for them only produced misleading partial scores.
         progress?.Report("Отримання коду завдань…");
-        var codeFiles    = GetCSharpFiles(workDir);
         var orderedTasks = lab.Tasks.OrderBy(t => t.Number).ToList();
 
-        var taskInputs = await Task.WhenAll(orderedTasks.Select(async taskDef =>
-        {
-            var mappedSha = commitMap?.FirstOrDefault(m => m.TaskNumber == taskDef.Number)?.Sha;
-            string code;
-            if (!string.IsNullOrEmpty(mappedSha))
+        var taskInputs = await Task.WhenAll(orderedTasks
+            .Where(t => MappedSha(t.Number) is not null)
+            .Select(async taskDef =>
             {
-                var rawDiff = await GetCommitCodeAsync(workDir, mappedSha, ct);
-                code = GitDiff.FilterToTask(rawDiff, taskDef.Number);
-            }
-            else
-            {
-                code = FindRelevantCode(codeFiles, taskDef.Title);
-            }
-            var checks = LoadTaskChecks(lab.Number, taskDef.Number);
-            return (Task: taskDef, Code: code, Checks: checks);
-        }));
+                var rawDiff = await GetCommitCodeAsync(workDir, MappedSha(taskDef.Number)!, ct);
+                var code    = GitDiff.FilterToTask(rawDiff, taskDef.Number);
+                var checks  = LoadTaskChecks(lab.Number, taskDef.Number);
+                return (Task: taskDef, Code: code, Checks: checks);
+            }));
 
         // ── 2.5 Plagiarism gate: identical to another student's checked work? ──
         // Runs BEFORE Gemini (no quota wasted). Teacher can approve to bypass.
@@ -194,9 +198,8 @@ public class GradingService(
         {
             progress?.Report("Перевірка на збіги з іншими роботами…");
             // ParseDiff strips the +/- diff prefixes — the same form the stored
-            // DiffLines use, otherwise commit-mapped submissions never match.
-            // Use "add" lines (what the student wrote); fall back to "ctx" for
-            // non-mapped, full-file submissions — mirrors the corpus in PlagiarismService.
+            // DiffLines use. Use "add" lines (what the student wrote this commit);
+            // fall back to "ctx" if a commit somehow carries no additions.
             var candidateLines = taskInputs.SelectMany(t =>
             {
                 var parsed = GitDiff.Parse(t.Code);
@@ -242,11 +245,23 @@ public class GradingService(
             }
         }
 
-        // ── 3. Grade ALL tasks in ONE Gemini call ────────────────────────────────
+        // ── 3. Grade the mapped tasks in ONE Gemini call ─────────────────────────
         progress?.Report("Аналіз коду через Gemini…");
         var gradeResults = await GradeAllWithGeminiAsync(lab, taskInputs, ct);
-        var graded = taskInputs
+        var gradedByNumber = taskInputs
             .Zip(gradeResults, (inp, res) => (inp.Task, inp.Code, Result: res))
+            .ToDictionary(x => x.Task.Number);
+
+        // Unmapped tasks: fixed zero, no Gemini feedback. They still weigh into the
+        // total (a lab is scored part-by-part), so skipping a task costs its share.
+        var notSubmitted = new GradeResult("fail", 0, [],
+            ["Коміт не вказано — завдання не перевірялося"],
+            "Завдання не здавалося: жодному коміту воно не призначене.");
+
+        var graded = orderedTasks
+            .Select(t => gradedByNumber.TryGetValue(t.Number, out var g)
+                ? g
+                : (Task: t, Code: "", Result: notSubmitted))
             .ToArray();
 
         // ── 4. Persist results ────────────────────────────────────────────────
@@ -398,11 +413,12 @@ public class GradingService(
   ...
 ]
 """);
+        var taskNums = inputs.Select(i => i.Task.Number).ToArray();
         sb.AppendLine("Правила:");
         sb.AppendLine("• Якщо для завдання наведено вимоги [rN] — у done/issues повертай ТІЛЬКИ їх ідентифікатори (r1, r2, ...), кожен рівно один раз, нічого не пропускай і не додавай своїх");
         sb.AppendLine("• Якщо вимог [rN] немає — сам виведи конкретні вимоги з умови завдання ТЕКСТОМ (не загальні фрази)");
         sb.AppendLine("• Оцінку рахує система за вагами вимог — поле 'score' не повертай");
-        sb.AppendLine($"• Поверни масив рівно з {inputs.Length} елементами (n=1..{inputs.Length})");
+        sb.AppendLine($"• Поле \"n\" = номер завдання із заголовка (### Завдання N). Поверни рівно {inputs.Length} об'єкт(и) — по одному на кожне з завдань: n ∈ {{{string.Join(", ", taskNums)}}}");
 
         try
         {
@@ -665,54 +681,7 @@ public class GradingService(
             throw new Exception($"git {args.Split(' ')[0]} failed: {stderr}");
     }
 
-    // ── Code discovery ────────────────────────────────────────────────────────
-
-    private Dictionary<string, string> GetCSharpFiles(string workDir) =>
-        Directory
-            .GetFiles(workDir, "*.cs", SearchOption.AllDirectories)
-            .Where(f => !f.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar)
-                     && !f.Contains(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar))
-            .ToDictionary(
-                f => Path.GetRelativePath(workDir, f),
-                f => TruncateFile(f));
-
-    private string TruncateFile(string path)
-    {
-        var lines = File.ReadAllLines(path);
-        return string.Join('\n', lines.Take(MaxLines));
-    }
-
-    private string FindRelevantCode(Dictionary<string, string> files, string taskTitle)
-    {
-        if (files.Count == 0) return "(репозиторій не містить .cs файлів)";
-
-        var words = taskTitle
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .Select(w => w.Trim('`'))
-            .Where(w => w.Length > 2 && !IsUkrainianStopWord(w))
-            .ToArray();
-
-        var scored = files
-            .Select(kv => (
-                Path:  kv.Key,
-                Code:  kv.Value,
-                Score: words.Sum(w => kv.Key.Contains(w, StringComparison.OrdinalIgnoreCase) ? 2 : 0)
-                     + words.Sum(w => kv.Value.Contains($"class {w}", StringComparison.OrdinalIgnoreCase) ? 3 : 0)
-            ))
-            .OrderByDescending(x => x.Score)
-            .FirstOrDefault();
-
-        if (scored.Score == 0 && files.Count > 0)
-        {
-            var all = string.Join("\n\n", files
-                .OrderBy(kv => kv.Key)
-                .Select(kv => $"// {kv.Key}\n{kv.Value}")
-                .Take(4));
-            return all.Length > 8000 ? all[..8000] + "\n// [truncated]" : all;
-        }
-
-        return $"// {scored.Path}\n{scored.Code}";
-    }
+    // ── Git commit code ──────────────────────────────────────────────────────
 
     private async Task<string> GetCommitCodeAsync(string workDir, string sha, CancellationToken ct)
     {
@@ -733,9 +702,6 @@ public class GradingService(
             return "";
         }
     }
-
-    private static bool IsUkrainianStopWord(string w) =>
-        w is "Клас" or "Метод" or "Клас:" or "Реалізуй" or "Визнач" or "Додай" or "Зростаючий";
 
     // ── Gemini health check ───────────────────────────────────────────────────
 
