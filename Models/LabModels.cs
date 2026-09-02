@@ -43,6 +43,9 @@ public class LabDetail
     public bool PlagFlag;
     public string? PlagNote;
     public bool PlagApproved;
+    // Soft structural-similarity suspicion — teacher UI only, never rendered to students.
+    public bool PlagSuspect;
+    public string? PlagSuspectNote;
 
     public bool IsOverdue => DeadlineAt.HasValue && DateTime.UtcNow > DeadlineAt.Value;
 }

@@ -24,12 +24,21 @@ public class GradingService(
     GeminiQuotaService quota,
     GradingQueueService queue,
     PlagiarismService plagiarism,
+    CodeSimilarityService similarity,
+    TeacherNotificationService teacherNotif,
     TokenProtector tokens,
     IHttpClientFactory httpFactory) : IGradingService
 {
     private string ApiKey   => cfg["Gemini:ApiKey"]  ?? "";
     private string Model    => cfg["Gemini:Model"]   ?? "gemini-2.5-flash";
     private string WorkRoot => GradingPaths.WorkRoot(cfg);
+
+    // Plagiarism thresholds (percent) — tunable in appsettings without a code deploy.
+    private int PlagExactPct   => IntCfg("Grading:Plagiarism:ExactPercent",            98);
+    private int PlagHardPct    => IntCfg("Grading:Plagiarism:StructuralHardPercent",   95);
+    private int PlagSuspectPct => IntCfg("Grading:Plagiarism:StructuralSuspectPercent", 85);
+    private int IntCfg(string key, int fallback) =>
+        int.TryParse(cfg[key], out var v) && v is > 0 and <= 100 ? v : fallback;
 
     // Ваги рівнів вимог у checks.json (калібруються в appsettings без деплою коду)
     private double WeightFor(string level)
@@ -192,22 +201,35 @@ public class GradingService(
                 return (Task: taskDef, Code: code, Checks: checks);
             }));
 
-        // ── 2.5 Plagiarism gate: identical to another student's checked work? ──
+        // ── 2.5 Plagiarism gate: match against other students' checked work ──
         // Runs BEFORE Gemini (no quota wasted). Teacher can approve to bypass.
+        //   • verbatim copy (line containment ≥ PlagExactPct)         → hard reject
+        //   • same structure, renamed identifiers (≥ PlagHardPct)     → hard reject
+        //   • high-ish structural similarity (≥ PlagSuspectPct)       → soft flag for the teacher
         if (!sub.PlagiarismApproved)
         {
             progress?.Report("Перевірка на збіги з іншими роботами…");
-            // ParseDiff strips the +/- diff prefixes — the same form the stored
-            // DiffLines use. Use "add" lines (what the student wrote this commit);
-            // fall back to "ctx" if a commit somehow carries no additions.
+            // GitDiff.Parse strips the +/- prefixes — the same form the stored DiffLines
+            // use. "add" lines are what the student wrote this commit; fall back to "ctx"
+            // if a commit somehow carries no additions.
             var candidateLines = taskInputs.SelectMany(t =>
             {
                 var parsed = GitDiff.Parse(t.Code);
                 var add = parsed.Where(d => d.Type == "add").Select(d => d.Text).ToList();
                 return add.Count > 0 ? add : parsed.Where(d => d.Type == "ctx").Select(d => d.Text).ToList();
-            });
-            var match = await plagiarism.FindExactMatchAsync(lab.Id, studentId, candidateLines);
-            if (match != null)
+            }).ToList();
+
+            var exact      = await plagiarism.FindExactMatchAsync(lab.Id, studentId, candidateLines, PlagExactPct / 100.0);
+            var structural = await similarity.FindStructuralMatchAsync(lab.Id, studentId, candidateLines);
+
+            var hardNote =
+                exact != null
+                    ? $"Збіг {exact.Containment:P0} рядків з роботою: {exact.StudentName} ({exact.Group})"
+                : structural is not null && structural.Percent >= PlagHardPct
+                    ? $"Структурний збіг {structural.Percent}% з роботою: {structural.StudentName} ({structural.Group}) (перейменовані назви)"
+                    : null;
+
+            if (hardNote is not null)
             {
                 var idx = sub.AttemptsUsed;
                 if      (idx == 0) sub.Attempt1Score = 0;
@@ -223,8 +245,7 @@ public class GradingService(
                 var priorBest = new[] { sub.Attempt1Score ?? 0, sub.Attempt2Score ?? 0, sub.Attempt3Score ?? 0 }.Max();
                 sub.AutoScore = priorBest >= 50 ? priorBest : null;
                 sub.PlagiarismFlag = true;
-                sub.PlagiarismNote =
-                    $"Збіг {match.Containment:P0} з роботою: {match.StudentName} ({match.Group})";
+                sub.PlagiarismNote = hardNote;
 
                 db.GradeAudits.Add(new GradeAudit
                 {
@@ -242,6 +263,30 @@ public class GradingService(
                 throw new InvalidOperationException(
                     "Здачу відхилено: код повністю збігається з роботою іншого студента, " +
                     "яка вже пройшла перевірку. Спробу витрачено. Зверніться до викладача.");
+            }
+
+            // Soft suspicion — flag for the teacher, but keep grading normally: no
+            // attempt burned, nothing zeroed, student never sees this.
+            if (structural is not null && structural.Percent >= PlagSuspectPct)
+            {
+                sub.PlagiarismSuspect = true;
+                sub.PlagiarismSuspectNote =
+                    $"Структурна схожість {structural.Percent}% з роботою: {structural.StudentName} ({structural.Group})";
+                db.GradeAudits.Add(new GradeAudit
+                {
+                    SubmissionId = sub.Id, Actor = "система", Action = "plagiarism-suspect",
+                    NewValue = sub.PlagiarismSuspectNote,
+                });
+                teacherNotif.Add(
+                    $"Lab{lab.Number:D2}: підозра на плагіат",
+                    $"{student.LastName} {student.FirstName} ({student.Group}) — {sub.PlagiarismSuspectNote}",
+                    "plagiarism");
+            }
+            else
+            {
+                // A clean re-check clears a stale suspicion from an earlier attempt.
+                sub.PlagiarismSuspect = false;
+                sub.PlagiarismSuspectNote = null;
             }
         }
 

@@ -122,11 +122,11 @@ public class PlagiarismService(IDbContextFactory<AppDbContext> dbf)
 
     /// <summary>
     /// Submission-time gate: does the candidate code fully contain another
-    /// student's already-checked work for this lab? Returns the best match with
-    /// ≥98% containment (≈ 100% copy), or null.
+    /// student's already-checked work for this lab? Returns the best match at or above
+    /// <paramref name="minContainment"/> (default 0.98 ≈ a verbatim copy), or null.
     /// </summary>
     public async Task<ExactMatch?> FindExactMatchAsync(
-        int labDefId, int studentId, IEnumerable<string> candidateLines)
+        int labDefId, int studentId, IEnumerable<string> candidateLines, double minContainment = 0.98)
     {
         var candidate = candidateLines
             .Select(Normalize)
@@ -173,7 +173,7 @@ public class PlagiarismService(IDbContextFactory<AppDbContext> dbf)
             // containment: how much of the OTHER student's work is inside the candidate
             var shared = set.Count(l => candidate.Contains(l));
             var containment = (double)shared / set.Count;
-            if (containment >= 0.98 && (best is null || containment > best.Containment))
+            if (containment >= minContainment && (best is null || containment > best.Containment))
                 best = new ExactMatch(other.Name, other.Group, containment);
         }
         return best;

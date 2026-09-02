@@ -59,6 +59,57 @@ public class CodeSimilarityService(IDbContextFactory<AppDbContext> dbf)
             .Take(topN).ToList();
     }
 
+    public record StructuralMatch(string StudentName, string Group, int Percent);
+
+    /// <summary>
+    /// Submission-time gate companion to PlagiarismService.FindExactMatchAsync: the best
+    /// STRUCTURAL match (identifier-normalised, rename/reformat-proof) between the candidate
+    /// code and any already-graded submission of the same lab. Caller applies the threshold.
+    /// </summary>
+    public async Task<StructuralMatch?> FindStructuralMatchAsync(
+        int labDefId, int studentId, IEnumerable<string> candidateLines)
+    {
+        var candSig = Analyze(string.Join('\n', candidateLines));
+        if (candSig.Fingerprints.Count < 5) return null;   // too little structure to judge
+
+        await using var db = await dbf.CreateDbContextAsync();
+        var rawOthers = await db.Submissions.AsNoTracking()
+            .Where(s => s.LabDefId == labDefId && s.StudentId != studentId && s.TaskResults.Any())
+            .Select(s => new
+            {
+                Name = s.Student.LastName + " " + s.Student.FirstName,
+                s.Student.Group,
+                TaskResults = s.TaskResults.Select(tr => new
+                {
+                    tr.AttemptNo,
+                    Add = tr.DiffLines.Where(d => d.Type == "add").OrderBy(d => d.OrderIndex).Select(d => d.Text).ToList(),
+                    Ctx = tr.DiffLines.Where(d => d.Type == "ctx").OrderBy(d => d.OrderIndex).Select(d => d.Text).ToList(),
+                }).ToList(),
+            })
+            .ToListAsync();
+
+        StructuralMatch? best = null;
+        foreach (var o in rawOthers)
+        {
+            // LATEST attempt only — same "don't dilute with stale attempts" reasoning as elsewhere.
+            var latest  = o.TaskResults.Count > 0 ? o.TaskResults.Max(t => t.AttemptNo) : 0;
+            var results = o.TaskResults.Where(t => t.AttemptNo == latest).ToList();
+            var add     = results.SelectMany(t => t.Add).ToList();
+            var lines   = add.Count > 0 ? add : results.SelectMany(t => t.Ctx).ToList();
+
+            var sig = Analyze(string.Join('\n', lines));
+            if (sig.Fingerprints.Count < 5) continue;
+
+            var shared = candSig.Fingerprints.Count(f => sig.Fingerprints.Contains(f));
+            if (shared == 0) continue;
+
+            var pct = Dice(candSig.Fingerprints.Count, sig.Fingerprints.Count, shared);
+            if (best is null || pct > best.Percent)
+                best = new StructuralMatch(o.Name, o.Group, pct);
+        }
+        return best;
+    }
+
     /// <summary>Line-level overlap between the target student and one other, for highlighting.</summary>
     public async Task<CodeOverlap?> GetOverlapAsync(int labNumber, int studentId, int otherStudentId)
     {

@@ -59,6 +59,19 @@
         </section>
     }
 
+    @* soft structural-similarity suspicion — teacher-only, does not block the student *@
+    @if (LabInfo.PlagSuspect && !LabInfo.PlagFlag)
+    {
+        <section class="glass plag-box" style="border-color:var(--st-yellow)">
+            <span class="plag-icon"><Icon Name="warn" Size="18" Stroke="2.2" /></span>
+            <div class="plag-text">
+                <div class="plag-title" style="color:var(--st-yellow)">Підозра на плагіат — перевірте вручну</div>
+                <div class="plag-note">@LabInfo.PlagSuspectNote</div>
+                <div class="plag-note" style="color:var(--tx-3)">Здачу не відхилено, спробу не витрачено. Порівняйте роботи у розділі «Моніторинг → Плагіат».</div>
+            </div>
+        </section>
+    }
+
     @* attempt switcher *@
     @if (LabInfo.Attempts.Count > 1)
     {

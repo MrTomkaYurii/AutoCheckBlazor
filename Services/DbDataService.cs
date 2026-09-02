@@ -63,9 +63,11 @@ public class DbDataService(IDbContextFactory<AppDbContext> dbf, TokenProtector t
             AttemptsUsed = sub.AttemptsUsed,
             AttemptsMax  = sub.AttemptsMax,
             Intro        = sub.LabDef.Goal ?? "",
-            PlagFlag     = sub.PlagiarismFlag,
-            PlagNote     = sub.PlagiarismNote,
-            PlagApproved = sub.PlagiarismApproved,
+            PlagFlag        = sub.PlagiarismFlag,
+            PlagNote        = sub.PlagiarismNote,
+            PlagApproved    = sub.PlagiarismApproved,
+            PlagSuspect     = sub.PlagiarismSuspect,
+            PlagSuspectNote = sub.PlagiarismSuspectNote,
         };
 
         // Attempts that have stored results; each attempt's score is recomputed

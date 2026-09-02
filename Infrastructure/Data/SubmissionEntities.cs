@@ -24,11 +24,16 @@ public class Submission
     public int? Attempt2Score { get; set; }
     public int? Attempt3Score { get; set; }
 
-    // Plagiarism gate: submission matched another student's checked work
+    // Plagiarism gate: submission matched another student's checked work → auto-rejected
     public bool PlagiarismFlag { get; set; }
     public string? PlagiarismNote { get; set; }
     /// <summary>Teacher explicitly allowed resubmission despite the match.</summary>
     public bool PlagiarismApproved { get; set; }
+
+    // Soft plagiarism suspicion (structural similarity below the hard-reject bar):
+    // teacher-only, never shown to the student, does NOT block or consume an attempt.
+    public bool PlagiarismSuspect { get; set; }
+    public string? PlagiarismSuspectNote { get; set; }
 
     public List<TaskResult> TaskResults { get; set; } = [];
     public List<LabComment> Comments { get; set; } = [];

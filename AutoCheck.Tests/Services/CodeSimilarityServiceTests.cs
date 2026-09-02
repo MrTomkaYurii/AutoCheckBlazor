@@ -120,5 +120,31 @@ public class CodeSimilarityServiceTests : IDisposable
         overlap!.Target.Count(l => l.Matched).Should().BeGreaterThan(0, "identical structure should light up matching lines");
     }
 
+    [Fact]
+    public async Task FindStructuralMatch_CatchesRenamedCopyAgainstStoredSubmissions()
+    {
+        var labDefId = _db.Submissions.First(s => s.StudentId == _aId).LabDefId;
+
+        // Student A submits code that is B's solution with identifiers renamed again.
+        var candidate = CodeA.Replace("\r", "").Split('\n');
+        var match = await _svc.FindStructuralMatchAsync(labDefId, _aId, candidate);
+
+        match.Should().NotBeNull();
+        match!.StudentName.Should().Contain("Beta");
+        match.Percent.Should().BeGreaterThanOrEqualTo(80);
+    }
+
+    [Fact]
+    public async Task FindStructuralMatch_NullWhenNothingSimilar()
+    {
+        var labDefId = _db.Submissions.First(s => s.StudentId == _cId).LabDefId;
+
+        // Gamma's genuinely different code vs the others.
+        var candidate = CodeC.Replace("\r", "").Split('\n');
+        var match = await _svc.FindStructuralMatchAsync(labDefId, _cId, candidate);
+
+        (match?.Percent ?? 0).Should().BeLessThan(80);
+    }
+
     public void Dispose() => _db.Dispose();
 }

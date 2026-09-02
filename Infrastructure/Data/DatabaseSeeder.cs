@@ -56,6 +56,8 @@ public class DatabaseSeeder(
         await AddColumnIfMissingAsync("Submissions", "PlagiarismFlag",     "INTEGER NOT NULL DEFAULT 0");
         await AddColumnIfMissingAsync("Submissions", "PlagiarismNote",     "TEXT");
         await AddColumnIfMissingAsync("Submissions", "PlagiarismApproved", "INTEGER NOT NULL DEFAULT 0");
+        await AddColumnIfMissingAsync("Submissions", "PlagiarismSuspect",     "INTEGER NOT NULL DEFAULT 0");
+        await AddColumnIfMissingAsync("Submissions", "PlagiarismSuspectNote", "TEXT");
 
         // Soft migration: new tables (EnsureCreated does nothing when the DB already exists)
         await db.Database.ExecuteSqlRawAsync("""
