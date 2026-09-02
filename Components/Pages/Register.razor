@@ -41,7 +41,13 @@
             </div>
             <div class="field">
                 <label>Email</label>
-                <input class="input" type="email" name="email" value="@Email" placeholder="you@example.com" required autocomplete="username" />
+                <input class="input" type="email" name="email" value="@Email"
+                       placeholder="@(_domainHint.Length > 0 ? "you@" + _domainHint : "you@example.com")"
+                       required autocomplete="username" />
+                @if (_domainHint.Length > 0)
+                {
+                    <span class="heading-sub" style="font-size:.8rem">Лише пошта @("@" + _domainHint)</span>
+                }
             </div>
             <div class="field">
                 <label>Група</label>
@@ -99,10 +105,14 @@
 
     private List<string> _groups = [];
     private bool _googleEnabled;
+    private string _domainHint = "";
 
     protected override async Task OnInitializedAsync()
     {
         _googleEnabled = !string.IsNullOrEmpty(Cfg["Authentication:Google:ClientId"]);
+        _domainHint = (Cfg["Registration:AllowedEmailDomain"] ?? "")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault() ?? "";
         await using var Db = await DbFactory.CreateDbContextAsync();
         _groups = await Db.Groups.OrderBy(g => g.OrderIndex).ThenBy(g => g.Name)
                                  .Select(g => g.Name).ToListAsync();

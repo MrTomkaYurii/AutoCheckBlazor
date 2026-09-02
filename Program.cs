@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
 
@@ -220,7 +221,7 @@ app.MapPost("/account/login", async (HttpContext ctx,
 // Student self-registration (plain form POST from /register)
 app.MapPost("/account/register", async (HttpContext ctx,
     SignInManager<AppUser> signIn, UserManager<AppUser> users, IAuthService auth,
-    AppDbContext db) =>
+    AppDbContext db, IConfiguration cfg) =>
 {
     var form      = await ctx.Request.ReadFormAsync();
     var firstName = form["firstName"].ToString().Trim();
@@ -239,6 +240,8 @@ app.MapPost("/account/register", async (HttpContext ctx,
         return Results.Redirect(Fail("Вкажіть ім'я та прізвище."));
     if (string.IsNullOrEmpty(email) || !email.Contains('@'))
         return Results.Redirect(Fail("Вкажіть коректний email."));
+    if (!RegistrationPolicy.EmailAllowed(email, cfg))
+        return Results.Redirect(Fail(RegistrationPolicy.Hint(cfg)));
     if (string.IsNullOrEmpty(group) || !await db.Groups.AnyAsync(g => g.Name == group))
         return Results.Redirect(Fail("Оберіть групу зі списку."));
     if (password.Length < 6)
@@ -274,7 +277,7 @@ app.MapGet("/account/google-login", (SignInManager<AppUser> signIn, string? retu
 
 app.MapGet("/account/google-callback", async (
     SignInManager<AppUser> signIn, UserManager<AppUser> users, IAuthService auth,
-    string? returnUrl) =>
+    IConfiguration cfg, string? returnUrl) =>
 {
     var dest = SafeReturnUrl(returnUrl);
     string Fail(string msg) => "/?error=" + Uri.EscapeDataString(msg);
@@ -302,6 +305,10 @@ app.MapGet("/account/google-callback", async (
     var isNew = user == null;
     if (user == null)
     {
+        // First-time Google sign-up is a registration → same domain rule as the form.
+        if (!RegistrationPolicy.EmailAllowed(email, cfg))
+            return Results.Redirect(Fail(RegistrationPolicy.Hint(cfg)));
+
         user = new AppUser
         {
             UserName = email, Email = email, EmailConfirmed = true,
@@ -334,6 +341,67 @@ app.MapPost("/account/logout", async (SignInManager<AppUser> signIn) =>
     await signIn.SignOutAsync();
     return Results.Redirect("/");
 });
+
+// ── Self-service password reset (email link) ─────────────────────────────────
+// Step 1: request a link. Always reports success — never reveal which emails exist.
+app.MapPost("/account/forgot", async (HttpContext ctx,
+    UserManager<AppUser> users, EmailService email, ILoggerFactory lf) =>
+{
+    var form  = await ctx.Request.ReadFormAsync();
+    var addr  = form["email"].ToString().Trim();
+    var done  = "/forgot?sent=1";
+
+    var user = string.IsNullOrEmpty(addr) ? null : await users.FindByEmailAsync(addr);
+    if (user is not null && !string.IsNullOrEmpty(user.Email))
+    {
+        var token   = await users.GeneratePasswordResetTokenAsync(user);
+        var encoded = WebEncoders.Base64UrlEncode(System.Text.Encoding.UTF8.GetBytes(token));
+        var link    = $"{ctx.Request.Scheme}://{ctx.Request.Host}/reset" +
+                      $"?email={Uri.EscapeDataString(user.Email)}&token={encoded}";
+        var sent = await email.SendAsync(user.Email,
+            "AutoCheck — відновлення паролю",
+            $"Щоб задати новий пароль, відкрийте посилання (дійсне обмежений час):\n\n{link}\n\n" +
+            "Якщо ви не робили цей запит — просто проігноруйте лист.");
+        if (!sent)
+            lf.CreateLogger("PasswordReset").LogWarning(
+                "Reset link for {Email} not emailed (SMTP disabled or failed)", user.Email);
+    }
+    return Results.Redirect(done);
+}).AllowAnonymous().DisableAntiforgery();
+
+// Step 2: submit the new password with the token from the link.
+app.MapPost("/account/reset", async (HttpContext ctx, UserManager<AppUser> users) =>
+{
+    var form     = await ctx.Request.ReadFormAsync();
+    var addr     = form["email"].ToString().Trim();
+    var encoded  = form["token"].ToString();
+    var password = form["password"].ToString();
+    var confirm  = form["confirm"].ToString();
+
+    string Fail(string msg) =>
+        $"/reset?email={Uri.EscapeDataString(addr)}&token={Uri.EscapeDataString(encoded)}" +
+        $"&error={Uri.EscapeDataString(msg)}";
+
+    if (password.Length < 6)
+        return Results.Redirect(Fail("Пароль має містити щонайменше 6 символів."));
+    if (password != confirm)
+        return Results.Redirect(Fail("Паролі не збігаються."));
+
+    var user = string.IsNullOrEmpty(addr) ? null : await users.FindByEmailAsync(addr);
+    if (user is null || string.IsNullOrEmpty(encoded))
+        return Results.Redirect(Fail("Посилання недійсне. Запросіть новий лист."));
+
+    string token;
+    try { token = System.Text.Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(encoded)); }
+    catch { return Results.Redirect(Fail("Посилання пошкоджене. Запросіть новий лист.")); }
+
+    var result = await users.ResetPasswordAsync(user, token, password);
+    if (!result.Succeeded)
+        return Results.Redirect(Fail(
+            "Не вдалося змінити пароль — посилання застаріле. Запросіть новий лист."));
+
+    return Results.Redirect("/?error=" + Uri.EscapeDataString("Пароль змінено. Увійдіть з новим паролем."));
+}).AllowAnonymous().DisableAntiforgery();
 
 // Re-issues the auth cookie after a security-stamp change (e.g. password change)
 app.MapGet("/account/refresh-signin", async (HttpContext ctx,

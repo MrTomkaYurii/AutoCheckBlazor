@@ -77,6 +77,7 @@
 @inject IDataService DataSvc
 @inject UserManager<AppUser> UserManager
 @inject PlagiarismService Plagiarism
+@inject IConfiguration Cfg
 
 @code {
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
@@ -105,6 +106,10 @@
         if (string.IsNullOrWhiteSpace(_first) || string.IsNullOrWhiteSpace(_last)) { _error = "Ім'я та прізвище обов'язкові"; return; }
         var finalGroup = _group == "__new__" ? _newGroup.Trim() : _group;
         if (string.IsNullOrWhiteSpace(finalGroup)) { _error = "Введіть групу"; return; }
+
+        var emailIn = _email.Trim();
+        if (emailIn.Length > 0 && !RegistrationPolicy.EmailAllowed(emailIn, Cfg))
+        { _error = RegistrationPolicy.Hint(Cfg); return; }
 
         _saving = true; StateHasChanged();
         var initials = (_first.Length > 0 ? _first[0].ToString() : "") + (_last.Length > 0 ? _last[0].ToString() : "");
