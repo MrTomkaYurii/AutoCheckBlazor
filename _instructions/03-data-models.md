@@ -7,7 +7,7 @@
 ### LabDef — лабораторна робота
 ```
 Id, Number, Slug, Title, Goal
-BranchName    ← гілка git (sandbox/intro, feature/…)
+BranchName    ← гілка git (лаби 01–04: Lab-01…Lab-04; далі feature/…)
 SourceDir     ← де шукати проект відносно кореня репо
 MergesMain    ← чи зливається в main
 OrderIndex    ← порядок сортування

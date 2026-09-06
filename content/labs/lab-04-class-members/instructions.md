@@ -6,20 +6,56 @@
 
 ## Контекст
 
-Після Лаби 03 система працює, але має «брудний» код: статуси зберігаються як рядки `"Scheduled"`, групи крові як `"A+"`, спеціальності як `"Кардіологія"`. Будь-яка опечатка — і логіка зламана, а компілятор нічого не скаже.
+Після Лаби 03 система працює, але код «брудний»: статуси — рядки `"Scheduled"`,
+групи крові — `"A+"`, спеціальності — `"Кардіологія"`. Одна опечатка — і логіка
+зламана, а компілятор мовчить.
 
-Ця лаба вирішує це системно: замінюємо magic strings на типобезпечні конструкції та розширюємо API менеджерів колекцій.
+Ця лаба лікує це системно: замінюємо magic strings на **типобезпечні
+конструкції** (`enum`, `struct`), виносимо форматування в **статичний клас** і
+розширюємо API менеджерів **індексаторами** та **перевантаженнями**.
+
+Працюєте в тому самому проєкті `ClinicApp/`. Гілка зливається в `main`.
+
+### Що нового дозволено (і тільки воно)
+
+- `enum` — іменовані константи;
+- `struct` — власний value-тип;
+- `static class` — клас без екземплярів;
+- індексатор `this[int index]`;
+- перевантаження методів (кілька методів з одним іменем, різні параметри);
+- `out`-параметр і патерн `TryXxx`;
+- `?.` і `??` — **тепер можна** (раніше були заборонені).
+
+Досі заборонено: `List<T>` / `Dictionary` (Лаба 09), LINQ (Лаба 14),
+`interface` / `abstract` (Лаби 06–07).
 
 ---
 
-## Гілка
+## Крок 1. Гілка
+
+> **Робочий процес** (повністю — [Git Воркшоп](https://tomka.space/git-workshop/)):
+> лаба = гілка `Lab-XX` від `main`, коміт на кожне завдання (`LabXX TaskYY`), у
+> кінці — злиття в `main` (Лаби 03+; 01–02 не зливались).
+
+Проєкт `ClinicApp/` уже існує з Лаби 03. Тут лише нова гілка від `main`:
 
 ```bash
 git checkout main
-git checkout -b feature/class-members
+git checkout -b Lab-04
 ```
 
-> Гілка **зливається в `main`** після завершення всіх завдань.
+Коміт — на кожне завдання (`Lab04 TaskNN`).
+
+### Ваш домен
+
+За замовчуванням — домен «клініка». Для власного домену дивіться таблицю
+**«Адаптація до вашого домену»** в кінці кожного завдання.
+
+### Як користуватися підказками
+
+Підказки — **напрям думки, не готовий код**. «Що реалізувати» і «Специфікація»
+кажуть *що*; підказки — *як міркувати*; блок **📖 Документація** — де прочитати
+синтаксис. Спершу документація і власна спроба.
 
 ---
 
@@ -62,23 +98,24 @@ if (Status == AppointmentStatus.Scheduled) ...
 
 ### Підказки
 
-1. Кожен `enum` — окремий файл у просторі імен `ClinicApp`:
-   ```csharp
-   namespace ClinicApp;
-   public enum AppointmentStatus { Scheduled, Cancelled, Completed }
-   ```
-2. Перший елемент `enum` отримує числове значення `0`. `Unknown`, `General` — природні значення за замовчуванням.
-3. У конструкторах замініть рядки на enum значення:
-   ```csharp
-   Status = AppointmentStatus.Scheduled;
-   BloodType = BloodType.Unknown;
-   ```
-4. У `Cancel()` і `Complete()`:
-   ```csharp
-   if (Status != AppointmentStatus.Scheduled) return false;
-   Status = AppointmentStatus.Cancelled;
-   ```
-5. `enum.ToString()` дає назву значення (`"Scheduled"`). Для відображення у зручному форматі ("Scheduled" → "A+") знадобиться Задача 3.
+1. **Кожен `enum` — окремий файл** у просторі імен `ClinicApp`. Оголошення
+   `enum` — коротке; синтаксис подивіться в документації.
+2. **Порядок значень має сенс.** Перший елемент отримує число `0` — тому на
+   першу позицію ставте «природне за замовчуванням»: `Unknown` для групи крові,
+   `General` для спеціальності. Так поле без явної ініціалізації матиме розумне
+   значення.
+3. **Заміна типу поля — механічна, але наскрізна.** У класах `Appointment`,
+   `Patient`, `Doctor` змініть тип властивості з `string` на відповідний `enum`,
+   а потім пройдіться по конструкторах і методах (`Cancel`, `Complete`),
+   замінюючи рядкові літерали на значення enum. Компілятор сам покаже всі місця,
+   де лишився `string`.
+4. **Порівняння enum** — звичайне `==` / `!=`, як з числами.
+5. **`enum.ToString()`** поверне назву значення як у коді (`"APositive"`), а не
+   `"A+"`. Гарне відображення зробите в Задачі 3 (статичний форматер).
+
+📖 Документація:
+- [Тип `enum`](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/enum)
+- [Типи перерахувань (посібник)](https://learn.microsoft.com/dotnet/csharp/programming-guide/enumeration-types)
 
 ### Адаптація до вашого домену
 
@@ -91,9 +128,9 @@ if (Status == AppointmentStatus.Scheduled) ...
 ### Коміт
 
 ```bash
-git add src/AppointmentStatus.cs src/BloodType.cs src/Speciality.cs
-git add src/Appointment.cs src/Patient.cs src/Doctor.cs
-git commit -m "Lab04 Task1: add enums for status, blood type and speciality"
+git add ClinicApp/AppointmentStatus.cs ClinicApp/BloodType.cs ClinicApp/Speciality.cs
+git add ClinicApp/Appointment.cs ClinicApp/Patient.cs ClinicApp/Doctor.cs
+git commit -m "Lab04 Task01"
 ```
 
 ---
@@ -144,34 +181,30 @@ WorkSchedule copy = morning;
 
 ### Підказки
 
-1. `struct` оголошується як `class`, але ключове слово `struct`:
-   ```csharp
-   public struct WorkSchedule
-   {
-       public int Start { get; }
-       public int End { get; }
-       public WorkSchedule(int start, int end) { Start = start; End = end; }
-   }
-   ```
-2. `get`-only властивості (`{ get; }`) можна ініціалізувати тільки в конструкторі — це забезпечує незмінність після створення.
-3. `Display` — форматування через `ToString("D2")`:
-   ```csharp
-   public string Display => Start.ToString("D2") + ":00–" + End.ToString("D2") + ":00";
-   ```
-4. У `Doctor` замініть два поля одним:
-   ```csharp
-   public WorkSchedule Schedule { get; set; }
-   ```
-   У конструкторі: `Schedule = new WorkSchedule(8, 17);`
-5. Після зміни у `Program.cs`:
-   ```csharp
-   d1.Schedule = new WorkSchedule(8, 16);   // замість WorkStartHour/WorkEndHour
-   ```
-6. `IsAvailableNow` у Doctor спрощується до:
-   ```csharp
-   public bool IsAvailableNow => Schedule.IsNow;
-   ```
-7. **Різниця struct vs class:** присвоєння `WorkSchedule a = b` копіює значення, а `Patient a = b` копіює посилання. Перевірте: змінивши `a.Start` після `WorkSchedule a = b`, `b.Start` не зміниться (але для struct з readonly властивостями взагалі не можна змінити після створення).
+1. **`struct` описується майже як `class`** — тільки ключове слово інше.
+   Синтаксис і повний перелік відмінностей — у документації.
+2. **`Start` і `End` — незмінні після створення.** Це властивості лише з `get`,
+   які присвоюються один раз у конструкторі. Далі `schedule.Start = 5` не
+   скомпілюється — і це добре: розклад не можна «покалічити».
+3. **`Display`** будує рядок `"08:00–17:00"` з двох годин, доповнених нулем
+   (формат `D2`) — так само, як `WorkSchedule`-властивість у Лабі 03, тільки
+   тепер логіка живе в одному місці.
+4. **`Contains` та `IsNow`.** `Contains(hour)` перевіряє діапазон `[Start, End)`;
+   `IsNow` — це просто `Contains` для поточної години. Не дублюйте умову.
+5. **У `Doctor` два поля стають одним** полем типу `WorkSchedule` (з `get`/`set`).
+   `IsAvailableNow` тоді зводиться до звернення до `Schedule.IsNow`, а
+   `CanAcceptAt` — до `Schedule.Contains(...)`.
+6. **Ключова відмінність `struct` від `class` — семантика копіювання.**
+   Присвоєння однієї `struct`-змінної іншій копіює *значення* (два незалежні
+   розклади), тоді як присвоєння об'єкта класу копіює *посилання* (обидві
+   змінні — на один об'єкт). Перевірте це експериментом у `Program.cs` і
+   прочитайте розділ «Value types vs reference types».
+7. **Валідацію `Start < End` поки не додаємо** — це Лаба 05 (Інкапсуляція).
+
+📖 Документація:
+- [Типи `struct`](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/struct)
+- [Типи-значення й типи-посилання](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/value-types)
+- [Властивості лише для читання](https://learn.microsoft.com/dotnet/csharp/programming-guide/classes-and-structs/properties#read-only)
 
 ### Адаптація до вашого домену
 
@@ -182,8 +215,8 @@ WorkSchedule copy = morning;
 ### Коміт
 
 ```bash
-git add src/WorkSchedule.cs src/Doctor.cs src/Program.cs
-git commit -m "Lab04 Task2: add WorkSchedule struct, replace int hours in Doctor"
+git add ClinicApp/WorkSchedule.cs ClinicApp/Doctor.cs ClinicApp/Program.cs
+git commit -m "Lab04 Task02"
 ```
 
 ---
@@ -226,49 +259,31 @@ Doctor second = clinic.Doctors[1];
 
 ### Підказки
 
-1. `static class` — не можна створити `new ClinicFormatter()`. Всі методи `public static`:
-   ```csharp
-   public static class ClinicFormatter
-   {
-       public static string FormatBloodType(BloodType bt) => bt switch
-       {
-           BloodType.APositive => "A+",
-           BloodType.ANegative => "A-",
-           // ...
-           _ => "Невідомо"
-       };
-   }
-   ```
-2. Правила відмінювання для `FormatAge`:
-   - 11–19 → завжди "років" (виняток для підлітків)
-   - закінчення 1 → "рік" (21 рік, 31 рік, але не 11)
-   - закінчення 2,3,4 → "роки" (22 роки, 33 роки)
-   - інше → "років"
-   ```csharp
-   if (age % 100 >= 11 && age % 100 <= 19) return age + " років";
-   switch (age % 10)
-   {
-       case 1: return age + " рік";
-       case 2: case 3: case 4: return age + " роки";
-       default: return age + " років";
-   }
-   ```
-3. Індексатор синтаксично схожий на властивість, але з параметром `this[...]`:
-   ```csharp
-   public Patient this[int index]
-   {
-       get
-       {
-           if (index < 0 || index >= _count) return null!;
-           return _patients[index];
-       }
-   }
-   ```
-4. Індексатор — лише `get` (readonly). `PatientManager[0] = new Patient(...)` не потрібно.
-5. `FormatPhone`: перевірте довжину 10 символів, усі цифри, потім форматуйте:
-   ```csharp
-   return "(" + phone.Substring(0, 3) + ") " + phone.Substring(3, 3) + "-" + phone.Substring(6);
-   ```
+1. **`static class` не має екземплярів** — `new ClinicFormatter()` заборонено
+   компілятором. Усередині лише `public static` методи. Такий клас — просто
+   «набір функцій під спільним іменем».
+2. **`FormatBloodType` / `FormatSpeciality`** — це зіставлення «значення enum →
+   рядок». Найчистіше — `switch` як вираз із гілкою `_` для решти. Кожній назві
+   зі специфікації Задачі 1 поставте у відповідність потрібний рядок.
+3. **`FormatAge` — правила українського відмінювання:**
+   - остача від ділення на 100 у діапазоні 11–19 → завжди «років»;
+   - інакше дивимось останню цифру: `1` → «рік», `2`–`4` → «роки», решта → «років».
+   Перевірте на 1, 3, 11, 21, 111.
+4. **`FormatPhone`** — спершу переконайтесь, що рядок має рівно 10 символів і всі
+   вони цифри; якщо ні — поверніть як є. Якщо так — зберіть
+   `"(050) 123-4567"` з підрядків. Метод виділення підрядка — у документації
+   `String`.
+5. **Індексатор — це властивість із параметром.** Синтаксис — `this[int index]`
+   з блоком `get`. Усередині перевірте межі (`index` у `[0, _count)`); якщо поза
+   межами — поверніть `null` (тому тип — `Patient?`). Тільки `get`, без `set`.
+6. **`Patient.ToString()` / `Doctor.ToString()`** тепер викликають `ClinicFormatter`
+   замість того, щоб форматувати самотужки.
+
+📖 Документація:
+- [`static`-класи](https://learn.microsoft.com/dotnet/csharp/programming-guide/classes-and-structs/static-classes-and-static-class-members)
+- [Вираз `switch`](https://learn.microsoft.com/dotnet/csharp/language-reference/operators/switch-expression)
+- [Індексатори](https://learn.microsoft.com/dotnet/csharp/programming-guide/indexers/)
+- [`String.Substring`](https://learn.microsoft.com/dotnet/api/system.string.substring) / [`Char.IsDigit`](https://learn.microsoft.com/dotnet/api/system.char.isdigit)
 
 ### Адаптація до вашого домену
 
@@ -280,10 +295,10 @@ Doctor second = clinic.Doctors[1];
 ### Коміт
 
 ```bash
-git add src/ClinicFormatter.cs
-git add src/Patient.cs src/Doctor.cs
-git add src/PatientManager.cs src/DoctorManager.cs src/AppointmentManager.cs
-git commit -m "Lab04 Task3: add ClinicFormatter static class and indexers on managers"
+git add ClinicApp/ClinicFormatter.cs
+git add ClinicApp/Patient.cs ClinicApp/Doctor.cs
+git add ClinicApp/PatientManager.cs ClinicApp/DoctorManager.cs ClinicApp/AppointmentManager.cs
+git commit -m "Lab04 Task03"
 ```
 
 ---
@@ -334,35 +349,31 @@ Console.WriteLine(name);  // не знайдено
 
 ### Підказки
 
-1. Перевантаження — просто два методи з однаковою назвою:
-   ```csharp
-   public Doctor[] FindBySpeciality(string query) { /* рядковий пошук */ }
-   public Doctor[] FindBySpeciality(Speciality speciality) { /* точне порівняння enum */ }
-   ```
-   C# обере правильний варіант залежно від типу аргументу при виклику.
-2. `GetByDate` з трьома числами — делегує до основного:
-   ```csharp
-   public Appointment[] GetByDate(int year, int month, int day)
-   {
-       return GetByDate(new DateTime(year, month, day));
-   }
-   ```
-3. `TryFindById` — класичний TryXxx патерн:
-   ```csharp
-   public bool TryFindById(int id, out Patient patient)
-   {
-       patient = FindById(id);
-       return patient != null;
-   }
-   ```
-   Виклик: `if (manager.TryFindById(5, out Patient p)) { ... }`
-4. `FindByBloodType` — двопрохідний патерн з Lab03, але умова — `== bloodType` замість `.Contains()`:
-   ```csharp
-   public Patient[] FindByBloodType(BloodType bloodType) { ... }
-   ```
-5. `?.` — null-conditional: `obj?.Property` повертає `null` якщо `obj == null`, інакше `obj.Property`.
-6. `??` — null-coalescing: `expr ?? defaultValue` повертає `defaultValue` якщо `expr == null`.
-7. Комбінація: `clinic.Patients.FindById(99)?.FullName ?? "невідомий"` — безпечне звернення до властивості з fallback значенням.
+1. **Перевантаження — це просто два методи з однаковим іменем і різними
+   параметрами.** `FindBySpeciality(string)` шукає за частиною рядка (як у Лабі
+   03), `FindBySpeciality(Speciality)` — точним порівнянням `enum`. Компілятор
+   сам обере потрібний за типом аргументу на місці виклику.
+2. **`GetByDate(int, int, int)` не дублює логіку** — він будує `DateTime` з трьох
+   чисел і викликає вже наявний `GetByDate(DateTime)`. Одна реалізація,
+   зручніший вхід.
+3. **`TryFindById` — патерн `TryXxx`.** Метод повертає `bool` (знайшли чи ні), а
+   сам об'єкт віддає через параметр `out`. Всередині він спирається на наявний
+   `FindById`. Прочитайте про `out` і про те, чому цей патерн зручніший за
+   «повернути `null` і сподіватись, що викличок перевірить».
+4. **`FindByBloodType(BloodType)`** — той самий двопрохідний патерн, що
+   `FindByName` у Лабі 03, лише умова — точна рівність `enum` (`==`), а не
+   входження підрядка.
+5. **`?.` (null-conditional)** — звертання до члена, що безпечно дає `null`,
+   якщо ліворуч `null`. **`??` (null-coalescing)** — підставляє запасне
+   значення замість `null`. Разом: `FindById(99)?.FullName ?? "невідомий"` не
+   впаде на неіснуючому ID. Ці оператори дозволені саме з цієї лаби —
+   продемонструйте їх у `Program.cs`.
+
+📖 Документація:
+- [Перевантаження методів](https://learn.microsoft.com/dotnet/csharp/programming-guide/classes-and-structs/methods#method-signatures)
+- [Параметр `out` і патерн Try](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/out-parameter-modifier)
+- [Оператори `?.` та `?[]`](https://learn.microsoft.com/dotnet/csharp/language-reference/operators/member-access-operators#null-conditional-operators--and-)
+- [Оператор `??`](https://learn.microsoft.com/dotnet/csharp/language-reference/operators/null-coalescing-operator)
 
 ### Адаптація до вашого домену
 
@@ -374,8 +385,8 @@ Console.WriteLine(name);  // не знайдено
 ### Коміт
 
 ```bash
-git add src/PatientManager.cs src/DoctorManager.cs src/AppointmentManager.cs src/Program.cs
-git commit -m "Lab04 Task4: add method overloads, TryFindById with out, FindByBloodType"
+git add ClinicApp/PatientManager.cs ClinicApp/DoctorManager.cs ClinicApp/AppointmentManager.cs ClinicApp/Program.cs
+git commit -m "Lab04 Task04"
 ```
 
 ---
@@ -383,40 +394,51 @@ git commit -m "Lab04 Task4: add method overloads, TryFindById with out, FindByBl
 ## Перевірка перед здачею
 
 ```bash
-cd src
-dotnet build
-dotnet run
+dotnet build ClinicApp
+dotnet run --project ClinicApp
 ```
 
 Переконайтесь, що:
 
-- [ ] Проєкт компілюється без помилок
-- [ ] `AppointmentStatus.Scheduled` — у коді немає рядка `"Scheduled"`
-- [ ] `BloodType.APositive` відображається як `"A+"` через `ClinicFormatter`
+- [ ] Проєкт компілюється без помилок і попереджень
+- [ ] У коді **немає рядкових літералів** `"Scheduled"`, `"A+"`, `"Кардіологія"` —
+  усе через `enum`
+- [ ] `BloodType.APositive` показується як `"A+"` (через `ClinicFormatter`)
 - [ ] `Doctor.Schedule.ToString()` повертає `"08:00–16:00 (8 год)"`
-- [ ] `clinic.Patients[0]` повертає першого пацієнта
-- [ ] `clinic.Doctors.FindBySpeciality(Speciality.Cardiology)` повертає кардіологів
-- [ ] `TryFindById(99, out p)` повертає `false` і не кидає виняток
-- [ ] `FindById(99)?.FullName ?? "не знайдено"` працює без NullReferenceException
+- [ ] `clinic.Patients[0]` повертає першого пацієнта, `clinic.Patients[999]` — `null`
+- [ ] `clinic.Doctors.FindBySpeciality(Speciality.Cardiology)` і
+  `FindBySpeciality("кардіо")` обидва працюють (перевантаження)
+- [ ] `TryFindById(99, out var p)` повертає `false` і не кидає виняток
+- [ ] `FindById(99)?.FullName ?? "не знайдено"` не падає з `NullReferenceException`
+- [ ] `FormatAge`: 1 → «1 рік», 3 → «3 роки», 11 → «11 років», 21 → «21 рік»
 
 ---
 
 ## Питання для самоперевірки
 
-1. Чому `enum` безпечніший за `string` для статусів? Що конкретно перевіряє компілятор?
-2. Яка різниця між `class` і `struct`? Що станеться при `WorkSchedule a = b; a.Start = 10`?
-3. Навіщо `static class`? Чому не можна просто написати звичайний клас і не створювати екземпляри?
-4. Що таке індексатор? Як він відрізняється від звичайної властивості?
-5. Чому `TryFindById` повертає `bool` і має `out`, а не просто повертає `null` при невдачі?
-6. Яка різниця між перевантаженням методів та параметрами за замовчуванням?
+1. Що саме перевіряє компілятор, коли статус — `enum`, і чого він **не** може
+   перевірити, коли статус — `string`?
+2. `WorkSchedule a = b; a.Start = 10;` — чому цей код навіть не скомпілюється, і
+   що було б з `b`, якби `Start` мав `set`?
+3. Чому `ClinicFormatter` — `static class`, а не звичайний клас, який просто
+   ніхто не інстанціює? Що дає ключове слово `static` на класі?
+4. Індексатор і звичайна властивість — у чому синтаксична й змістова різниця?
+5. `TryFindById` повертає `bool` + `out`. Чим це надійніше за «повернути
+   `Patient?` і сподіватись на перевірку `!= null`»?
+6. `FindBySpeciality(string)` і `FindBySpeciality(Speciality)` — це перевантаження.
+   Чи можна було б обійтися одним методом з необов'язковим параметром? Чому ні?
 
 ---
 
-## Злиття
+## Статус гілки
+
+Після всіх 4 завдань (кожне — окремий коміт `Lab04 TaskNN` на гілці `Lab-04`):
 
 ```bash
+git push -u origin Lab-04
 git checkout main
-git merge --no-ff feature/class-members -m "Merge feature/class-members: Lab04 Class Members"
+git merge --no-ff Lab-04 -m "Merge Lab-04: Class Members"
+git push
 ```
 
-> Наступна лаба: `git checkout -b feature/encapsulation` — інкапсуляція, приватні поля, валідація.
+> Наступна лаба: `git checkout main` → `git checkout -b Lab-05`.

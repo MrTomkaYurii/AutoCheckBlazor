@@ -39,9 +39,11 @@ public static class LabMdParser
         var goalM = Regex.Match(md, @"##\s+Мета\s*\n([\s\S]*?)(?=\n##|\z)");
         if (goalM.Success) goal = goalM.Groups[1].Value.Trim();
 
-        // git branch name
+        // git branch name — only the real command as its own line (inside a ```bash
+        // block), never an inline mention in prose. Inline examples often carry a
+        // placeholder ("git checkout -b Lab-XX") that appears before the real one.
         string? branch = null;
-        var brM = Regex.Match(md, @"git checkout -b (\S+)");
+        var brM = Regex.Match(md, @"^[ \t]*git checkout -b (\S+)", RegexOptions.Multiline);
         if (brM.Success) branch = brM.Groups[1].Value;
         bool merges = md.Contains("зливається в `main`") && !md.Contains("не зливається в `main`");
 

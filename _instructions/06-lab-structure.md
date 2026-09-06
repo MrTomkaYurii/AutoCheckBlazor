@@ -87,16 +87,19 @@ Regex: `^#{2,3}\s+(?:Задача|Завдання)\s+(\d+)(?:\.|\s+[—–])\s+
 - Додає/редагує/видаляє завдання через TaskDialog
 - Імпортує лаби з MD файлів (PreviewImportAsync → ImportAsync)
 
-## Структура студентського репо (лаба 01)
+## Структура студентського репо
 
 ```
-студент/repo/
+студент/repo/            (гілка Lab-01…Lab-04; з лаби 03 зливається в main)
   .gitignore
-  sandbox/intro/
-    SandboxIntro.csproj
+  oop-course.sln
+  Lab01/                        ← лаба 01 (окремий проєкт-тренажер)
+    Lab01.csproj
     Program.cs
     Task1.cs ... Task8.cs
-  src/                           ← починається з лаби 03
+  Lab02/                        ← лаба 02 (масиви, окремий проєкт)
+  ClinicApp/                    ← основний проєкт, починається з лаби 03
+    ClinicApp.csproj
     Patient.cs, Doctor.cs...
 ```
 

@@ -4,46 +4,71 @@
 Навчитися працювати з одновимірними, двовимірними, рваними та тривимірними масивами в C#.
 
 ## Контекст
-Це **пісочниця** — окремий мінімальний проєкт, який **не зливається в `main`**. Після цієї лаби стартує основний проєкт (Лаба 03).
+
+Друга — і остання — лаба-тренажер. Тут ви відпрацьовуєте **масиви всіх видів**:
+одновимірні, прямокутні 2D, рвані (jagged) та тривимірні. Це фундамент: у Лабі 03
+менеджери колекцій (`PatientManager` тощо) зберігатимуть об'єкти саме в масивах
+із ручним лічильником, поки в Лабі 09 не з'явиться `List<T>`.
+
+Як і Лаба 01, це **окремий проєкт `Lab02/`**, який не стає частиною системи.
+
+> **Нагадування про робочий процес** (деталі — [Git Воркшоп](https://tomka.space/git-workshop/)):
+> кожна лаба = гілка `Lab-XX` від `main`. З Лаби 03 гілка зливається назад у `main`.
+> **Лаби 01 і 02 — виняток: гілку пушите на GitHub, але в `main` НЕ зливаєте.**
+> Коміт на кожне завдання, формат — `LabXX TaskYY` (напр. `Lab02 Task03`).
 
 ---
 
-## Гілка для цієї лаби
+## Крок 1. Проєкт для Лаби 02
+
+Рішення `oop-course.sln` і `.gitignore` вже створені в Лабі 01 (Крок 0). Тут —
+лише нова гілка й новий проєкт.
 
 ```bash
 git checkout main
-git checkout -b sandbox/arrays
-```
+git checkout -b Lab-02
 
----
+dotnet new console -o Lab02 --name Lab02
+dotnet sln add Lab02/Lab02.csproj
+dotnet run --project Lab02          # має вивести Hello, World!
 
-## Створення проєкту
-
-```bash
-dotnet new console -o sandbox/arrays --name SandboxArrays
-cd sandbox/arrays
-dotnet run
-```
-
-Має вивести `Hello, World!`. Поверніться в корінь і зробіть коміт:
-
-```bash
-cd ../..
-git add sandbox/arrays/
-git commit -m "Lab02: create sandbox/arrays console project"
+git add oop-course.sln Lab02/
+git commit -m "Lab02: project"
 ```
 
 ---
 
 ## Як виконувати завдання
 
-Кожне завдання — окремий файл. У `Program.cs` один рядок — змінюйте після кожного завдання:
+Кожне завдання — окремий файл `TaskN.cs` у теці `Lab02/` (клас `TaskN` з методом
+`Run()`). У `Lab02/Program.cs` — один рядок-виклик, який ви міняєте після кожного
+завдання:
 
 ```csharp
-// Рядок для коректного зчитування дробових чисел з крапкою
-System.Threading.Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+// Дробові числа вводимо з КРАПКОЮ незалежно від локалі Windows.
+System.Threading.Thread.CurrentThread.CurrentCulture =
+    System.Globalization.CultureInfo.InvariantCulture;
+
 Task1.Run();   // → Task2.Run() → Task3.Run() → ...
 ```
+
+Після кожного завдання — коміт `Lab02 TaskNN`.
+
+> Як і в Лабі 01: `Console.ReadLine()` пишемо зі знаком `!` перед `Parse` —
+> `int.Parse(Console.ReadLine()!)`. Це прибирає попередження nullable-аналізу.
+> Тему nullable-типів розберемо в Лабі 03.
+
+### Ваш домен
+
+За замовчуванням виконуйте завдання **як написано**. Якщо ведете власний домен —
+таблиця **«Адаптація до вашого домену»** в кінці кожного завдання показує, чим
+замінити суть; формат вводу/виводу й структуру коду зберігайте.
+
+### Як користуватися підказками
+
+Підказки — це **напрям думки, а не готовий код**. Кожна закінчується блоком
+**📖 Документація**. Спершу читаєте документацію і пробуєте самі, і лише якщо
+застрягли — берете наступний крок підказки.
 
 ---
 
@@ -76,11 +101,23 @@ Task1.Run();   // → Task2.Run() → Task3.Run() → ...
 
 ### Підказки
 
-1. Оголосіть масив: `double[] weights = new double[n];`
-2. Заповніть масив циклом `for`.
-3. Порахуйте суму, мін і макс одним проходом `foreach`.
-4. Середнє = `sum / n`.
-5. Другим проходом `for` рахуйте елементи, де `weights[i] > avg`.
+1. **Спершу N, потім масив.** Прочитайте кількість пацієнтів, оголосіть
+   одновимірний масив рівно на N елементів. Синтаксис створення масиву — у
+   документації.
+2. **Заповнення.** Пройдіться `for` від `0` до `N-1`, у кожній ітерації читаючи
+   одне число з консолі в комірку масиву.
+3. **Перший прохід — агрегати.** Один `foreach` по масиву, у якому ви водночас
+   накопичуєте суму та відстежуєте поточні мінімум і максимум. Початкові
+   значення для min/max беріть з першого елемента, не з нуля.
+4. **Середнє** — сума поділена на кількість. Слідкуйте за типом ділення.
+5. **Другий прохід — порівняння із середнім.** Середнє відоме лише *після*
+   кроку 3, тому «скільки ваг вище середнього» рахується окремим циклом.
+6. **Формат виводу** — дивіться приклади: одне число після коми (`F1`).
+
+📖 Документація:
+- [Масиви (одновимірні)](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/arrays#single-dimensional-arrays)
+- [Оператори ітерації `for`, `foreach`](https://learn.microsoft.com/dotnet/csharp/language-reference/statements/iteration-statements)
+- [Стандартні числові формати (`F1`)](https://learn.microsoft.com/dotnet/standard/base-types/standard-numeric-format-strings)
 
 ### Адаптація до вашого домену
 
@@ -94,8 +131,8 @@ Task1.Run();   // → Task2.Run() → Task3.Run() → ...
 ### Коміт
 
 ```bash
-git add sandbox/arrays/Task1.cs sandbox/arrays/Program.cs
-git commit -m "Lab02 Task1: basic 1D array stats"
+git add Lab02/Task1.cs Lab02/Program.cs
+git commit -m "Lab02 Task01"
 ```
 
 ---
@@ -131,11 +168,25 @@ git commit -m "Lab02 Task1: basic 1D array stats"
 
 ### Підказки
 
-1. Збережіть вивід черги **до** сортування одразу після зчитування.
-2. Bubble sort — два вкладені цикли. Зовнішній `i` від 0 до n-2, внутрішній `j` від 0 до n-2-i.
-3. Якщо `queue[j] > queue[j+1]` — міняємо місцями через тимчасову змінну `temp`.
-4. Після сортування: `queue[0]` — мінімум, `queue[n-1]` — максимум.
-5. Для виводу масиву: `string.Join(" ", queue)`.
+1. **Зафіксуйте «до».** Одразу після зчитування збережіть рядок із початковою
+   чергою в окрему змінну — інакше після сортування ви його вже не покажете.
+2. **Bubble sort — два вкладені цикли.** Зовнішній повторює прохід по масиву,
+   внутрішній порівнює сусідні пари `queue[j]` і `queue[j+1]`. З кожним
+   зовнішнім проходом найбільше число «спливає» в кінець, тому діапазон
+   внутрішнього циклу можна щоразу скорочувати. Розберіть алгоритм по кроках у
+   документації (посилання нижче).
+3. **Обмін двох комірок.** Класичний спосіб — через тимчасову змінну. C# також
+   уміє обмін одним рядком через кортеж — знайдіть «tuple / deconstruction».
+4. **Після сортування за зростанням** мінімум — у `queue[0]`, максимум — в
+   останній комірці.
+5. **Вивід масиву в рядок** — метод, який склеює елементи через роздільник
+   (шукайте `string.Join`).
+
+📖 Документація:
+- [Масиви](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/arrays)
+- [`String.Join`](https://learn.microsoft.com/dotnet/api/system.string.join)
+- [Обмін значень через кортеж](https://learn.microsoft.com/dotnet/csharp/fundamentals/functional/deconstruct)
+- Bubble sort — будь-яке джерело з поясненням алгоритму (напр. Wikipedia «Сортування бульбашкою»)
 
 ### Адаптація до вашого домену
 
@@ -149,8 +200,8 @@ git commit -m "Lab02 Task1: basic 1D array stats"
 ### Коміт
 
 ```bash
-git add sandbox/arrays/Task2.cs sandbox/arrays/Program.cs
-git commit -m "Lab02 Task2: bubble sort on 1D array"
+git add Lab02/Task2.cs Lab02/Program.cs
+git commit -m "Lab02 Task02"
 ```
 
 ---
@@ -209,10 +260,22 @@ git commit -m "Lab02 Task2: bubble sort on 1D array"
 
 ### Підказки
 
-1. Оголосіть масив назв днів: `string[] days = { "Понеділок", "Вівторок", ... }`.
-2. Зчитайте `patients[0..6]` циклом `for`.
-3. Знаходьте `maxIdx` і `minIdx` — індекси, а не самі значення. Тоді `days[maxIdx]` дасть назву.
-4. Для форматування стовпців: `{days[i],-12}` вирівнює рядок ліворуч у полі 12 символів.
+1. **Два паралельні масиви.** Один — з назвами днів (заповнюєте його одразу
+   літералами при оголошенні), другий — з кількістю пацієнтів (7 чисел з
+   консолі). Індекс `i` в обох означає той самий день.
+2. **Читання 7 значень** — простий `for` від 0 до 6.
+3. **Шукайте індекси, а не значення.** Щоб вивести «Середа (15)», потрібно
+   знати *позицію* максимуму: тоді назва — це `days[maxIdx]`, а число —
+   `counts[maxIdx]`. Те саме для мінімуму.
+4. **Ініціалізація пошуку.** `maxIdx` і `minIdx` почніть з `0` і порівнюйте
+   решту елементів з поточним «чемпіоном».
+5. **Вирівнювання стовпців** у виводі задається *компонентом вирівнювання* в
+   інтерполяції рядка (від'ємне число — вирівняти ліворуч). Знайдіть «composite
+   formatting alignment» в документації.
+
+📖 Документація:
+- [Ініціалізація масиву літералами](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/arrays#array-initialization)
+- [Складене форматування — вирівнювання](https://learn.microsoft.com/dotnet/standard/base-types/composite-formatting#alignment-component)
 
 ### Адаптація до вашого домену
 
@@ -226,8 +289,8 @@ git commit -m "Lab02 Task2: bubble sort on 1D array"
 ### Коміт
 
 ```bash
-git add sandbox/arrays/Task3.cs sandbox/arrays/Program.cs
-git commit -m "Lab02 Task3: weekly schedule with named fixed array"
+git add Lab02/Task3.cs Lab02/Program.cs
+git commit -m "Lab02 Task03"
 ```
 
 ---
@@ -286,11 +349,23 @@ git commit -m "Lab02 Task3: weekly schedule with named fixed array"
 
 ### Підказки
 
-1. Оголосіть `int[,] matrix = new int[n, m];` — це прямокутний 2D масив.
-2. Зчитування рядка: `string[] parts = Console.ReadLine()!.Split(' ');`, потім `int.Parse(parts[j])`.
-3. Два вкладені `for` для рядкових сум: зовнішній по i (лікарі), внутрішній по j (дні).
-4. Для стовпцевих сум: зовнішній по j, внутрішній по i — навпаки.
-5. Максимум: стежте за `maxRow` і `maxCol` — індексами найбільшого елемента.
+1. **Прямокутний 2D масив** оголошується з двома розмірностями через кому в
+   дужках. Рядок = лікар, стовпець = день. Синтаксис — у документації
+   («multidimensional arrays»).
+2. **Читання рядка матриці.** Ціла стрічка чисел через пробіл ділиться на
+   частини методом, який розбиває рядок за роздільником; кожну частину
+   перетворюєте на `int`.
+3. **Суми по рядках.** Зовнішній цикл — по лікарях (`i`), внутрішній — по днях
+   (`j`); накопичуєте суму елементів `matrix[i, j]` для фіксованого `i`.
+4. **Суми по стовпцях — навпаки.** Зовнішній цикл по днях (`j`), внутрішній по
+   лікарях (`i`). Порядок вкладення циклів визначає, що ви підсумовуєте.
+5. **Максимум із позицією.** Окрім самого значення зберігайте `maxRow` і
+   `maxCol` — щоб вивести «(Лікар 2, День 2)».
+
+📖 Документація:
+- [Багатовимірні масиви `int[,]`](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/arrays#multidimensional-arrays)
+- [`String.Split`](https://learn.microsoft.com/dotnet/api/system.string.split)
+- [`GetLength(dimension)` — розмір по вимірі](https://learn.microsoft.com/dotnet/api/system.array.getlength)
 
 ### Адаптація до вашого домену
 
@@ -304,8 +379,8 @@ git commit -m "Lab02 Task3: weekly schedule with named fixed array"
 ### Коміт
 
 ```bash
-git add sandbox/arrays/Task4.cs sandbox/arrays/Program.cs
-git commit -m "Lab02 Task4: 2D rectangular array with row/column sums"
+git add Lab02/Task4.cs Lab02/Program.cs
+git commit -m "Lab02 Task04"
 ```
 
 ---
@@ -361,11 +436,19 @@ git commit -m "Lab02 Task4: 2D rectangular array with row/column sums"
 
 ### Підказки
 
-1. Один цикл `for i` від 0 до N-1:
-   - Головна: `matrix[i, i]`
-   - Побічна: `matrix[i, N-1-i]`
-2. Збирайте елементи в масиви `mainDiag[]` і `secDiag[]` для виводу через `string.Join(", ", ...)`.
-3. Суми накопичуйте паралельно: `mainSum += matrix[i, i]`.
+1. **Обидві діагоналі проходяться одним циклом** `i` від 0 до N−1:
+   - головна — комірка, де номер рядка дорівнює номеру стовпця;
+   - побічна — комірка, де номер стовпця дзеркальний: `N-1-i`.
+   Виведіть на папері для N=3, щоб переконатися в формулі `N-1-i`.
+2. **Збирайте елементи в два невеликі масиви** (по N елементів кожен) — щоб потім
+   вивести їх через кому методом склеювання рядка.
+3. **Суми** накопичуйте в тому ж циклі, паралельно зі збором елементів.
+4. Для N непарного центральний елемент належить *обом* діагоналям — це нормально,
+   так і має бути в сумах.
+
+📖 Документація:
+- [Багатовимірні масиви](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/arrays#multidimensional-arrays)
+- [`String.Join`](https://learn.microsoft.com/dotnet/api/system.string.join)
 
 ### Адаптація до вашого домену
 
@@ -379,8 +462,8 @@ git commit -m "Lab02 Task4: 2D rectangular array with row/column sums"
 ### Коміт
 
 ```bash
-git add sandbox/arrays/Task5.cs sandbox/arrays/Program.cs
-git commit -m "Lab02 Task5: square matrix diagonal analysis"
+git add Lab02/Task5.cs Lab02/Program.cs
+git commit -m "Lab02 Task05"
 ```
 
 ---
@@ -450,11 +533,22 @@ git commit -m "Lab02 Task5: square matrix diagonal analysis"
 
 ### Підказки
 
-1. Рваний масив: `int[][] costs = new int[n][];`
-2. Для кожного лікаря: зчитайте K, потім `costs[i] = new int[k];`, потім K значень.
-3. Це нормально, що `costs[i].Length` відрізняється для різних i.
-4. Середнє: `(double)totals[i] / costs[i].Length` (явне приведення до `double`!).
-5. `int[][]` — масив масивів; `int[,]` — прямокутна матриця. Це різні типи.
+1. **Рваний масив (jagged) — це масив масивів.** Зовнішній масив на N елементів
+   ви створюєте одразу, а кожен внутрішній — окремо, коли вже знаєте його
+   довжину K. Синтаксис `int[][]` — у документації («jagged arrays»).
+2. **Для кожного лікаря:** прочитали K → створили внутрішній масив на K комірок →
+   прочитали K значень у нього.
+3. **Різна довжина рядків — це вся суть завдання.** `costs[i].Length` у різних
+   `i` буде різним, і це правильно.
+4. **Середнє по лікарю.** Сума цілих поділена на кількість дасть ціле — а
+   потрібне дробове. Одному з операндів треба явно задати тип `double`
+   (приведенням). Зверніться до розділу про перетворення типів.
+5. **`int[][]` ≠ `int[,]`.** Перше — масив масивів (рядки різної довжини), друге —
+   суцільна прямокутна матриця. Це різні типи з різним синтаксисом доступу.
+
+📖 Документація:
+- [Рвані масиви `int[][]`](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/arrays#jagged-arrays)
+- [Явні числові перетворення (приведення)](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/numeric-conversions#explicit-numeric-conversions)
 
 ### Адаптація до вашого домену
 
@@ -468,8 +562,8 @@ git commit -m "Lab02 Task5: square matrix diagonal analysis"
 ### Коміт
 
 ```bash
-git add sandbox/arrays/Task6.cs sandbox/arrays/Program.cs
-git commit -m "Lab02 Task6: jagged array with per-row stats"
+git add Lab02/Task6.cs Lab02/Program.cs
+git commit -m "Lab02 Task06"
 ```
 
 ---
@@ -514,10 +608,19 @@ git commit -m "Lab02 Task6: jagged array with per-row stats"
 
 ### Підказки
 
-1. Два окремих масиви: `string[] names = new string[n];` і `double[] bmis = new double[n];`.
-2. При сортуванні — міняйте **обидва** масиви одночасно. C# підтримує tuple swap: `(bmis[j], bmis[j+1]) = (bmis[j+1], bmis[j]);`
-3. Сортування за **спаданням**: умова `bmis[j] < bmis[j+1]` (не `>`).
-4. Якщо не міняти `names` синхронно з `bmis`, ім'я і ІМТ розійдуться — типова помилка.
+1. **Два паралельні масиви однакової довжини:** імена (`string`) та значення ІМТ
+   (`double`). Комірка `i` в обох — це один пацієнт.
+2. **Сортуємо ті самі bubble-sort-проходи, що в Задачі 2**, але з однією
+   відмінністю: коли міняєте місцями два ІМТ, ви **тим самим рухом** міняєте
+   місцями два імені з тими самими індексами.
+3. **За спаданням.** Щоб більше значення опинилось спереду, умова обміну —
+   «поточний менший за наступний» (дзеркально до сортування за зростанням).
+4. **Найтиповіша помилка** — переставити тільки `bmis`, забувши `names`. Тоді
+   рейтинг покаже правильні числа з чужими іменами. Обидва масиви рухаються синхронно.
+
+📖 Документація:
+- [Масиви](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/arrays)
+- [Обмін значень через кортеж](https://learn.microsoft.com/dotnet/csharp/fundamentals/functional/deconstruct)
 
 ### Адаптація до вашого домену
 
@@ -531,8 +634,8 @@ git commit -m "Lab02 Task6: jagged array with per-row stats"
 ### Коміт
 
 ```bash
-git add sandbox/arrays/Task7.cs sandbox/arrays/Program.cs
-git commit -m "Lab02 Task7: parallel arrays sorted by value"
+git add Lab02/Task7.cs Lab02/Program.cs
+git commit -m "Lab02 Task07"
 ```
 
 ---
@@ -612,11 +715,20 @@ git commit -m "Lab02 Task7: parallel arrays sorted by value"
 
 ### Підказки
 
-1. Оголосіть: `int[,,] data = new int[d, w, 2];` — три виміри: відділення, тиждень, зміна.
-2. Три вкладені цикли `for`: зовнішній по `dept`, середній по `week`, внутрішній по `shift` (0..1).
-3. Доступ до елементу: `data[dept, week, shift]`.
-4. Суму по відділенню збирайте в окремий масив `int[] totals = new int[d]`.
-5. `int[,,]` — тривимірний прямокутний масив. Всі три виміри фіксовані в момент створення.
+1. **Тривимірний прямокутний масив** оголошується з трьома розмірностями через
+   коми. Виміри: `[відділення, тиждень, зміна]`, де зміна — це 0 або 1.
+2. **Три вкладені цикли:** зовнішній по відділеннях, середній по тижнях,
+   внутрішній по змінах (0..1). Порядок читання вводу — саме такий (див. «Формат
+   вводу»).
+3. **Доступ до комірки** — три індекси через кому в дужках.
+4. **Підсумки по відділеннях** зручно накопичувати в окремому одновимірному
+   масиві на D елементів, паралельно з основними циклами.
+5. **Найзавантаженіше відділення** — знову шукайте *індекс* максимуму в масиві
+   підсумків, а не саме значення.
+
+📖 Документація:
+- [Багатовимірні масиви (`int[,,]`)](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/arrays#multidimensional-arrays)
+- [`Array.GetLength`](https://learn.microsoft.com/dotnet/api/system.array.getlength)
 
 ### Адаптація до вашого домену
 
@@ -630,8 +742,8 @@ git commit -m "Lab02 Task7: parallel arrays sorted by value"
 ### Коміт
 
 ```bash
-git add sandbox/arrays/Task8.cs sandbox/arrays/Program.cs
-git commit -m "Lab02 Task8: 3D array analysis with per-department stats"
+git add Lab02/Task8.cs Lab02/Program.cs
+git commit -m "Lab02 Task08"
 ```
 
 ---
@@ -639,29 +751,43 @@ git commit -m "Lab02 Task8: 3D array analysis with per-department stats"
 ## Перевірка перед здачею
 
 ```bash
-cd sandbox/arrays
-dotnet run
+dotnet run --project Lab02
 ```
 
-Порівняйте вивід з прикладами у кожному завданні.
+Пройдіться по всіх 8 завданнях, міняючи виклик у `Lab02/Program.cs`, і порівняйте
+вивід з прикладами.
 
 ---
 
 ## Питання для самоперевірки
 
-1. Чим відрізняється `int[,]` від `int[][]`? Коли який використовувати?
-2. У Task 7, якщо міняти тільки `bmis`, але не `names` — що піде не так?
-3. У Task 4 чому стовпцеві суми рахуються зворотним порядком циклів?
-4. Скільки елементів у масиві `int[d, w, 2]`? Напишіть формулу.
-5. Чому `(double)totals[i] / costs[i].Length` — а не просто `totals[i] / costs[i].Length`?
+Відповіді формулюйте своїми словами; за потреби — повертайтесь до документації з підказок.
+
+1. Чим `int[,]` відрізняється від `int[][]` на рівні пам'яті? Наведіть задачу,
+   де підходить лише рваний масив.
+2. У Задачі 7, якщо переставляти тільки `bmis`, а `names` лишати — що саме
+   побачить користувач у рейтингу?
+3. У Задачі 4 суми по стовпцях рахуються зі зворотним вкладенням циклів.
+   Що зміниться в результаті, якщо залишити порядок як для сум по рядках?
+4. Скільки всього елементів у масиві `int[d, w, 2]`? Виведіть формулу.
+5. Чому `totals[i] / costs[i].Length` дає неправильне середнє, а
+   `(double)totals[i] / costs[i].Length` — правильне?
+6. У bubble sort зовнішній цикл робить N−1 прохід. Чому саме N−1, а не N?
+7. Задача 3 будує таблицю через паралельні масиви (назви + числа). Чому не можна
+   тримати назву й число в одній комірці одного масиву?
 
 ---
 
 ## Статус гілки
 
-Ця гілка **не зливається в `main`**. Після завершення:
+Після завершення всіх 8 завдань (кожне — окремий коміт `Lab02 TaskNN` на гілці
+`Lab-02`) — **лише push гілки, без злиття в `main`**:
 
 ```bash
-git checkout main
-# наступна лаба: git checkout -b feature/patient-class
+git push -u origin Lab-02
 ```
+
+Лаба 02, як і Лаба 01, — тренажер, тому **не зливається в `main`**.
+
+> Наступна лаба: `git checkout main` → `git checkout -b Lab-03`. З Лаби 03
+> починається основний проєкт `ClinicApp/`, і **її гілка вже зливається в `main`**.

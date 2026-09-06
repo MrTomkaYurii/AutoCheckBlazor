@@ -85,6 +85,27 @@ public class LabMdParserTests
         result.BranchName.Should().BeNull();
     }
 
+    // Regression: lab-01 mentions "git checkout -b Lab-XX" inline (a placeholder)
+    // in prose BEFORE the real command in a ```bash block. The parser must ignore
+    // the inline mention and take the command that stands on its own line.
+    [Fact]
+    public void Parse_IgnoresInlinePlaceholder_TakesRealBranchCommand()
+    {
+        var md = """
+            # Лаба 01 — Основи C#
+
+            1. `git checkout main` → `git checkout -b Lab-XX` — нова гілка.
+
+            ## Крок 1
+
+            ```bash
+            git checkout main
+            git checkout -b Lab-01
+            ```
+            """;
+        LabMdParser.Parse(md).BranchName.Should().Be("Lab-01");
+    }
+
     // ── MergesMain detection ─────────────────────────────────────────────────
 
     [Fact]

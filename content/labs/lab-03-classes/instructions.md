@@ -5,35 +5,96 @@
 
 ## Контекст
 
-Попередні лаби були **пісочницями** — окремими мінімальними проєктами для відпрацювання синтаксису. З цієї лаби починається **основний проєкт** `src/ClinicApp`, який буде рости протягом усіх 21 лаб.
+Лаби 01–02 були тренажерами синтаксису. **З цієї лаби починається основний
+проєкт `ClinicApp/`**, який росте до кінця курсу (Лаби 03–22). Це перша лаба,
+гілка якої **зливається в `main`**.
 
-Станом на початок цієї лаби:
-- `sandbox/intro/` — базовий синтаксис C# (Лаба 01)
-- `sandbox/arrays/` — масиви (Лаба 02)
-- `src/` — **порожньо** (тут і починаємо)
+Станом на початок:
+- `Lab01/`, `Lab02/` — тренажери (лишились на своїх гілках, у `main` їх нема);
+- `main` містить лише `.gitignore` і порожнє рішення `oop-course.sln`.
 
-Після цієї лаби у `src/` з'являться класи `Patient`, `Doctor`, `Appointment`, три менеджери колекцій та клас `Clinic`, що їх об'єднує.
+Після цієї лаби у `ClinicApp/` будуть класи `Patient`, `Doctor`, `Appointment`,
+три менеджери-колекції на масивах та клас `Clinic`, що їх об'єднує, — і працююче
+консольне меню.
+
+### Що дозволено в цій лабі
+
+Тільки те, що ви вже знаєте: **класи, поля, властивості, конструктори, методи,
+масиви й цикли**. Свідомо **не використовуємо**:
+
+- `List<T>`, `Dictionary<,>` та будь-які інші узагальнені колекції — зберігання
+  лише через **масив фіксованого розміру + лічильник `_count`** (як у Лабі 02).
+  Узагальнення (generics) — це Лаба 09;
+- LINQ (`.Where`, `.FirstOrDefault`, `.Average` …) — Лаба 14;
+- скорочені оператори `?.` і `??` — Лаба 04 (тут пишемо явні `== null` / `!= null`);
+- патерн `is not null` та інші патерни зіставлення — значно пізніше;
+- `enum`, `struct`, `interface`, `abstract` — наступні лаби.
+
+Обмеження навмисні: спочатку ви руками пишете лінійний пошук і зростання масиву,
+а вже потім курс показує готові інструменти й ви розумієте, що всередині них.
 
 ---
 
-## Гілка для цієї лаби
+## Коротко про `null` і тип `T?`
+
+У проєкті увімкнено `<Nullable>enable</Nullable>` — компілятор відстежує, які
+змінні можуть бути `null`, і попереджає про небезпечні звернення.
+
+Що вам знадобиться в цій лабі — рівно чотири речі:
+
+1. **`null` — це «посилання в нікуди».** Змінна типу класу або тримає об'єкт, або
+   дорівнює `null`. Звернення до члена через `null` (`patient.FullName`, коли
+   `patient == null`) кидає `NullReferenceException`.
+
+2. **Метод, який може «не знайти», повертає тип зі знаком `?`.** Наприклад
+   `FindById` повертає `Patient?` — «або пацієнт, або `null`». Знак `?` — це
+   сигнал і вам, і компілятору: результат треба перевірити.
+
+3. **Перевіряйте звичайним порівнянням.** Отримавши `Patient?`, спершу
+   `if (result == null)` (обробити відсутність) або `if (result != null)`
+   (працювати далі). Тільки після такої перевірки компілятор дозволить
+   звертатись до `result.FullName`.
+
+   ```csharp
+   Patient? found = manager.FindById(id);
+   if (found == null)
+   {
+       Console.WriteLine("Не знайдено.");
+       return;
+   }
+   Console.WriteLine(found.FullName);   // тут компілятор уже спокійний
+   ```
+
+4. **`Console.ReadLine()!`** — при читанні вводу залишайте знак `!` після
+   `ReadLine()` (як у Лабах 01–02): «я гарантую, що тут не `null`».
+
+Скорочені оператори `?.` і `??` для роботи з `null` — у **Лабі 04**. Тут —
+тільки явні перевірки `== null` / `!= null`.
+
+📖 [Nullable-типи посилань](https://learn.microsoft.com/dotnet/csharp/nullable-references) ·
+[Оператор `!` (null-forgiving)](https://learn.microsoft.com/dotnet/csharp/language-reference/operators/null-forgiving)
+
+---
+
+## Крок 1. Проєкт `ClinicApp`
+
+> **Робочий процес** (повністю — [Git Воркшоп](https://tomka.space/git-workshop/)):
+> лаба = гілка `Lab-XX` від `main`, коміт на кожне завдання (`LabXX TaskYY`), у
+> кінці — злиття в `main`. **Лаби 01–02 у `main` не зливались; з цієї лаби —
+> зливаються.**
+
+Рішення `oop-course.sln` створене в Лабі 01. Тут — гілка `Lab-03` і новий проєкт.
 
 ```bash
 git checkout main
-git checkout -b feature/catalog
+git checkout -b Lab-03
+
+dotnet new console -o ClinicApp --name ClinicApp
+dotnet sln add ClinicApp/ClinicApp.csproj
 ```
 
-> Гілка `feature/catalog` **зливається в `main`** після завершення всіх завдань.
-
----
-
-## Створення проєкту
-
-```bash
-dotnet new console -o src --name ClinicApp
-```
-
-Перевірте, що з'явилися `src/ClinicApp.csproj` і `src/Program.cs`. Відредагуйте `.csproj`:
+Перевірте, що у `ClinicApp/ClinicApp.csproj` увімкнені такі властивості (додайте
+відсутні):
 
 ```xml
 <PropertyGroup>
@@ -44,49 +105,53 @@ dotnet new console -o src --name ClinicApp
 </PropertyGroup>
 ```
 
-Перший запуск:
+Перший запуск і коміт:
 
 ```bash
-cd src
-dotnet run
-```
-
-Має вивести `Hello, World!`. Поверніться в корінь і зробіть перший коміт:
-
-```bash
-cd ..
-git add src/
-git commit -m "Lab03: create src/ClinicApp console project"
+dotnet run --project ClinicApp        # має вивести Hello, World!
+git add oop-course.sln ClinicApp/
+git commit -m "Lab03: project"
 ```
 
 ---
 
 ## Як виконувати завдання
 
-На відміну від пісочниць, тут **не потрібно** файлів `Task1.cs`, `Task2.cs`. Кожне завдання додає новий файл із класом до **одного спільного проєкту**. Клас зразу використовується у спільному `Program.cs`.
+На відміну від Лаб 01–02, тут **немає** файлів `Task1.cs`. Кожне завдання додає
+новий файл із класом у **той самий проєкт** `ClinicApp/`, і клас одразу
+використовується у спільному `ClinicApp/Program.cs`. Коміт — на кожне завдання
+(`Lab03 TaskNN`).
 
 Структура після завершення всіх завдань:
 
 ```
-src/
+ClinicApp/
 ├── ClinicApp.csproj
-├── Program.cs              ← меню та тестовий код
-├── Patient.cs              ← Задача 1
-├── Doctor.cs               ← Задача 2
-├── PatientManager.cs       ← Задача 3
-├── DoctorManager.cs        ← Задача 4
-├── Appointment.cs          ← Задача 5
-├── AppointmentManager.cs   ← Задача 6
-├── Clinic.cs               ← Задача 7
-└── GrowablePatientManager.cs ← Задача 8
+├── Program.cs                  ← меню та тестовий код
+├── Patient.cs                  ← Задача 1
+├── Doctor.cs                   ← Задача 2
+├── PatientManager.cs           ← Задача 3
+├── DoctorManager.cs            ← Задача 4
+├── Appointment.cs              ← Задача 5
+├── AppointmentManager.cs       ← Задача 6
+├── Clinic.cs                   ← Задача 7
+└── GrowablePatientManager.cs   ← Задача 8
 ```
 
-Усі файли — у **просторі імен `ClinicApp`**:
-```csharp
-namespace ClinicApp;
+Усі класи — у просторі імен `ClinicApp` (`namespace ClinicApp;` на початку файлу).
 
-public class Patient { ... }
-```
+### Ваш домен
+
+За замовчуванням виконуйте завдання **як написано** (домен «клініка»). Якщо ведете
+власний домен — таблиця **«Адаптація до вашого домену»** в кінці кожного завдання
+показує відповідники сутностей і методів. Структуру класів зберігайте.
+
+### Як користуватися підказками
+
+Підказки — це **напрям думки, а не готовий код**. Специфікація класу (таблиця
+членів) каже, *що* має бути; підказки кажуть, *як міркувати*; блок
+**📖 Документація** — куди піти по деталі синтаксису. Спершу документація і
+власна спроба, і лише потім наступний крок підказки.
 
 ---
 
@@ -131,27 +196,37 @@ public class Patient { ... }
 
 ### Підказки
 
-1. Оголосіть `private static int _nextId = 1;` на рівні класу. Статичне поле — одне для всіх примірників.
-2. Властивість `Id` лише з гетером: `public int Id { get; }` (ініціалізується тільки в конструкторі).
-3. Повний конструктор присвоює `Id = _nextId++;` — постінкремент спершу бере значення, потім збільшує на 1.
-4. Ланцюжок конструкторів через `: this(...)`:
-   ```csharp
-   public Patient() : this("Невідомий", "Пацієнт") { }
-   public Patient(string f, string l) : this(f, l, new DateTime(2000, 1, 1), "Невідомо", "0000000000") { }
-   public Patient(string f, string l, DateTime dob, string bt, string phone) { Id = _nextId++; ... }
-   ```
-5. Вік враховує, чи вже був день народження цього року:
-   ```csharp
-   int age = DateTime.Today.Year - DateOfBirth.Year;
-   if (DateOfBirth.Date > DateTime.Today.AddYears(-age)) age--;
-   ```
-6. `GetAgeCategory()`:
-   ```csharp
-   if (Age < 18) return "дитина";
-   if (Age < 60) return "дорослий";
-   return "літній";
-   ```
-7. У `Program.cs` створіть мінімум 5 пацієнтів: хоча б одним конструктором без параметрів, одним з ім'ям та прізвищем, трьома — повним.
+1. **Лічильник ID — статичне поле.** Одне поле, спільне для всіх об'єктів класу
+   (не для кожного окремо). Прочитайте про `static` члени: різниця між полем
+   екземпляра і полем класу.
+2. **`Id` не можна змінювати ззовні.** Це властивість «лише читання»: значення
+   присвоюється один раз у конструкторі й далі незмінне. Знайдіть у документації
+   get-only auto-property.
+3. **Присвоєння Id у повному конструкторі.** Візьміть поточне значення лічильника,
+   а потім збільште його на 1 — так наступний пацієнт отримає наступний номер.
+   Розберіться з різницею пре- та постінкремента.
+4. **Ланцюжок конструкторів.** Коротші конструктори не дублюють присвоєння полів,
+   а делегують роботу повному через `: this(...)`. Спроєктуйте так, щоб `Id++`
+   траплявся рівно в одному місці — у повному конструкторі. Документація —
+   «constructor chaining» / `this` як ініціалізатор конструктора.
+5. **Обчислення віку.** Різниця років — це груба оцінка; якщо день народження
+   цього року ще не настав, вік на 1 менший. Продумайте перевірку на папері для
+   дати народження 31 грудня. `DateTime` має властивості `Today`, `Year` і метод
+   зсуву дати — шукайте в документації.
+6. **`GetAgeCategory()`** — той самий каскад `if`, що в Задачі 3 Лаби 01, але
+   межі: `< 18` → дитина, `< 60` → дорослий, інакше → літній.
+7. **`Age`, `IsAdult`, `FullName`** — обчислювані властивості (лише `get`), вони
+   не зберігають значення, а рахують його щоразу з інших полів.
+8. **У `Program.cs`** створіть щонайменше 5 пацієнтів: хоча б по одному кожним із
+   трьох конструкторів. Виведіть кожного (спрацює ваш `ToString()`).
+
+📖 Документація:
+- [`static` члени](https://learn.microsoft.com/dotnet/csharp/programming-guide/classes-and-structs/static-classes-and-static-class-members)
+- [Автоматичні властивості (get-only)](https://learn.microsoft.com/dotnet/csharp/programming-guide/classes-and-structs/auto-implemented-properties)
+- [Конструктори та `: this()`](https://learn.microsoft.com/dotnet/csharp/programming-guide/classes-and-structs/constructors#constructor-syntax)
+- [Оператори інкременту `++`](https://learn.microsoft.com/dotnet/csharp/language-reference/operators/arithmetic-operators#increment-operator-)
+- [Структура `DateTime`](https://learn.microsoft.com/dotnet/api/system.datetime)
+- [`override ToString()`](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/override)
 
 ### Адаптація до вашого домену
 
@@ -166,8 +241,8 @@ public class Patient { ... }
 ### Коміт
 
 ```bash
-git add src/Patient.cs src/Program.cs
-git commit -m "Lab03 Task1: add Patient class with 3 constructors and computed properties"
+git add ClinicApp/Patient.cs ClinicApp/Program.cs
+git commit -m "Lab03 Task01"
 ```
 
 ---
@@ -215,22 +290,28 @@ git commit -m "Lab03 Task1: add Patient class with 3 constructors and computed p
 
 ### Підказки
 
-1. `WorkStartHour` і `WorkEndHour` — прості `int`. Не потрібен спеціальний тип: `8` означає 08:00.
-2. `WorkSchedule` — форматуйте через `ToString("D2")` для нулів: `WorkStartHour.ToString("D2") + ":00–" + WorkEndHour.ToString("D2") + ":00"`.
-3. `IsAvailableNow` — отримайте поточну годину через `DateTime.Now.Hour`:
-   ```csharp
-   int currentHour = DateTime.Now.Hour;
-   return currentHour >= WorkStartHour && currentHour < WorkEndHour;
-   ```
-4. У повному конструкторі виставляйте `WorkStartHour = 8; WorkEndHour = 17;` в тілі.
-5. Після створення лікаря можна змінити графік через сеттери:
-   ```csharp
-   var doc = new Doctor("Олег", "Сидоренко", "Кардіологія", "LIC-001", "0441234567");
-   doc.WorkStartHour = 8;
-   doc.WorkEndHour   = 16;
-   ```
-6. `CanAcceptAt(int hour)` — корисний для перевірки перед записом: `if (!doctor.CanAcceptAt(10)) Console.WriteLine("Лікар не приймає о 10:00");`
-7. У `ToString()` використовуйте `WorkSchedule` щоб не дублювати логіку форматування.
+1. **Години — прості `int` (0–23).** Окремий тип поки не потрібен: `8` означає
+   08:00. У Лабі 04 ви якраз об'єднаєте ці два поля у `struct`.
+2. **`WorkSchedule` — форматований рядок.** Щоб отримати `08` замість `8`,
+   потрібне доповнення нулем — це стандартний числовий формат (`D2`). Зберіть
+   рядок `"08:00–17:00"` із двох відформатованих годин.
+3. **`IsAvailableNow`** порівнює *поточну* годину з діапазоном `[Start, End)`:
+   більше-або-дорівнює початку **і** строго менше кінця. Поточну годину дає
+   `DateTime.Now`.
+4. **Значення за замовчуванням 8–17** виставляйте у повному конструкторі (решта
+   конструкторів делегують йому через `: this(...)`).
+5. **Графік можна міняти після створення** — тому `WorkStartHour`/`WorkEndHour`
+   мають і `get`, і `set` (звичайні авто-властивості).
+6. **`CanAcceptAt(int hour)`** — та сама перевірка діапазону, що в
+   `IsAvailableNow`, але для довільної години. Не дублюйте логіку — нехай
+   `IsAvailableNow` спирається на `CanAcceptAt`.
+7. **`ToString()`** складіть з готових властивостей (`FullName`, `WorkSchedule`,
+   `WorkingHoursPerDay`, `IsAvailableNow`) — не повторюйте форматування вручну.
+
+📖 Документація:
+- [Стандартні числові формати (`D2`)](https://learn.microsoft.com/dotnet/standard/base-types/standard-numeric-format-strings#decimal-format-specifier-d)
+- [`DateTime.Now`](https://learn.microsoft.com/dotnet/api/system.datetime.now)
+- [Обчислювані властивості (вираз-тіло)](https://learn.microsoft.com/dotnet/csharp/programming-guide/classes-and-structs/properties#expression-body-definitions)
 
 ### Адаптація до вашого домену
 
@@ -245,8 +326,8 @@ git commit -m "Lab03 Task1: add Patient class with 3 constructors and computed p
 ### Коміт
 
 ```bash
-git add src/Doctor.cs src/Program.cs
-git commit -m "Lab03 Task2: add Doctor class with int work hours and availability check"
+git add ClinicApp/Doctor.cs ClinicApp/Program.cs
+git commit -m "Lab03 Task02"
 ```
 
 ---
@@ -268,7 +349,7 @@ git commit -m "Lab03 Task2: add Doctor class with int work hours and availabilit
 | `_count` | `private int` | Поточна кількість пацієнтів |
 | `Count` | `public int` | `_count` |
 | `Add(Patient)` | `public void` | Додає, виводить підтвердження або повідомлення про ліміт |
-| `FindById(int)` | `public Patient` | Лінійний пошук, повертає `null!` якщо не знайдено |
+| `FindById(int)` | `public Patient?` | Лінійний пошук; повертає `null`, якщо не знайдено |
 | `FindByName(string)` | `public Patient[]` | Пошук у `FirstName` або `LastName` (без урахування регістру) |
 | `Remove(int id)` | `public bool` | Видаляє, зсуває елементи ліворуч |
 | `DisplayAll()` | `public void` | Таблиця або «порожній список» |
@@ -297,18 +378,40 @@ git commit -m "Lab03 Task2: add Doctor class with int work hours and availabilit
 
 ### Підказки
 
-1. Поля масиву:
-   ```csharp
-   private const int MaxPatients = 100;
-   private Patient[] _patients = new Patient[MaxPatients];
-   private int _count = 0;
-   ```
-2. `Add` — перевірте ліміт, потім `_patients[_count] = patient; _count++;`
-3. `FindById` — лінійний пошук: цикл від `0` до `_count`, порівняйте `_patients[i].Id == id`. Якщо не знайдено — поверніть `null!`.
-4. `FindByName` — двопрохідний патерн з Лаби 02: один цикл рахує кількість збігів, потім виділяється масив точного розміру, другий цикл його заповнює. Порівняння регістронезалежне: `FirstName.ToLower().Contains(query.ToLower())` або аналогічно для `LastName`.
-5. `Remove` — знайдіть індекс елемента (через цикл або `FindById`), зсуньте решту масиву ліворуч (`_patients[j] = _patients[j+1]`), встановіть останній слот у `null!`, зменшіть `_count`.
-6. `DisplayStats` — один прохід по масиву: накопичуйте суму вікУ (`totalAge`), відстежуйте індекси мінімального та максимального елемента, рахуйте кількість дорослих. Середнє — `totalAge / _count`. Виводьте ім'я через `_patients[minIdx].FullName`.
-7. У `Program.cs` ізолюйте підменю в окрему функцію `static void PatientsMenu(Clinic clinic)`.
+1. **Три приватні поля.** Константа-ліміт (`MaxPatients`), сам масив, створений
+   на цей ліміт, і лічильник фактичної кількості `_count`. Це та сама схема
+   «масив + `_count`», що в Задачах 3, 6, 8 Лаби 02 — тільки елементи тепер
+   об'єкти `Patient`, а не числа.
+2. **`Add`.** Спершу перевірте, чи є місце (`_count < MaxPatients`). Якщо ні —
+   повідомте про ліміт і вийдіть. Якщо є — покладіть об'єкт у комірку `_count`
+   і збільште лічильник.
+3. **`FindById` — лінійний пошук.** Цикл по перших `_count` елементах, порівняння
+   `Id`. Знайшли — одразу `return` знайдений об'єкт. Дійшли до кінця — `return null`
+   (тому тип результату `Patient?`).
+4. **`FindByName` — двопрохідний патерн із Лаби 02.** Перший прохід рахує,
+   скільки елементів підходять; потім створюєте масив-результат точно цього
+   розміру; другий прохід його заповнює. Порівняння без урахування регістру —
+   приведіть обидва рядки до нижнього регістру перед перевіркою входження
+   підрядка.
+5. **`Remove` — видалення зі зсувом.** Знайдіть індекс потрібного елемента.
+   Зсуньте всі наступні елементи на одну позицію ліворуч. Останню (тепер
+   дубльовану) комірку очистіть, зменшіть `_count`. Поверніть `true`/`false`
+   залежно від того, чи знайшли елемент.
+6. **`DisplayStats` — один прохід.** Накопичуйте суму віків; відстежуйте
+   *індекси* наймолодшого й найстаршого (а не самі об'єкти); рахуйте, скільки
+   `IsAdult`. Середній вік = сума / `_count` (стежте за типом ділення — потрібне
+   дробове).
+7. **Порожній список.** `DisplayAll` і `DisplayStats` мають коректно
+   відпрацьовувати, коли `_count == 0`.
+8. **У `Program.cs`** винесіть підменю «Пацієнти» в окремий локальний метод —
+   щоб `Program.cs` не перетворився на суцільний `switch`.
+
+📖 Документація:
+- [`const`](https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/const)
+- [Масиви](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/arrays)
+- [`String.ToLower`](https://learn.microsoft.com/dotnet/api/system.string.tolower) / [`String.Contains`](https://learn.microsoft.com/dotnet/api/system.string.contains)
+- [Nullable-типи посилань (`Patient?`)](https://learn.microsoft.com/dotnet/csharp/nullable-references)
+- [Локальні функції](https://learn.microsoft.com/dotnet/csharp/programming-guide/classes-and-structs/local-functions)
 
 ### Адаптація до вашого домену
 
@@ -322,8 +425,8 @@ git commit -m "Lab03 Task2: add Doctor class with int work hours and availabilit
 ### Коміт
 
 ```bash
-git add src/PatientManager.cs src/Program.cs
-git commit -m "Lab03 Task3: add PatientManager with array storage, CRUD and stats"
+git add ClinicApp/PatientManager.cs ClinicApp/Program.cs
+git commit -m "Lab03 Task03"
 ```
 
 ---
@@ -345,7 +448,7 @@ git commit -m "Lab03 Task3: add PatientManager with array storage, CRUD and stat
 | `_count` | `private int` | Поточна кількість |
 | `Count` | `public int` | `_count` |
 | `Add(Doctor)` | `public void` | Додає або повідомляє про ліміт |
-| `FindById(int)` | `public Doctor` | Лінійний пошук |
+| `FindById(int)` | `public Doctor?` | Лінійний пошук; `null`, якщо не знайдено |
 | `FindBySpeciality(string)` | `public Doctor[]` | Пошук за спеціальністю (без урахування регістру) |
 | `GetAll()` | `public Doctor[]` | Копія перших `_count` елементів |
 | `Remove(int id)` | `public bool` | Видаляє зі зсувом |
@@ -373,15 +476,28 @@ git commit -m "Lab03 Task3: add PatientManager with array storage, CRUD and stat
 
 ### Підказки
 
-1. `FindBySpeciality` — той самий двопрохідний патерн що і `PatientManager.FindByName`. Умова порівняння: `_doctors[i].Speciality.ToLower().Contains(q)`.
-2. `GetAll()` — виділіть масив розміром `_count`, скопіюйте перші `_count` елементів з `_doctors`, поверніть.
-3. `DisplayStats()` — для унікальних спеціальностей: зовнішній цикл по `i`, внутрішній (`j < i`) перевіряє чи спеціальність вже зустрічалась раніше. Якщо нова — третій цикл (`k`) рахує кількість лікарів з цією спеціальністю.
-4. Кількість доступних: простий `for` з лічильником, `if (_doctors[i].IsAvailableNow) availableNow++;`
-5. При введенні години роботи з консолі використовуйте `int.TryParse`:
-   ```csharp
-   Console.Write("Початок роботи (година, напр. 8): ");
-   int.TryParse(Console.ReadLine(), out int workStart);
-   ```
+1. **`DoctorManager` — копія `PatientManager` за структурою.** Той самий масив +
+   `_count`, ті самі `Add` / `FindById` / `Remove` / `DisplayAll`. Відрізняються
+   лише `FindBySpeciality` і `DisplayStats`.
+2. **`FindBySpeciality`** — той самий двопрохідний патерн, що `FindByName`, лише
+   порівняння йде по полю `Speciality` (без урахування регістру).
+3. **`GetAll()`** повертає *копію* — новий масив рівно на `_count` елементів. Це
+   потрібно, щоб зовнішній код не міг зіпсувати внутрішній масив менеджера.
+4. **Унікальні спеціальності без `Dictionary`.** Для кожного лікаря `i`
+   перевірте вкладеним циклом по попередніх (`j < i`), чи така спеціальність вже
+   траплялась. Якщо ні — це нова спеціальність; порахуйте окремим проходом,
+   скільки всього лікарів її мають, і виведіть рядок. Так виходить три вкладені
+   цикли — це нормально для навчальної лаби (у Лабі 09 те саме зробить
+   `Dictionary` в один прохід).
+5. **Кількість доступних зараз** — один прохід із лічильником по `IsAvailableNow`.
+6. **Ввід години з консолі** — розбирайте рядок методом, який повертає ознаку
+   успіху й не кидає виняток на некоректному тексті (`int.TryParse`). Повноцінно
+   «свої» методи з `out` ви писатимете в Лабі 04.
+
+📖 Документація:
+- [`Array.Copy`](https://learn.microsoft.com/dotnet/api/system.array.copy)
+- [`int.TryParse`](https://learn.microsoft.com/dotnet/api/system.int32.tryparse)
+- [Вкладені цикли](https://learn.microsoft.com/dotnet/csharp/language-reference/statements/iteration-statements#the-for-statement)
 
 ### Адаптація до вашого домену
 
@@ -395,8 +511,8 @@ git commit -m "Lab03 Task3: add PatientManager with array storage, CRUD and stat
 ### Коміт
 
 ```bash
-git add src/DoctorManager.cs src/Program.cs
-git commit -m "Lab03 Task4: add DoctorManager with speciality search and stats"
+git add ClinicApp/DoctorManager.cs ClinicApp/Program.cs
+git commit -m "Lab03 Task04"
 ```
 
 ---
@@ -442,31 +558,31 @@ git commit -m "Lab03 Task4: add DoctorManager with speciality search and stats"
 
 ### Підказки
 
-1. `Status` має `private set` — ззовні змінити неможливо, лише через `Cancel`/`Complete`:
-   ```csharp
-   public string Status { get; private set; }
-   ```
-2. `Cancel` перевіряє поточний стан:
-   ```csharp
-   public bool Cancel(string reason = "")
-   {
-       if (Status != "Scheduled") return false;
-       Status = "Cancelled";
-       if (reason.Length > 0) Notes = reason;
-       return true;
-   }
-   ```
-3. Метод повертає `bool` — це дозволяє в `Program.cs` перевірити успіх:
-   ```csharp
-   if (!appointment.Cancel("причина"))
-       Console.WriteLine("Вже завершено або скасовано.");
-   ```
-4. `DurationMinutes = 30` — значення за замовчуванням у підписі конструктора (optional parameter).
-5. У `ToString()` виводьте лише `#PatientId` і `#DoctorId` — це навмисно. Ви відчуєте незручність і вирішите її в Задачі 6.
-6. `Notes` ініціалізуйте порожнім рядком `""`, а в `ToString()` додавайте тільки якщо не порожній:
-   ```csharp
-   if (Notes.Length > 0) result += " | " + Notes;
-   ```
+1. **Кінцевий автомат статусу.** Дозволені лише переходи
+   `Scheduled → Cancelled` і `Scheduled → Completed`, і кожен — лише один раз.
+   Тому `Status` можна *читати* ззовні, але *змінювати* — тільки зсередини
+   класу. Це властивість із `private set` (шукайте «private setter» у
+   документації про властивості).
+2. **`Cancel` і `Complete` — вартові переходу.** Обидва спершу перевіряють, що
+   поточний статус досі `Scheduled`. Якщо ні — нічого не змінюють і повертають
+   `false`. Якщо так — змінюють статус і повертають `true`.
+3. **Навіщо повертати `bool`.** Викликач у `Program.cs` за результатом вирішує,
+   що показати користувачу («скасовано» проти «вже завершено»).
+4. **`reason` у `Cancel`** — необов'язковий параметр зі значенням за
+   замовчуванням (порожній рядок). Якщо причину передали — запишіть її в `Notes`.
+5. **`Notes` — звичайний рядок, не nullable.** Ініціалізуйте його `""` у
+   конструкторі; у `ToString()` додавайте до виводу лише коли він непорожній
+   (`Notes.Length > 0`).
+6. **`DurationMinutes` за замовчуванням 30** — необов'язковий параметр
+   конструктора.
+7. **`ToString()` навмисно показує `#PatientId` і `#DoctorId`, а не імена.**
+   Клас не знає про менеджери й не має доступу до об'єктів `Patient`/`Doctor`.
+   Цю незручність ви приберете в Задачі 6.
+
+📖 Документація:
+- [Властивості: `private set`](https://learn.microsoft.com/dotnet/csharp/programming-guide/classes-and-structs/properties#init-only-and-private-set)
+- [Необов'язкові аргументи](https://learn.microsoft.com/dotnet/csharp/programming-guide/classes-and-structs/named-and-optional-arguments#optional-arguments)
+- [Кінцевий автомат (State machine) — загальна ідея](https://uk.wikipedia.org/wiki/Скінченний_автомат)
 
 ### Адаптація до вашого домену
 
@@ -481,8 +597,8 @@ git commit -m "Lab03 Task4: add DoctorManager with speciality search and stats"
 ### Коміт
 
 ```bash
-git add src/Appointment.cs src/Program.cs
-git commit -m "Lab03 Task5: add Appointment class with status state machine"
+git add ClinicApp/Appointment.cs ClinicApp/Program.cs
+git commit -m "Lab03 Task05"
 ```
 
 ---
@@ -535,41 +651,32 @@ git commit -m "Lab03 Task5: add Appointment class with status state machine"
 
 ### Підказки
 
-1. Конструктор зберігає посилання, не копіює:
-   ```csharp
-   public AppointmentManager(PatientManager patients, DoctorManager doctors)
-   {
-       _patients = patients;
-       _doctors = doctors;
-   }
-   ```
-2. `Book` — спочатку перевірте ID (через `FindById`, порівняйте з `null`), потім створюйте:
-   ```csharp
-   Patient patient = _patients.FindById(patientId);
-   if (patient == null) { Console.WriteLine("..."); return false; }
-   Doctor doctor = _doctors.FindById(doctorId);
-   if (doctor == null) { Console.WriteLine("..."); return false; }
-   _appointments[_count++] = new Appointment(patientId, doctorId, scheduledAt, durationMinutes);
-   ```
-3. `DisplayAppointment` — знайдіть імена через `FindById`, перевірте на `null` явно:
-   ```csharp
-   Patient patient = _patients.FindById(a.PatientId);
-   string patientName;
-   if (patient != null) patientName = patient.FullName;
-   else patientName = "Пацієнт #" + a.PatientId;
-   ```
-4. `GetByDate` — порівнюйте тільки дату (без часу): `_appointments[i].ScheduledAt.Date == date.Date`
-5. `GetByPatient`, `GetByDoctor`, `GetByDate`, `GetUpcoming` — всі за тим самим двопрохідним патерном.
-6. Приватний допоміжний метод `FindById(int id)` всередині класу спрощує `Cancel` і `Complete`:
-   ```csharp
-   private Appointment FindById(int id)
-   {
-       for (int i = 0; i < _count; i++)
-           if (_appointments[i].Id == id) return _appointments[i];
-       return null!;
-   }
-   ```
-7. У підменю «Записи» перед введенням ID пацієнта виводьте список пацієнтів, перед ID лікаря — список лікарів. Так видно, які ID доступні.
+1. **Конструктор зберігає *посилання* на менеджери, а не копіює їх.** Поля
+   `_patients` і `_doctors` вказують на ті самі об'єкти, з якими працює решта
+   програми, — тому менеджер записів завжди бачить актуальні списки. Це і є суть
+   «отримати залежність через конструктор».
+2. **`Book` спершу валідує ID.** Через `_patients.FindById` і `_doctors.FindById`
+   перевірте, що обидва існують (результат не `null`). Якщо ні — повідомте й
+   поверніть `false`, запис не створюйте. Якщо все гаразд — створіть `Appointment`
+   і покладіть у масив.
+3. **`DisplayAppointment` перетворює ID на імена.** Знайдіть `Patient` і `Doctor`
+   за їхніми ID; якщо знайдено — беріть `FullName`, якщо ні (запис на видаленого) —
+   виводьте запасне `"Пацієнт #<id>"`. Перевірку на `null` робіть явно через
+   `== null` / `!= null`.
+4. **`GetByDate`** порівнює лише *дату*, ігноруючи час: у `DateTime` для цього є
+   властивість, що відкидає час доби.
+5. **`GetByPatient`, `GetByDoctor`, `GetByDate`, `GetUpcoming`** — усі той самий
+   двопрохідний патерн (порахувати → виділити масив → заповнити), лише умова
+   фільтра різна.
+6. **Приватний `FindById` всередині менеджера** прибирає дублювання в `Cancel`
+   і `Complete`. Він теж повертає `Appointment?` (може не знайти).
+7. **У підменю «Записи»** перед запитом ID показуйте список пацієнтів і список
+   лікарів — щоб користувач бачив доступні номери.
+
+📖 Документація:
+- [Передача залежностей через конструктор (Dependency Injection — базова ідея)](https://learn.microsoft.com/dotnet/core/extensions/dependency-injection)
+- [Значення й посилальні типи](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/reference-types)
+- [`DateTime.Date`](https://learn.microsoft.com/dotnet/api/system.datetime.date)
 
 ### Адаптація до вашого домену
 
@@ -583,8 +690,8 @@ git commit -m "Lab03 Task5: add Appointment class with status state machine"
 ### Коміт
 
 ```bash
-git add src/AppointmentManager.cs src/Program.cs
-git commit -m "Lab03 Task6: add AppointmentManager with constructor injection and name lookup"
+git add ClinicApp/AppointmentManager.cs ClinicApp/Program.cs
+git commit -m "Lab03 Task06"
 ```
 
 ---
@@ -632,27 +739,26 @@ git commit -m "Lab03 Task6: add AppointmentManager with constructor injection an
 
 ### Підказки
 
-1. У конструкторі порядок важливий — `AppointmentManager` потребує вже створених менеджерів:
-   ```csharp
-   Patients = new PatientManager();
-   Doctors  = new DoctorManager();
-   Appointments = new AppointmentManager(Patients, Doctors);
-   ```
-2. `DisplaySchedule` — отримайте масив через `Appointments.GetByDate(date)`, виведіть через `Appointments.DisplayList(...)`.
-3. `GenerateReport` — для навантаження кожного лікаря: отримайте майбутні записи один раз, потім для кожного лікаря рахуйте в циклі:
-   ```csharp
-   Appointment[] upcoming = Appointments.GetUpcoming();
-   Doctor[] allDoctors = Doctors.GetAll();
-   for (int i = 0; i < allDoctors.Length; i++)
-   {
-       int doctorCount = 0;
-       for (int j = 0; j < upcoming.Length; j++)
-           if (upcoming[j].DoctorId == allDoctors[i].Id) doctorCount++;
-       Console.WriteLine("  " + allDoctors[i].FullName + ": " + doctorCount + " записів");
-   }
-   ```
-4. Символи рамок: `╔ ╗ ╚ ╝ ╠ ╣ ║ ═` — скопіюйте звідси.
-5. У `Program.cs` тепер все через `clinic`. Підменю отримують `Clinic clinic` як параметр.
+1. **Порядок створення в конструкторі важливий.** `AppointmentManager` вимагає
+   вже готових `PatientManager` і `DoctorManager` (див. Задачу 6), тому спершу
+   створіть їх, а потім передайте в конструктор менеджера записів.
+2. **`Clinic` майже нічого не робить сам** — він делегує. `DisplaySchedule`
+   бере записи на дату в `Appointments` і виводить їх наявним методом
+   `DisplayList`.
+3. **`GenerateReport` — навантаження лікарів без LINQ.** Візьміть майбутні записи
+   один раз (`GetUpcoming`) і всіх лікарів (`GetAll`). Для кожного лікаря
+   вкладеним циклом порахуйте, скільки записів мають його `Id`, і виведіть рядок.
+4. **Символи рамок** для звіту: `╔ ╗ ╚ ╝ ╠ ╣ ║ ═` — скопіюйте потрібні.
+5. **`Program.cs` після цієї задачі** працює лише через один об'єкт `clinic`.
+   Кожне підменю приймає `Clinic` параметром і звертається до `clinic.Patients`,
+   `clinic.Doctors`, `clinic.Appointments`.
+6. **Публічні властивості-менеджери** (`Patients`, `Doctors`, `Appointments`) —
+   get-only: створюються в конструкторі й далі не переприсвоюються.
+
+📖 Документація:
+- [Порядок ініціалізації в конструкторі](https://learn.microsoft.com/dotnet/csharp/programming-guide/classes-and-structs/constructors)
+- [Композиція об'єктів («має-а»)](https://learn.microsoft.com/dotnet/csharp/fundamentals/object-oriented/objects)
+- [Символи псевдографіки (box-drawing) — Wikipedia](https://uk.wikipedia.org/wiki/Символи_для_малювання_рамок)
 
 ### Адаптація до вашого домену
 
@@ -667,38 +773,41 @@ git commit -m "Lab03 Task6: add AppointmentManager with constructor injection an
 ### Коміт
 
 ```bash
-git add src/Clinic.cs src/Program.cs
-git commit -m "Lab03 Task7: add Clinic orchestrator with schedule and report"
+git add ClinicApp/Clinic.cs ClinicApp/Program.cs
+git commit -m "Lab03 Task07"
 ```
 
 ---
 
-## Задача 8. Зростаючий масив — передумови для List\<T\> ⭐⭐⭐⭐
+## Задача 8. Зростаючий масив ⭐⭐⭐⭐
 
 ### Умова
 
-`PatientManager` має жорсткий ліміт — `const int MaxPatients = 100`. Що станеться, коли клініка виросте до 200 пацієнтів?
+`PatientManager` має жорсткий ліміт — `const int MaxPatients = 100`. Що станеться,
+коли клініка виросте до 200 пацієнтів? А якщо поставити ліміт `100000` — програма
+завжди триматиме в пам'яті масив на 100000 комірок, навіть коли пацієнтів п'ятеро.
 
-Просте збільшення константи нічого не вирішує: масив завжди займає пам'ять на `MaxPatients` елементів — навіть якщо в ньому лише 5. З іншого боку, занадто малий ліміт зупиняє роботу.
+**Ваше завдання:** реалізувати `GrowablePatientManager` — менеджер, у якому масив
+**сам збільшується**, коли заповнюється, і жодного наперед заданого ліміту немає.
 
-**Ваше завдання:** реалізувати `GrowablePatientManager` — клас з **автоматичним збільшенням масиву** коли він заповнений.
-
-Алгоритм зростання: коли `_count == _capacity`, створіть **новий масив удвічі більший** та скопіюйте всі елементи.
+Алгоритм зростання (лише масиви й цикли, нічого нового): коли масив заповнений
+(`_count` дорівнює довжині масиву), створіть **новий масив удвічі більший**,
+циклом скопіюйте в нього всі елементи зі старого й далі працюйте з новим.
 
 ### Специфікація класу
 
 | Член класу | Тип | Опис |
 |------------|-----|------|
-| `_patients` | `private Patient[]` | Починається з розміру 4 |
-| `_count` | `private int` | Поточна кількість |
+| `_patients` | `private Patient[]` | Внутрішній масив; початкова довжина — 4 |
+| `_count` | `private int` | Поточна кількість пацієнтів |
 | `Count` | `public int` | `_count` |
-| `Capacity` | `public int` | `_patients.Length` — поточна ємність масиву |
-| `Add(Patient)` | `public void` | Якщо повний — зростає, потім додає |
-| `FindById(int)` | `public Patient` | Лінійний пошук |
-| `Remove(int id)` | `public bool` | Видаляє зі зсувом |
-| `DisplayAll()` | `public void` | Виводить список + поточну ємність |
+| `Capacity` | `public int` (get-only) | Поточна довжина масиву `_patients` |
+| `Add(Patient)` | `public void` | Якщо масив повний — спершу збільшити, потім додати |
+| `FindById(int)` | `public Patient?` | Лінійний пошук; `null`, якщо не знайдено |
+| `Remove(int id)` | `public bool` | Видаляє зі зсувом ліворуч |
+| `DisplayAll()` | `public void` | Список пацієнтів + поточна ємність |
 
-### Що очікується у виводі
+### Приклад виводу
 
 ```
 === Тест GrowablePatientManager ===
@@ -728,15 +837,36 @@ git commit -m "Lab03 Task7: add Clinic orchestrator with schedule and report"
 
 ### Підказки
 
-1. Приватний метод `Grow()`: обчисліть нову ємність (`_patients.Length * 2`), виділіть новий масив, скопіюйте перші `_count` елементів зі старого циклом, присвойте `_patients = newArray`. Виведіть рядок із старою та новою ємністю.
-2. `Add`: якщо `_count == _patients.Length` — викличте `Grow()`. Потім присвойте елемент і збільшіть `_count`.
-3. Починайте з малого початкового розміру (`new Patient[4]`) — так ви побачите кілька розширень навіть на малих даних.
-4. `_patients = newArray;` — після цього старий масив більше не потрібен. C# автоматично звільнить пам'ять.
-5. Додайте `Capacity` властивість: `public int Capacity => _patients.Length;` — для виводу поточного розміру.
-6. Протестуйте: додайте 20 пацієнтів у циклі, після кожного виводьте `Count` та `Capacity`. Ви побачите стрибки: 4→8→16→32.
-7. Подумайте: скільки разів копіюється кожен елемент загалом, якщо додати 16 пацієнтів (починаючи з ємності 4)? Намалюйте на папері.
+1. **Приватний метод «збільшити».** Він рахує нову довжину (удвічі більшу за
+   поточну), створює новий масив, циклом переносить у нього перші `_count`
+   елементів, і робить його новим внутрішнім масивом. Тут же виведіть рядок
+   «Розширення: X → Y».
+2. **`Add`.** Перед додаванням перевірте, чи масив заповнений (`_count` дорівнює
+   довжині масиву). Якщо так — спершу викличте метод збільшення. Потім покладіть
+   елемент у комірку `_count` і збільште лічильник.
+3. **Малий початковий розмір (4)** — навмисно: на 20 пацієнтах ви побачите
+   кілька розширень поспіль (4 → 8 → 16 → 32) і зрозумієте закономірність.
+4. **Стару копію масиву чіпати не треба.** Щойно поле вказало на новий масив,
+   старий стає нікому не потрібен — середовище саме звільнить пам'ять
+   (збирач сміття).
+5. **`Capacity`** — обчислювана властивість, що просто повертає довжину
+   внутрішнього масиву.
+6. **Тест у `Program.cs`:** у циклі додайте 20 пацієнтів, після кожного
+   виводьте `Count` і `Capacity`. Потім перевірте `FindById` на наявному та
+   відсутньому ID.
+7. **Питання на подумати (на папері):** якщо додати 16 пацієнтів, починаючи з
+   ємності 4, скільки разів загалом буде скопійовано *окремий* елемент? Чому
+   подвоєння вигідніше, ніж «додавати по 1 комірці щоразу»?
 
-> **Підказка наперед:** саме цей алгоритм — "подвоєння при заповненні" — використовується всередині `List<T>` у C#. У наступній лабі ви перейдете на `List<T>` і більше не писатимете цей код вручну.
+> Ви щойно вручну реалізували те, що надалі в курсі роблять готові динамічні
+> колекції. Коли курс дійде до них — ви вже знатимете, що всередині просто масив,
+> який подвоюється.
+
+📖 Документація:
+- [Масиви](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/arrays)
+- [`Array.Resize` (як це виглядає «з коробки»)](https://learn.microsoft.com/dotnet/api/system.array.resize)
+- [Керування пам'яттю та збирач сміття (базово)](https://learn.microsoft.com/dotnet/standard/garbage-collection/fundamentals)
+- [Амортизована складність (динамічний масив) — Wikipedia](https://uk.wikipedia.org/wiki/Динамічний_масив)
 
 ### Адаптація до вашого домену
 
@@ -749,8 +879,8 @@ git commit -m "Lab03 Task7: add Clinic orchestrator with schedule and report"
 ### Коміт
 
 ```bash
-git add src/GrowablePatientManager.cs src/Program.cs
-git commit -m "Lab03 Task8: implement growable array manager to understand List<T> internals"
+git add ClinicApp/GrowablePatientManager.cs ClinicApp/Program.cs
+git commit -m "Lab03 Task08"
 ```
 
 ---
@@ -758,43 +888,59 @@ git commit -m "Lab03 Task8: implement growable array manager to understand List<
 ## Перевірка перед здачею
 
 ```bash
-cd src
-dotnet build
-dotnet run
+dotnet build ClinicApp
+dotnet run --project ClinicApp
 ```
 
 Переконайтесь, що:
 
-- [ ] Проєкт компілюється без помилок і попереджень
-- [ ] Кожен пацієнт має унікальний Id (1, 2, 3, ...)
+- [ ] Проєкт компілюється **без помилок і без попереджень**
+- [ ] Кожен пацієнт має унікальний Id (1, 2, 3, …)
 - [ ] Вік розраховується правильно (з урахуванням дня народження)
-- [ ] `Cancel` повертає `false`, якщо запис вже скасовано або завершено
-- [ ] `Book` виводить помилку при неіснуючому ID
+- [ ] `Cancel` повертає `false`, якщо запис уже скасовано або завершено
+- [ ] `Book` виводить помилку при неіснуючому ID пацієнта чи лікаря
 - [ ] `FindByName` знаходить за частиною імені (без урахування регістру)
-- [ ] `DisplayStats` виводить коректні дані (середнє, мін, макс)
-- [ ] Підменю всіх трьох розділів (Пацієнти, Лікарі, Записи) працюють
+- [ ] `DisplayStats` рахує коректні дані (середнє, мін, макс, кількість дорослих)
+- [ ] `DisplayAll` / `DisplayStats` не падають на порожньому списку
+- [ ] Усі три підменю (Пацієнти, Лікарі, Записи) працюють через об'єкт `clinic`
 - [ ] `GenerateReport()` виводить правильну кількість майбутніх записів
-- [ ] `GrowablePatientManager` розширюється при заповненні та зберігає всі елементи
+- [ ] `GrowablePatientManager` розширюється при заповненні й зберігає всі елементи
+- [ ] у коді немає `List<T>`, `Dictionary<,>`, LINQ, `?.`, `??`, `enum`, `struct`
 
 ---
 
 ## Питання для самоперевірки
 
-1. Чому `_nextId` — `static`, а `Id` — не `static`? Що трапиться, якщо `_nextId` буде звичайним полем?
-2. Чому конструктор `Patient(firstName, lastName)` викликає `: this(...)`, а не просто присвоює поля?
-3. У `Appointment` поле `Status` має `private set`. Як би виглядав код без цього обмеження? Що могло б піти не так?
-4. Чому `AppointmentManager` отримує `PatientManager` і `DoctorManager` у конструкторі, а не створює їх сам?
-5. Скільки разів кожен елемент копіюється якщо послідовно додати 16 пацієнтів у `GrowablePatientManager`, що починається з ємності 4?
+1. `_nextId` — `static`, `Id` — ні. Що зламається, якщо зробити `_nextId`
+   звичайним полем екземпляра?
+2. Конструктор `Patient(firstName, lastName)` викликає `: this(...)`. Що погано
+   станеться з нумерацією `Id`, якщо він натомість сам присвоюватиме всі поля?
+3. `Status` в `Appointment` має `private set`. Наведіть рядок коду, який став би
+   можливий без цього обмеження і зламав би кінцевий автомат.
+4. Чому `AppointmentManager` *отримує* менеджери в конструкторі, а не створює
+   їх сам через `new`? Що було б, якби створював?
+5. Скільки разів буде скопійовано окремий елемент, якщо додати 16 пацієнтів у
+   `GrowablePatientManager` з початковою ємністю 4?
+6. `FindById` повертає `Patient?`. Чому тип із `?`, і що зобов'язаний зробити
+   викличок перед тим, як звертатись до властивостей результату?
+7. `DisplayStats` у `DoctorManager` рахує унікальні спеціальності трьома
+   вкладеними циклами. Яка приблизно складність цього щодо кількості лікарів N?
 
 ---
 
 ## Статус гілки
 
-Ця гілка **зливається в `main`**. Після завершення всіх завдань:
+Це **перша лаба, що зливається в `main`**. Після всіх 8 завдань (кожне — окремий
+коміт `Lab03 TaskNN` на гілці `Lab-03`):
 
 ```bash
+git push -u origin Lab-03          # гілка на GitHub
 git checkout main
-git merge feature/catalog
+git merge --no-ff Lab-03 -m "Merge Lab-03: Defining Classes"
+git push
 ```
 
-> Наступна лаба: `git checkout -b feature/abstraction` — абстрактні класи та enum.
+`--no-ff` створює явний merge-коміт — у графі історії видно межі лаби.
+
+> Наступна лаба: `git checkout main` → `git checkout -b Lab-04`. Проєкт той самий
+> (`ClinicApp/`), гілка знову зливається в `main`.
