@@ -5,7 +5,7 @@ namespace AutoCheck.Services;
 
 public class NotificationService(IDbContextFactory<AppDbContext> dbf, EmailService email) : INotificationService
 {
-    public async Task SendAsync(int studentId, string title, string body, string type = "info")
+    public async Task SendAsync(int studentId, string title, string body, string type = "info", string? emailBody = null)
     {
         await using var db = await dbf.CreateDbContextAsync();
         db.Notifications.Add(new Notification
@@ -21,7 +21,7 @@ public class NotificationService(IDbContextFactory<AppDbContext> dbf, EmailServi
             var to = await db.Students.Where(s => s.Id == studentId)
                                       .Select(s => s.Email).FirstOrDefaultAsync();
             if (!string.IsNullOrEmpty(to))
-                _ = email.SendAsync(to, $"AutoCheck · {title}", body);
+                _ = email.SendAsync(to, $"AutoCheck · {title}", emailBody ?? body);
         }
     }
 

@@ -175,6 +175,7 @@
     private record TaskResultView(string TaskTitle, string State, int Score, string? Feedback);
 
     private string _name = "", _initials = "", _group = "", _labTitle = "";
+    private string _studentFirst = "", _studentLast = "";
     private int _auto;
     private int _attemptNo;
     private string _defense = "";
@@ -196,6 +197,8 @@
         var student = await Db.Students.FindAsync(StudentId);
         if (student is null) return;
         _name     = student.LastName + " " + student.FirstName;
+        _studentFirst = student.FirstName;
+        _studentLast  = student.LastName;
         _initials = student.Initials;
         _group    = student.Group;
 
@@ -303,10 +306,22 @@
             });
             await Db.SaveChangesAsync();
 
+            var email =
+                $"{EmailText.Greeting(_studentFirst, _studentLast)}\n\n" +
+                $"Лабораторну роботу № {LabId} «{_labTitle}» зараховано.\n" +
+                $"Фінальна оцінка: {Final}/100.\n\n" +
+                "Як рахується оцінка:\n" +
+                $"• авто-перевірка (виставляє система) — {_auto}/100, вага 40%\n" +
+                $"• захист (виставляє викладач) — {_defNum}/100, вага 60%\n" +
+                $"• підсумок: 0.4 × {_auto} + 0.6 × {_defNum} = {Final} " +
+                "(округлення до цілого, шкала 0–100)\n\n" +
+                "Повідомлення сформовано автоматично.";
+
             await Notif.SendAsync(StudentId,
                 $"Lab{LabId:D2} зарахована!",
                 $"Фінальна оцінка: {Final}/100 (авто: {_auto}, захист: {_defNum})",
-                "grade");
+                "grade",
+                email);
         }
 
         _saving = false; _saved = true; StateHasChanged();

@@ -70,7 +70,8 @@ GitHub **REST API** (не клонує). `ParseUrl`, `GetBranchesAsync`, `GetBra
 
 ## NotificationService
 In-app + email нотифікації (через `EmailService`).
-`SendAsync(studentId, title, body, type)`, `GetUnreadAsync`, `GetUnreadCountAsync`, `MarkReadAsync`, `MarkAllReadAsync`.
+`SendAsync(studentId, title, body, type, emailBody?)` — `emailBody` необовʼязковий: якщо заданий, у лист іде він (in-app завжди `body`), щоб тримати рядок сповіщення коротким, а лист — повнішим. `GetUnreadAsync`, `GetUnreadCountAsync`, `MarkReadAsync`, `MarkAllReadAsync`.
+Спільний блок листів — `EmailText.Greeting(first, last)` («Шановний(-а) …!» / «Доброго дня!»). Формальні листи: дедлайн (DeadlineReminderService) і «Lab зарахована» (GradeDialog — № + назва + фінал/авто/захист).
 
 ## TeacherNotificationService (singleton)
 In-memory стрічка подій для викладача: `Add(title, body, type)`, `GetAll`, `MarkAllRead`.
@@ -84,7 +85,7 @@ SMTP-розсилка; `Enabled` лише коли задано `Email:SmtpHost`
 Коментарі викладач↔студент до здачі/завдання. `GetForSubmissionAsync`, `AddAsync`, `GetAllThreadsAsync`, `DeleteAsync`.
 
 ## Фонові сервіси (HostedService)
-- **DeadlineReminderService** — щогодини: нагадування про дедлайн (<24 год) тим, хто не здав (one-time по Title).
+- **DeadlineReminderService** — щогодини: нагадування про дедлайн у двох вікнах (≈72 год «за 3 дні» і ≈24 год «завтра») тим, хто не здав; кожне вікно one-time по Title. In-app — короткий рядок, email — офіційний лист зі зверненням на ім'я з профілю (fallback «Доброго дня!») через `NotificationService.SendAsync(..., emailBody:)`.
 - **BackupService** — щоденний бекап SQLite (`BackupHelper`, VACUUM INTO) + ротація + git-дзеркало.
 - **RepoCleanupService** — щоденне видалення клонів у `WorkRoot`, що простоюють > `Grading:RepoRetentionDays` (default 7); `PrepareRepoAsync` штампує mtime при кожному використанні.
 
